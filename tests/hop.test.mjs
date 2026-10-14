@@ -23,11 +23,11 @@ test('corner impact freezes, launches, and ends without scoring during the effec
   for (let i = 0; i < 30; i++) engine.runner_step(1 / 120);
   assert.equal(engine.runner_value(6), x);
   assert.equal(engine.runner_value(0), y);
-  for (let i = 0; i < 40; i++) engine.runner_step(1 / 120);
+  for (let i = 0; i < 80; i++) engine.runner_step(1 / 120);
   assert.ok(engine.runner_value(6) > x);
   assert.ok(engine.runner_value(0) < y);
   assert.equal(engine.runner_value(2), score);
-  for (let i = 0; i < 120; i++) engine.runner_step(1 / 120);
+  for (let i = 0; i < 240; i++) engine.runner_step(1 / 120);
   assert.equal(engine.runner_value(4), 2);
   engine.runner_reset(1);
   assert.equal(engine.runner_value(8), 0);

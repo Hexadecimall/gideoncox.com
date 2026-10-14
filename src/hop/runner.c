@@ -76,12 +76,12 @@ void runner_step(float dt) {
     if (dt <= 0 || dt > 0.02f) return;
     if (state == 3) {
         launch_time += dt;
-        if (launch_time < 0.4f) return;
-        x += 480 * dt;
+        if (launch_time < 0.65f) return;
+        x += 390 * dt;
         velocity += 300 * dt;
         y += velocity * dt;
         angle += 22 * dt;
-        if (y + SIZE < -40 || x > 760) state = 2;
+        if ((y + SIZE < -40 || x > 760) && launch_time >= 2.4f) state = 2;
         return;
     }
     if (state != 1) return;

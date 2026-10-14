@@ -46,9 +46,9 @@ function draw() {
   context.fillStyle = preferences().hopSky || '#101619';
   context.fillRect(0, 0, 720, 280);
   if (launched && !reducedMotion.matches) {
-    const zoom = launchTime < .4 ? 1 + 1.2 * Math.min(1, launchTime / .14)
-      : 1 + 1.2 * Math.max(0, 1 - (launchTime - .4) / .22);
-    const shake = launchTime > .4 ? 9 * Math.max(0, 1 - (launchTime - .4) / .45) : 0;
+    const zoom = launchTime < .65 ? 1 + 1.2 * Math.min(1, launchTime / .22)
+      : 1 + 1.2 * Math.max(0, 1 - (launchTime - .65) / .4);
+    const shake = launchTime > .65 ? 10 * Math.max(0, 1 - (launchTime - .65) / 1.3) : 0;
     context.translate(121 + Math.sin(launchTime * 105) * shake, 165 + Math.cos(launchTime * 137) * shake);
     context.scale(zoom, zoom);
     context.translate(-121, -165);
@@ -141,7 +141,7 @@ function draw() {
   context.translate(x + 11, y + (crouching ? 6 : 11));
   if (crouching) context.scale(1.13, 12 / 22);
   context.rotate(reducedMotion.matches ? 0 : angle);
-  const whiteCap = launched && launchTime >= .14;
+  const whiteCap = launched && launchTime >= .22;
   if (whiteCap) {
     const forehead = context.createLinearGradient(0, -11, 0, 11);
     forehead.addColorStop(0, '#ffffff');
@@ -159,7 +159,7 @@ function draw() {
   }
   if (launched) {
     // The eyes widen as the camera closes in, then stay wide during flight.
-    const surprise = Math.min(1, launchTime / .14);
+    const surprise = Math.min(1, launchTime / .22);
     const eyeHeight = 2 + surprise * 4;
     for (const eyeX of [-4, 5]) {
       context.fillStyle = '#ffffff';
@@ -183,9 +183,9 @@ function draw() {
     context.fillRect(x + 4 + i * 9, y - 20, 5, 3);
   }
   context.restore();
-  if (launched && launchTime >= .38) {
+  if (launched && launchTime >= .6) {
     context.save();
-    if (!reducedMotion.matches && launchTime < .85) {
+    if (!reducedMotion.matches && launchTime < 2) {
       context.strokeStyle = '#e5ffb950';
       context.lineWidth = 2;
       for (let i = 0; i < 18; i++) {
