@@ -1,0 +1,48 @@
+/* Dedicated tools occupy their own pages, with shared site navigation. */
+.workspace-page {
+  max-width: 1480px;
+  padding-top: 24px;
+  padding-bottom: 40px;
+}
+.workspace-nav {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 22px;
+  font-size: 12px;
+}
+.workspace-nav a {
+  padding: 9px 12px;
+  color: var(--muted);
+  border: 1px solid transparent;
+  border-radius: 3px;
+}
+.workspace-nav a:first-child { margin-right: auto; padding-left: 0; }
+.workspace-nav a[aria-current=page] { color: var(--lime); border-color: #465440; background: #18221980; }
+.workspace-panel {
+  min-width: 0;
+  overflow: hidden;
+  background: #111714;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+}
+.workspace-view .local-terminal-surface { height: max(420px, calc(100dvh - 365px)); }
+.workspace-view .terminal-output { height: max(360px, calc(100dvh - 350px)); }
+.workspace-view .editor-layout { min-height: max(480px, calc(100dvh - 255px)); grid-template-columns: 220px minmax(0, 1fr); }
+.workspace-view .editor-surface { flex: 1; min-height: 360px; }
+.workspace-view .editor-document { display: flex; flex-direction: column; }
+.workspace-view .editor-text { min-height: 360px; height: 100%; }
+.workspace-view .footer { max-width: 1480px; }
+@media (max-width: 700px) {
+  .workspace-page { padding: 16px 12px 26px; }
+  .workspace-view .editor-layout { grid-template-columns: minmax(0, 1fr); }
+  .workspace-nav { gap: 5px; }
+  .workspace-nav a { padding: 8px; }
+}
+
+.zed-placeholder { min-height: 420px; display: flex; flex-direction: column; align-items: flex-start; justify-content: center; padding: clamp(28px, 6vw, 72px); }
+.zed-mark { color: var(--lime); font-size: 46px; letter-spacing: -.12em; line-height: 1; margin-bottom: 24px; }
+.zed-placeholder h1 { margin: 0 0 16px; font-size: 26px; font-weight: 500; }
+.zed-placeholder p { color: var(--text); font-size: 14px; line-height: 1.8; margin: 0 0 8px; }
+.zed-placeholder .zed-detail { color: var(--muted); font-size: 12px; margin-bottom: 28px; }

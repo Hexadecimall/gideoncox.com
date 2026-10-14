@@ -1,0 +1,421 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <script src="../assets/js/preferences.js">
+  </script>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
+  <meta content="#0b0e11" name="theme-color"/>
+  <meta content="Browser games, interactive tools, and WebAssembly experiments. Play Hop, draw on the doodle pad, and test your clicking speed." name="description"/>
+  <link href="https://gideoncox.com/settings/" rel="canonical"/>
+  <meta content="index,follow,max-image-preview:large" name="robots"/>
+  <meta content="website" property="og:type"/>
+  <meta content="random crap" property="og:site_name"/>
+  <meta content="Settings · random crap" property="og:title"/>
+  <meta content="Browser games, interactive tools, and WebAssembly experiments. Play Hop, draw on the doodle pad, and test your clicking speed." property="og:description"/>
+  <meta content="https://gideoncox.com/settings/" property="og:url"/>
+  <meta content="summary" name="twitter:card"/>
+  <meta content="random crap" name="twitter:title"/>
+  <meta content="Browser games, interactive tools, and WebAssembly experiments. Play Hop, draw on the doodle pad, and test your clicking speed." name="twitter:description"/>
+  <title>
+   Settings · random crap
+  </title>
+  <link href="../assets/icons/favicon.svg" rel="icon" type="image/svg+xml"/>
+  <link href="../assets/css/base.css" rel="stylesheet"/>
+  <link href="../assets/css/navigation.css" rel="stylesheet"/>
+  <link href="../assets/css/tools.css" rel="stylesheet"/>
+  <link href="../assets/css/motion.css" rel="stylesheet"/>
+  <link href="../assets/css/workspace.css" rel="stylesheet"/>
+  <link href="../assets/css/settings.css" rel="stylesheet"/>
+  <link href="../assets/css/quote.css" rel="stylesheet"/>
+ </head>
+ <body class="workspace-view">
+  <header id="site-header">
+   <div class="shell nav">
+    <button aria-controls="site-menu" aria-expanded="false" aria-label="Open menu" class="brand menu-toggle" id="menu-toggle">
+     <span class="brand-mark">
+      g.
+     </span>
+    </button>
+    <div class="header-actions">
+     <aside aria-label="Quote of the day" class="quote-section">
+      <button aria-controls="quote-panel" aria-expanded="false" class="quote-toggle" id="quote-toggle">
+       Quote of the day
+      </button>
+      <div class="small-tool" hidden="" id="quote-panel">
+       <div class="quote-body">
+        <div class="quote-heading">
+         <span>
+          Quote of the day
+         </span>
+         <time id="quote-date">
+         </time>
+        </div>
+        <p id="quote-status" role="status">
+         Loading…
+        </p>
+        <figure hidden="" id="quote-content">
+         <blockquote id="quote-text">
+         </blockquote>
+         <figcaption id="quote-author">
+         </figcaption>
+        </figure>
+        <div class="quote-footer">
+         <a href="https://dumbapis.com/docs/daily-quote/" rel="noopener noreferrer" target="_blank">
+          Source ↗
+         </a>
+         <button class="tool-button" hidden="" id="quote-retry">
+          Retry
+         </button>
+        </div>
+       </div>
+      </div>
+     </aside>
+     <aside aria-label="CPS tester" class="cps-section" id="cps-tester">
+      <button aria-controls="cps-panel" aria-expanded="false" class="cps-toggle" id="cps-toggle">
+       <span>
+        CPS tester
+       </span>
+      </button>
+      <div class="small-tool cps-card" hidden="" id="cps-panel">
+       <div class="tool-body">
+        <div class="cps-heading">
+         <span>
+          5-second test
+         </span>
+         <button class="tool-button" hidden="" id="cps-reset">
+          Try again
+         </button>
+        </div>
+        <div class="cps-stats">
+         <div>
+          <output id="cps-score">
+           0.0
+          </output>
+          <span>
+           clicks / second
+          </span>
+         </div>
+         <div>
+          <output id="cps-clicks">
+           0
+          </output>
+          <span>
+           clicks
+          </span>
+         </div>
+         <div>
+          <output id="cps-time">
+           5.0
+          </output>
+          <span>
+           seconds left
+          </span>
+         </div>
+        </div>
+        <button class="cps-target" id="cps-target">
+         <strong>
+          Click to start
+         </strong>
+        </button>
+        <div aria-hidden="true" class="cps-track">
+         <div id="cps-progress">
+         </div>
+        </div>
+        <p class="sr-only" id="cps-status" role="status">
+         Your first click starts the timer.
+        </p>
+       </div>
+      </div>
+     </aside>
+    </div>
+   </div>
+   <div class="site-menu" hidden="" id="site-menu">
+    <div class="shell">
+     <nav aria-label="Site navigation" class="menu-bar">
+      <div class="menu-group">
+       <button aria-controls="projects-panel" aria-expanded="false" data-menu-panel="projects">
+        <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+         <path d="M3 7V5h6l2 2h10v12H3Z">
+         </path>
+        </svg>
+        projects
+        <span aria-hidden="true" class="menu-arrow">
+         ›
+        </span>
+       </button>
+       <div aria-label="projects" class="menu-panel" hidden="" id="projects-panel" role="region">
+        <div class="menu-children">
+         <p>
+          Nothing pinned here yet.
+         </p>
+        </div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="tools-panel" aria-expanded="false" data-menu-panel="tools">
+        <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+         <path d="M14 4a6 6 0 0 0-5 8l-6 6 3 3 6-6a6 6 0 0 0 8-7l-4 4-4-4 4-4Z">
+         </path>
+        </svg>
+        tools
+        <span aria-hidden="true" class="menu-arrow">
+         ›
+        </span>
+       </button>
+       <div aria-label="tools" class="menu-panel" hidden="" id="tools-panel" role="region">
+        <div class="menu-children">
+         <a href="../#doodle-pad">
+          Doodle pad
+         </a>
+         <a href="../#hop">
+          Hop
+         </a>
+         <a href="../#cps-tester">
+          CPS tester
+         </a>
+         <a href="../terminal/">
+          Terminal
+         </a>
+         <a href="../editor/">
+          Zed
+         </a>
+        </div>
+       </div>
+      </div>
+      <a href="https://github.com/Hexadecimall" rel="noopener noreferrer" target="_blank">
+       <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+        <circle cx="6" cy="5" r="2">
+        </circle>
+        <circle cx="6" cy="19" r="2">
+        </circle>
+        <circle cx="18" cy="6" r="2">
+        </circle>
+        <path d="M6 7v10M18 8v2c0 4-12 2-12 7">
+        </path>
+       </svg>
+       github
+       <span aria-hidden="true" class="menu-arrow">
+        ↗
+       </span>
+      </a>
+      <a href="../settings/">
+       settings
+      </a>
+     </nav>
+    </div>
+   </div>
+  </header>
+  <main class="workspace-page shell" id="top">
+   <nav aria-label="Workspace" class="workspace-nav">
+    <a href="../">
+     ← random crap
+    </a>
+    <a href="../terminal/">
+     Terminal
+    </a>
+    <a aria-current="page" href="../editor/">
+     Zed
+    </a>
+   </nav>
+   <h1 class="preferences-title">
+    Settings
+   </h1>
+   <form id="preferences">
+    <div class="preferences-grid">
+     <fieldset>
+      <legend>
+       Appearance
+      </legend>
+      <label class="preference" for="pref-accent">
+       Accent
+       <input id="pref-accent" name="accent" type="color"/>
+      </label>
+      <label class="preference" for="pref-background">
+       Background
+       <input id="pref-background" name="background" type="color"/>
+      </label>
+      <label class="preference" for="pref-font">
+       Code font
+       <select id="pref-font" name="font">
+        <option value="mono">
+         System monospace
+        </option>
+        <option value="menlo">
+         Menlo
+        </option>
+        <option value="consolas">
+         Consolas
+        </option>
+       </select>
+      </label>
+      <label class="preference" for="pref-density">
+       Spacing
+       <select id="pref-density" name="density">
+        <option value="comfortable">
+         Comfortable
+        </option>
+        <option value="compact">
+         Compact
+        </option>
+       </select>
+      </label>
+      <label class="preference" for="pref-motion">
+       Motion
+       <select id="pref-motion" name="motion">
+        <option value="system">
+         Follow system
+        </option>
+        <option value="reduced">
+         Reduced
+        </option>
+        <option value="full">
+         Full
+        </option>
+       </select>
+      </label>
+     </fieldset>
+     <fieldset>
+      <legend>
+       Terminal
+      </legend>
+      <label class="preference" for="pref-terminalFontSize">
+       Font size
+       <span>
+        <input id="pref-terminalFontSize" max="22" min="10" name="terminalFontSize" type="range"/>
+        <output for="pref-terminalFontSize">
+        </output>
+       </span>
+      </label>
+      <label class="preference" for="pref-terminalCursor">
+       Cursor
+       <select id="pref-terminalCursor" name="terminalCursor">
+        <option value="bar">
+         Bar
+        </option>
+        <option value="block">
+         Block
+        </option>
+        <option value="underline">
+         Underline
+        </option>
+       </select>
+      </label>
+      <label class="preference" for="pref-terminalBlink">
+       Blinking cursor
+       <input id="pref-terminalBlink" name="terminalBlink" type="checkbox"/>
+      </label>
+      <label class="preference" for="pref-terminalScrollback">
+       Scrollback lines
+       <input id="pref-terminalScrollback" max="10000" min="100" name="terminalScrollback" type="number"/>
+      </label>
+     </fieldset>
+     <fieldset>
+      <legend>
+       Hop
+      </legend>
+      <label class="preference" for="pref-hopPlayer">
+       Player color
+       <input id="pref-hopPlayer" name="hopPlayer" type="color"/>
+      </label>
+      <label class="preference" for="pref-hopSky">
+       Sky color
+       <input id="pref-hopSky" name="hopSky" type="color"/>
+      </label>
+      <label class="preference" for="pref-hopEffects">
+       Impact zoom and shake
+       <input id="pref-hopEffects" name="hopEffects" type="checkbox"/>
+      </label>
+      <label class="preference" for="pref-jumpKey">
+       Jump key
+       <select id="pref-jumpKey" name="jumpKey">
+        <option value="Space">
+         Space
+        </option>
+        <option value="ArrowUp">
+         Up
+        </option>
+        <option value="KeyW">
+         W
+        </option>
+        <option value="KeyZ">
+         Z
+        </option>
+       </select>
+      </label>
+      <label class="preference" for="pref-duckKey">
+       Duck key
+       <select id="pref-duckKey" name="duckKey">
+        <option value="ArrowDown">
+         Down
+        </option>
+        <option value="KeyS">
+         S
+        </option>
+        <option value="KeyX">
+         X
+        </option>
+       </select>
+      </label>
+     </fieldset>
+     <fieldset>
+      <legend>
+       Doodle pad &amp; CPS
+      </legend>
+      <label class="preference" for="pref-brushColor">
+       Default ink
+       <input id="pref-brushColor" name="brushColor" type="color"/>
+      </label>
+      <label class="preference" for="pref-brushSize">
+       Brush size
+       <span>
+        <input id="pref-brushSize" max="9" min="1" name="brushSize" type="range"/>
+        <output for="pref-brushSize">
+        </output>
+       </span>
+      </label>
+      <label class="preference" for="pref-cpsSeconds">
+       CPS test seconds
+       <input id="pref-cpsSeconds" max="30" min="3" name="cpsSeconds" type="number"/>
+      </label>
+     </fieldset>
+    </div>
+   </form>
+   <div class="preferences-footer">
+    <button class="tool-button" id="preferences-reset">
+     Restore defaults
+    </button>
+    <p id="preferences-status" role="status">
+     Settings are saved in this browser and shared across pages.
+    </p>
+   </div>
+  </main>
+  <footer class="shell footer">
+   <span>
+    g. /
+    <span id="year">
+     2026
+    </span>
+   </span>
+   <div class="footer-links">
+    <a href="../#top">
+     Back to top ↑
+    </a>
+    <a href="https://github.com/Hexadecimall" rel="noopener noreferrer" target="_blank">
+     GitHub ↗
+    </a>
+    <a href="../settings/">
+     Settings
+    </a>
+   </div>
+  </footer>
+  <script src="../assets/js/navigation.js" type="module">
+  </script>
+  <script src="../assets/js/cps.js" type="module">
+  </script>
+  <script src="../assets/js/quote.js" type="module">
+  </script>
+  <script src="../assets/js/settings.js" type="module">
+  </script>
+ </body>
+</html>

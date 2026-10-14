@@ -1,0 +1,41 @@
+.header-actions {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+}
+.quote-toggle {
+  display: block;
+  padding: 10px 12px;
+  min-height: 47px;
+  background: #18221980;
+  color: var(--text);
+  border: 1px solid #465440;
+  border-radius: 3px;
+  font: 12px var(--mono);
+  cursor: pointer;
+  white-space: nowrap;
+}
+.quote-toggle[aria-expanded=true] { color: var(--lime); border-color: var(--lime); }
+#quote-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 15px);
+  width: min(370px, calc(100vw - 40px));
+  box-shadow: 0 14px 36px #0005;
+}
+.quote-body { padding: 20px; max-height: calc(100dvh - 110px); overflow-y: auto; }
+.quote-heading { display: flex; justify-content: space-between; gap: 12px; color: var(--muted); font-size: 10px; margin-bottom: 22px; }
+.quote-heading time { font-variant-numeric: tabular-nums; }
+.quote-body figure { margin: 0; }
+.quote-body blockquote { margin: 0; color: var(--text); font: 15px/1.8 var(--mono); overflow-wrap: anywhere; }
+.quote-body figcaption { color: var(--lime); font-size: 12px; margin-top: 18px; }
+.quote-footer { display: flex; align-items: center; justify-content: space-between; margin-top: 24px; color: var(--muted); font-size: 10px; }
+#quote-status { font-size: 12px; color: var(--muted); line-height: 1.7; }
+@media (max-width: 520px) {
+  #site-header .nav { gap: 10px; padding-right: 12px; padding-left: 12px; }
+  .header-actions { gap: 7px; }
+  .quote-toggle { font-size: 10px; padding: 10px 8px; min-height: 40px; }
+  #quote-panel { width: min(370px, calc(100vw - 24px)); }
+}

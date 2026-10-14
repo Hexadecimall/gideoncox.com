@@ -1,0 +1,163 @@
+.intro-divider {
+  border:0;
+  border-top:1px solid #303b31;
+  margin:0 0 30px;
+}
+
+.runner-stage {
+  position:relative;
+  aspect-ratio:18/7;
+  background:#101619;
+}
+
+.runner-stage canvas {
+  width:100%;
+  height:100%;
+  cursor:pointer;
+  touch-action:manipulation;
+}
+
+.runner-stage canvas:focus-visible {
+  outline:2px solid var(--lime);
+  outline-offset:-3px;
+}
+
+.runner-overlay {
+  position:absolute;
+  inset:0;
+  display:grid;
+  place-items:center;
+  background:#0b0e1159;
+  text-align:center;
+}
+
+.runner-overlay[hidden] {
+  display:none;
+}
+
+.runner-overlay>div {
+  padding:20px 26px;
+  background:#101714ed;
+  border:1px solid #465440;
+  border-radius:3px;
+}
+
+.runner-overlay p {
+  margin:0 0 17px;
+  color:var(--text);
+  font:13px/1.6 var(--mono);
+}
+
+.runner-overlay .tool-button {
+  min-width:110px;
+  color:var(--lime);
+}
+
+.runner-scores {
+  display:flex;
+  gap:20px;
+  font-variant-numeric:tabular-nums;
+}
+
+.runner-scores output {
+  color:var(--lime);
+}
+
+.runner-toolbar {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:16px;
+  padding:14px 20px;
+  border-top:1px solid #303b31;
+}
+
+.runner-toolbar p {
+  margin:0;
+  color:var(--muted);
+  font:10px/1.8 var(--mono);
+}
+
+.runner .tool-heading {
+  background:#121b16;
+}
+
+.runner-toolbar .tool-button {
+  background:#1c261d;
+  border-color:#465440;
+}
+
+@media(max-width:520px) {
+  .runner .tool-heading {
+    padding:14px;
+  }
+  .runner-scores {
+    gap:10px;
+    font-size:9px;
+  }
+  .runner-toolbar {
+    padding:12px 14px;
+    gap:10px;
+  }
+  .runner-toolbar p {
+    font-size:9px;
+    max-width:180px;
+  }
+  .runner-overlay>div {
+    padding:12px 16px;
+  }
+  .runner-overlay p {
+    font-size:11px;
+    margin-bottom:10px;
+  }
+  .runner-overlay .tool-button {
+    padding:8px 12px;
+  }
+}
+
+.runner-actions {
+  display:flex;
+  gap:8px;
+}
+
+.runner:fullscreen {
+  display:flex;
+  flex-direction:column;
+  border:0;
+  border-radius:0;
+  background:#101619;
+}
+
+.runner:fullscreen .runner-stage {
+  flex:1;
+  min-height:0;
+  aspect-ratio:auto;
+  display:grid;
+  place-items:center;
+}
+
+.runner:fullscreen canvas {
+  width:100%;
+  height:100%;
+  object-fit:contain;
+}
+
+.runner:fullscreen .runner-toolbar {
+  flex:none;
+}
+
+.runner:fullscreen .tool-heading {
+  flex:none;
+}
+
+@media(max-width:520px) {
+  .runner-toolbar {
+    flex-wrap:wrap;
+  }
+  .runner-toolbar p {
+    max-width:none;
+  }
+  .runner-actions {
+    margin-left:auto;
+  }
+}

@@ -1,0 +1,273 @@
+/* Shared cards and the visible shortcuts to every tool. */
+.small-tools {
+  padding-bottom: 65px;
+}
+
+.tool-shortcuts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 26px;
+}
+
+.tool-shortcuts a {
+  padding: 10px 13px;
+  border: 1px solid #465440;
+  border-radius: 3px;
+  color: var(--muted);
+  font-size: 12px;
+  background: #18221980;
+}
+
+.tool-shortcuts a:hover {
+  color: var(--lime);
+}
+
+.tools-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 760px);
+  align-items: start;
+  gap: 24px;
+}
+
+.small-tool {
+  min-width: 0;
+  border: 1px solid var(--line);
+  border-radius: 4px;
+  overflow: hidden;
+  background: #111714;
+  scroll-margin-top: 18px;
+}
+
+.tool-heading {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 18px;
+  padding: 17px 20px;
+  border-bottom: 1px solid var(--line);
+  font-size: 10px;
+  color: var(--muted);
+}
+
+.tool-heading h3 {
+  font: 500 14px var(--mono);
+  color: var(--text);
+  margin: 0;
+}
+
+.tool-body {
+  padding: 21px 20px 15px;
+}
+
+.tool-button {
+  background: #1c261d;
+  color: var(--text);
+  border: 1px solid #465440;
+  border-radius: 3px;
+  padding: 10px 12px;
+  font: 11px var(--mono);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tool-button:disabled {
+  opacity: .4;
+  cursor: default;
+}
+
+.tool-button:hover:not(:disabled) {
+  border-color: var(--lime);
+}
+
+.tool-note {
+  min-height: 18px;
+  font: 10px/1.8 var(--mono);
+  color: var(--muted);
+  margin: 14px 0 0;
+}
+
+/* Doodle pad */
+.doodle-surface {
+  aspect-ratio: 5/3;
+  background: var(--panel);
+}
+
+.doodle-surface canvas {
+  touch-action: none;
+  cursor: crosshair;
+}
+
+.drawing-toolbar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.drawing-inks, .drawing-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.ink-button {
+  width: 27px;
+  height: 27px;
+  padding: 0;
+  background: var(--swatch);
+  border: 1px solid #71816c;
+  border-radius: 3px;
+  cursor: pointer;
+}
+
+.ink-button[aria-pressed=true] {
+  box-shadow: 0 0 0 3px #101518, 0 0 0 4px #b4c1ad;
+}
+
+.ink-button:disabled {
+  opacity: .4;
+  cursor: wait;
+}
+
+/* Header CPS panel */
+.cps-section {
+  position: relative;
+}
+
+.cps-toggle {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  min-height: 47px;
+  padding: 10px 12px;
+  border: 1px solid #465440;
+  border-radius: 3px;
+  background: #18221980;
+  color: var(--text);
+  font: 12px var(--mono);
+  cursor: pointer;
+}
+
+.cps-toggle[aria-expanded=true] {
+  color: var(--lime);
+  border-color: var(--lime);
+}
+
+#cps-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 15px);
+  width: min(330px, calc(100vw - 44px));
+  box-shadow: 0 14px 36px #0005;
+}
+
+.cps-card .tool-body {
+  padding: 19px;
+}
+
+.cps-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 33px;
+  margin-bottom: 17px;
+  color: var(--muted);
+  font-size: 11px;
+}
+
+.cps-heading .tool-button {
+  padding: 7px 10px;
+}
+
+.cps-stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+  padding: 5px 0 20px;
+}
+
+.cps-stats > div {
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+
+.cps-stats output {
+  font-size: 26px;
+  color: var(--lime);
+  font-variant-numeric: tabular-nums;
+}
+
+.cps-stats span {
+  font-size: 9px;
+  color: var(--muted);
+}
+
+.cps-target {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  min-height: 150px;
+  padding: 24px;
+  background: #182219;
+  color: var(--lime);
+  border: 1px solid #536c3e;
+  border-radius: 3px;
+  cursor: pointer;
+  touch-action: manipulation;
+  user-select: none;
+}
+
+.cps-target strong {
+  font-size: 19px;
+  font-weight: 500;
+}
+
+.cps-target:hover:not(:disabled) {
+  background: #22321c;
+}
+
+.cps-target:disabled {
+  cursor: default;
+  background: #151b17;
+}
+
+.cps-target:active:not(:disabled) {
+  background: #304523;
+  transform: scale(.99) !important;
+}
+
+.cps-track {
+  height: 3px;
+  background: var(--line);
+  margin-top: 17px;
+  overflow: hidden;
+}
+
+.cps-track > div {
+  height: 100%;
+  background: var(--lime);
+  transform-origin: left;
+}
+
+@media (max-width: 760px) {
+  .small-tools {
+    padding-bottom: 45px;
+  }
+  .drawing-toolbar {
+    gap: 10px;
+  }
+  .tool-body {
+    padding: 18px 17px 15px;
+  }
+}
+
+@media (max-width: 520px) {
+  .cps-toggle {
+    font-size: 10px;
+    padding: 10px 8px;
+    min-height: 40px;
+  }
+}
