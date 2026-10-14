@@ -1,0 +1,41 @@
+.ambient {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+  contain: strict;
+}
+.ambient i {
+  position: absolute;
+  left: var(--x);
+  top: var(--y);
+  display: block;
+  width: 2px;
+  height: 2px;
+  background: var(--lime);
+  opacity: .15;
+  animation: ambient-drift var(--duration) var(--delay) ease-in-out infinite alternate;
+  will-change: transform;
+}
+.ambient .ambient-dash { width: 10px; height: 1px; opacity: .12; }
+.ambient .ambient-cross { width: 7px; height: 1px; }
+.ambient-cross::after { content: ''; position: absolute; left: 3px; top: -3px; width: 1px; height: 7px; background: inherit; }
+.brand-mark { animation: brand-glow 7s ease-in-out infinite; }
+.ambient-sleep i { animation-play-state: paused; }
+@keyframes ambient-drift {
+  0% { transform: translate3d(0, 14px, 0); opacity: .07; }
+  50% { opacity: .24; }
+  100% { transform: translate3d(var(--drift), -30px, 0); opacity: .1; }
+}
+@keyframes brand-glow {
+  0%, 100% { box-shadow: 0 0 0 0 transparent; }
+  50% { box-shadow: 0 0 15px -5px var(--lime); }
+}
+@media (max-width: 600px) {
+  .ambient i:nth-child(even) { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ambient i, .brand-mark { animation: none; }
+}
+html[data-motion=reduced] .ambient i, html[data-motion=reduced] .brand-mark { animation: none; }
