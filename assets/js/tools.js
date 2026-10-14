@@ -43,7 +43,15 @@ async function startDrawing() {
       if (history.length > 12) history.shift();
       undo.disabled = false;
     }
+    function saveDrawing() {
+      try { localStorage.setItem('doodle-pixels-v1', btoa(Array.from(pixels, byte => String.fromCharCode(byte)).join(''))); }
+      catch { /* Drawing still works when storage is unavailable. */ }
+    }
     runtime.clear_drawing();
+    try {
+      const saved = atob(localStorage.getItem('doodle-pixels-v1') || '');
+      if (saved.length === pixels.length) pixels.set(Uint8Array.from(saved, character => character.charCodeAt(0)));
+    } catch { /* Ignore an incomplete saved drawing. */ }
     paint();
     clear.disabled = false;
     inks.forEach(button => button.disabled = false);
@@ -72,7 +80,7 @@ async function startDrawing() {
       paint();
     });
     ['pointerup', 'pointercancel', 'lostpointercapture'].forEach(type => drawing.addEventListener(type, event => {
-      if (event.pointerId === activePointer) activePointer = null;
+      if (event.pointerId === activePointer) { activePointer = null; saveDrawing(); }
     }));
     drawing.addEventListener('keydown', event => {
       const steps = { ArrowLeft: [-1, 0], ArrowRight: [1, 0], ArrowUp: [0, -1], ArrowDown: [0, 1] };
@@ -84,6 +92,7 @@ async function startDrawing() {
       if (event.shiftKey || event.code === 'Space') {
         remember();
         runtime.draw_line(...last, ...next, ink);
+        saveDrawing();
       }
       last = next;
       paint();
@@ -92,10 +101,11 @@ async function startDrawing() {
     undo.addEventListener('click', () => {
       if (!history.length) return;
       pixels.set(history.pop());
+      saveDrawing();
       undo.disabled = !history.length;
       paint();
     });
-    clear.addEventListener('click', () => { remember(); runtime.clear_drawing(); paint(); });
+    clear.addEventListener('click', () => { remember(); runtime.clear_drawing(); saveDrawing(); paint(); });
   } catch (error) {
     drawingStatus.textContent = 'The drawing pad couldn’t load. Try refreshing.';
     console.error(error);

@@ -1,0 +1,19 @@
+.doodle-section { position: relative; }
+#doodle-panel {
+  position: absolute;
+  top: calc(100% + 15px);
+  right: 0;
+  width: min(440px, calc(100vw - 40px));
+  box-shadow: 0 18px 60px #0008;
+  max-height: calc(100dvh - 110px);
+  overflow-y: auto;
+}
+#doodle-toggle[aria-expanded=true] { color: var(--lime); border-color: var(--lime); }
+.label-short { display: none; }
+@media (max-width: 760px) {
+  #doodle-panel { position: fixed; top: 76px; left: 12px; right: 12px; width: auto; }
+  .label-full { display: none; }
+  .label-short { display: inline; }
+  .header-actions { gap: 6px; }
+  .header-actions .quote-toggle, .header-actions .cps-toggle { min-height: 44px; padding: 9px 10px; font-size: 11px; }
+}

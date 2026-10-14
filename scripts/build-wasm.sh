@@ -9,6 +9,7 @@ export CARGO_TARGET_DIR="$BUILD_DIR/rust"
 export RUSTFLAGS="--remap-path-prefix=$PWD=/site --remap-path-prefix=$HOME=/toolchain -C debuginfo=0"
 RUST_TOOLCHAIN=${RUST_TOOLCHAIN:-1.98.1}
 
+zig cc -target wasm32-freestanding -O2 -nostdlib -Wl,--no-entry -Wl,--strip-all src/orbit/orbit.c -o assets/wasm/orbit.wasm
 zig cc -target wasm32-freestanding -O2 -nostdlib -Wl,--no-entry -Wl,--strip-all src/field/field.c -o assets/wasm/field.wasm
 zig cc -target wasm32-freestanding -O2 -nostdlib -Wl,--no-entry -Wl,--strip-all src/hop/runner.c -o assets/wasm/runner.wasm
 zig c++ -target wasm32-wasi -std=c++20 -O2 -fno-exceptions -fno-rtti -mexec-model=reactor \

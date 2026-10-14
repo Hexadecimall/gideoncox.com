@@ -41,7 +41,7 @@
           { "@type": "Thing", "name": "WebAssembly" }
         ],
         "hasPart": [
-          { "@type": "WebApplication", "name": "Hop", "url": "https://gideoncox.com/#hop", "applicationCategory": "GameApplication", "operatingSystem": "Web browser", "description": "A runner game with double jumps, blocks, and gaps." },
+          { "@type": "WebApplication", "name": "Hop", "url": "https://gideoncox.com/games/hop/", "applicationCategory": "GameApplication", "operatingSystem": "Web browser", "description": "A runner game with double jumps, blocks, and gaps." },
           { "@type": "WebApplication", "name": "Doodle pad", "url": "https://gideoncox.com/#doodle-pad", "applicationCategory": "DesignApplication", "operatingSystem": "Web browser", "description": "A pixel drawing pad with three ink colors and undo." },
           { "@type": "WebApplication", "name": "CPS tester", "url": "https://gideoncox.com/#cps-tester", "applicationCategory": "UtilitiesApplication", "operatingSystem": "Web browser", "description": "A five-second clicks-per-second test." }
         ]
@@ -56,9 +56,10 @@
   <link href="assets/css/base.css" rel="stylesheet"/>
   <link href="assets/css/navigation.css" rel="stylesheet"/>
   <link href="assets/css/tools.css" rel="stylesheet"/>
-  <link href="assets/css/runner.css" rel="stylesheet"/>
+  <link href="assets/css/home.css" rel="stylesheet"/>
   <link href="assets/css/motion.css" rel="stylesheet"/>
   <link href="assets/css/quote.css" rel="stylesheet"/>
+  <link href="/assets/css/doodle.css" rel="stylesheet"/>
  </head>
  <body>
   <header id="site-header">
@@ -69,9 +70,49 @@
      </span>
     </button>
     <div class="header-actions">
+     <aside class="doodle-section" aria-label="Doodle pad">
+      <button class="quote-toggle" id="doodle-toggle" aria-label="Doodle pad" aria-controls="doodle-panel" aria-expanded="false"><span class="label-full">Doodle pad</span><span class="label-short" aria-hidden="true">Doodle</span></button>
+      <div class="small-tool" id="doodle-panel" hidden>
+      <div class="tool-heading">
+       <h3>
+        Doodle pad
+       </h3>
+       <span>
+        
+       </span>
+      </div>
+      <div class="doodle-surface">
+       <canvas aria-label="Drawing pad. Drag to draw. Arrow keys move the brush, Shift plus arrows draw, and Space adds a dot." height="96" id="drawing" role="img" tabindex="0" width="160">
+       </canvas>
+      </div>
+      <div class="tool-body">
+       <div class="drawing-toolbar">
+        <div aria-label="Ink color" class="drawing-inks" role="group">
+         <button aria-label="Lime ink" aria-pressed="true" class="ink-button" data-ink="c6f277" disabled="" style="--swatch:#c6f277">
+         </button>
+         <button aria-label="Blue ink" aria-pressed="false" class="ink-button" data-ink="88c9dc" disabled="" style="--swatch:#88c9dc">
+         </button>
+         <button aria-label="Purple ink" aria-pressed="false" class="ink-button" data-ink="c0adf7" disabled="" style="--swatch:#c0adf7">
+         </button>
+        </div>
+        <div class="drawing-actions">
+         <button class="tool-button" disabled="" id="undo-drawing">
+          Undo
+         </button>
+         <button class="tool-button" disabled="" id="clear-drawing">
+          Clear
+         </button>
+        </div>
+       </div>
+       <p class="tool-note" id="drawing-status" role="status">
+        Loading…
+       </p>
+      </div>
+      </div>     </aside>
+
      <aside aria-label="Quote of the day" class="quote-section">
-      <button aria-controls="quote-panel" aria-expanded="false" class="quote-toggle" id="quote-toggle">
-       Quote of the day
+      <button aria-controls="quote-panel" aria-expanded="false" class="quote-toggle" id="quote-toggle" aria-label="Quote of the day">
+       <span class="label-full">Quote of the day</span><span class="label-short" aria-hidden="true">Quote</span>
       </button>
       <div class="small-tool" hidden="" id="quote-panel">
        <div class="quote-body">
@@ -103,10 +144,8 @@
       </div>
      </aside>
      <aside aria-label="CPS tester" class="cps-section" id="cps-tester">
-      <button aria-controls="cps-panel" aria-expanded="false" class="cps-toggle" id="cps-toggle">
-       <span>
-        CPS tester
-       </span>
+      <button aria-controls="cps-panel" aria-expanded="false" class="cps-toggle" id="cps-toggle" aria-label="CPS tester">
+       <span class="label-full">CPS tester</span><span class="label-short" aria-hidden="true">CPS</span>
       </button>
       <div class="small-tool cps-card" hidden="" id="cps-panel">
        <div class="tool-body">
@@ -196,22 +235,22 @@
        </button>
        <div aria-label="tools" class="menu-panel" hidden="" id="tools-panel" role="region">
         <div class="menu-children">
-         <a href="#doodle-pad">
-          Doodle pad
-         </a>
-         <a href="#hop">
-          Hop
-         </a>
-         <a href="#cps-tester">
-          CPS tester
-         </a>
-         <a href="terminal/">
+         <a href="/terminal/">
           Terminal
          </a>
-         <a href="editor/">
+         <a href="/editor/">
           Zed
          </a>
         </div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="games-panel" aria-expanded="false" data-menu-panel="games">
+        <svg aria-hidden="true" class="menu-icon" viewBox="0 0 24 24"><path d="M7 7h10l4 11-3 2-4-4h-4l-4 4-3-2Z M7 10v4 M5 12h4 M16 11h.01 M18 13h.01"/></svg>
+        games <span aria-hidden="true" class="menu-arrow">›</span>
+       </button>
+       <div aria-label="games" class="menu-panel" hidden id="games-panel" role="region">
+        <div class="menu-children"><a href="/games/hop/">Hop</a></div>
        </div>
       </div>
       <a href="https://github.com/Hexadecimall" rel="noopener noreferrer" target="_blank">
@@ -237,124 +276,30 @@
     </div>
    </div>
   </header>
-  <main id="top">
-   <div class="shell">
-    <div class="hero">
-     <p class="hero-sub">
-      I make cool things. sometimes. here are some projects and other stupid things
-     </p>
+  <main class="home-page shell" id="top">
+   <section class="home-intro" aria-labelledby="home-title">
+    <div class="home-heading">
+     <span class="home-address">gideoncox.com</span>
+     <h1 id="home-title">random <br/><span>crap.</span></h1>
     </div>
-   </div>
-   <section aria-label="Games and tools" class="small-tools shell">
-    <hr class="intro-divider"/>
-    <nav aria-label="Jump to a tool" class="tool-shortcuts">
-     <a href="#doodle-pad">
-      Doodle pad
-     </a>
-     <a href="#hop">
-      Hop
-     </a>
-     <a href="terminal/">
-      Terminal ↗
-     </a>
-     <a href="editor/">
-      Zed ↗
-     </a>
-    </nav>
-    <div class="tools-grid">
-     <article class="small-tool" id="doodle-pad">
-      <div class="tool-heading">
-       <h3>
-        Doodle pad
-       </h3>
-       <span>
-        C / WASM
-       </span>
-      </div>
-      <div class="doodle-surface">
-       <canvas aria-label="Drawing pad. Drag to draw. Arrow keys move the brush, Shift plus arrows draw, and Space adds a dot." height="96" id="drawing" role="img" tabindex="0" width="160">
-       </canvas>
-      </div>
-      <div class="tool-body">
-       <div class="drawing-toolbar">
-        <div aria-label="Ink color" class="drawing-inks" role="group">
-         <button aria-label="Lime ink" aria-pressed="true" class="ink-button" data-ink="c6f277" disabled="" style="--swatch:#c6f277">
-         </button>
-         <button aria-label="Blue ink" aria-pressed="false" class="ink-button" data-ink="88c9dc" disabled="" style="--swatch:#88c9dc">
-         </button>
-         <button aria-label="Purple ink" aria-pressed="false" class="ink-button" data-ink="c0adf7" disabled="" style="--swatch:#c0adf7">
-         </button>
-        </div>
-        <div class="drawing-actions">
-         <button class="tool-button" disabled="" id="undo-drawing">
-          Undo
-         </button>
-         <button class="tool-button" disabled="" id="clear-drawing">
-          Clear
-         </button>
-        </div>
-       </div>
-       <p class="tool-note" id="drawing-status" role="status">
-        Loading…
-       </p>
-      </div>
-     </article>
-     <article aria-labelledby="hop-title" class="small-tool runner" id="hop">
-      <div class="tool-heading">
-       <h3 id="hop-title">
-        Hop
-       </h3>
-       <div class="runner-scores">
-        <span>
-         distance
-         <output id="hop-score">
-          0
-         </output>
-         m
-        </span>
-        <span>
-         best
-         <output id="hop-best">
-          0
-         </output>
-         m
-        </span>
-       </div>
-      </div>
-      <div class="runner-stage">
-       <canvas aria-label="Hop runner game. Space, Up, or tap to jump. Jump again in the air for a double jump. Hold Down or S to duck. P or Escape pauses." height="280" id="hop-canvas" role="img" tabindex="0" width="720">
-       </canvas>
-       <div class="runner-overlay" id="hop-overlay">
-        <div>
-         <p id="hop-message"></p>
-         <button class="tool-button" disabled="" id="hop-start">
-          Loading…
-         </button>
-        </div>
-       </div>
-      </div>
-      <div class="runner-toolbar">
-       <p>
-        Space / tap to jump · Down / S to duck · jump twice to double jump (nah really)
-       </p>
-       <div class="runner-actions">
-        <button class="tool-button" disabled="" id="hop-duck">
-         Hold to duck
-        </button>
-        <button class="tool-button" id="hop-fullscreen">
-         Fullscreen
-        </button>
-        <button class="tool-button" disabled="" id="hop-pause">
-         Pause
-        </button>
-       </div>
-      </div>
-      <p class="sr-only" id="hop-status" role="status">
-       Loading game.
-      </p>
-     </article>
+    <p class="home-description">I make cool things. sometimes.<br/>here are some projects and other stupid things</p>
+   </section>
+   <section class="orbit" aria-label="Interactive particle field">
+    <div class="orbit-heading"><span>01 / orbit</span><span aria-hidden="true" class="orbit-live">● live</span></div>
+    <canvas id="orbit-canvas" tabindex="0" role="img" aria-label="Interactive particle ring. Move your pointer or drag to push particles. Press Space to scatter them."></canvas>
+    <div class="orbit-footer">
+     <p id="orbit-status" role="status">Drag to interact · Space to scatter</p>
+     <div class="orbit-controls">
+      <button id="orbit-scatter" class="tool-button">Scatter</button>
+      <button id="orbit-pause" class="tool-button" aria-pressed="false">Pause</button>
+     </div>
     </div>
    </section>
+   <nav class="home-destinations" aria-label="Explore the site">
+    <a href="games/hop/"><span class="destination-index">01 / games</span><span class="destination-name">Hop <span aria-hidden="true">↗</span></span><span class="destination-detail">Play in your browser</span></a>
+    <a href="/terminal/"><span class="destination-index">02 / tools</span><span class="destination-name">Ark <span aria-hidden="true">↗</span></span><span class="destination-detail">Open terminal</span></a>
+    <a href="https://github.com/Hexadecimall" target="_blank" rel="noopener noreferrer"><span class="destination-index">03 / elsewhere</span><span class="destination-name">GitHub <span aria-hidden="true">↗</span></span><span class="destination-detail">Source &amp; projects</span></a>
+   </nav>
   </main>
   <footer class="shell footer">
    <span>
@@ -383,7 +328,8 @@
   </script>
   <script src="assets/js/quote.js" type="module">
   </script>
-  <script src="assets/js/runner.js" type="module">
+  <script src="assets/js/home.js" type="module">
   </script>
+  <script src="/assets/js/doodle.js" type="module"></script>
  </body>
 </html>

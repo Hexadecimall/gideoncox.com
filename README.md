@@ -1,6 +1,6 @@
 # random crap
 
-A static site with a doodle pad, Hop, a CPS tester, daily quotes, an Ark terminal, and a reserved page for Zed.
+A static personal site with an interactive particle field, a header doodle pad, Hop, a CPS tester, daily quotes, an Ark terminal, and a reserved page for Zed.
 
 ## Preview
 
@@ -15,6 +15,7 @@ Open `http://127.0.0.1:8767/`. The checked-in WebAssembly and terminal display a
 ## Layout
 
 - `index.html` — homepage, navigation, and search metadata.
+- `games/hop/` — the standalone game, linked under Games in the site menu.
 - `terminal/`, `editor/`, `settings/` — full tool and customization pages.
 - `assets/css/` — base styles and separate styles for each interface.
 - `assets/js/` — page behavior; terminal runtime modules live in `terminal/`.
@@ -23,6 +24,7 @@ Open `http://127.0.0.1:8767/`. The checked-in WebAssembly and terminal display a
 - `src/field/` — doodle rasterizer in C.
 - `src/hop/` — fixed-step game physics in C.
 - `src/ark/` — Ark lexer, parser, expander, and the browser ABI bridge.
+- `src/orbit/` — the homepage particle simulation, compiled to WebAssembly.
 - `src/terminal/` — Rust filesystem and browser commands.
 - `connector/` — optional local Ark connector.
 - `scripts/` — build and public-source audit commands.
@@ -80,3 +82,5 @@ The native connector check requires Ark, runs with a temporary home, and verifie
 ## Hosting
 
 Serve this repository root as a static site. `CNAME`, `robots.txt`, `sitemap.xml`, and `.nojekyll` are included for GitHub Pages. HTTPS is configured in the hosting settings, separately from these source files. The only external content request is the daily quote API; the terminal libraries are bundled locally.
+
+The header drawing pad saves its pixels on this device between pages. The homepage field stops while offscreen, paused, or hidden, and respects reduced-motion preferences.
