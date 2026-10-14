@@ -1,33 +1,46 @@
-/* Terminal chrome stays separate from the terminal's character grid. */
-.terminal-card { scroll-margin-top: 90px; }
-.terminal-heading-actions { display: flex; gap: 12px; align-items: center; }
-.terminal-modes { display: flex; gap: 6px; padding: 10px 16px; border-bottom: 1px solid var(--line); }
-.terminal-modes button { background: transparent; border-color: transparent; }
-.terminal-modes button[aria-pressed=true] { color: var(--lime); border-color: #465440; background: #1b261c; }
-.connector-setup { padding: 18px 20px; font: 12px/1.8 var(--mono); color: var(--muted); }
-.connector-setup > p { margin: 0 0 12px; color: var(--text); }
-.connector-setup summary { display: inline-flex; align-items: center; min-height: 44px; cursor: pointer; color: var(--lime); }
-.connector-setup details { margin: 0 0 12px; }
-.connector-setup ol { padding-left: 22px; }
-.connector-setup li { margin-bottom: 9px; }
-.connector-setup a { color: var(--lime); text-decoration: underline; text-underline-offset: 3px; }
-.connector-setup code { color: var(--text); overflow-wrap: anywhere; }
-.connector-form { display: flex; align-items: center; flex-wrap: wrap; gap: 10px; }
-.connector-form input { flex: 1; min-width: 120px; padding: 10px; background: #0c110f; border: 1px solid #465440; border-radius: 4px; color: var(--text); }
-.terminal-surface { height: 420px; min-width: 0; padding: 16px; background: #0c110f; }
+/* Terminal page: a single character grid beneath a compact tab bar. */
+.terminal-page .workspace-page { max-width: none; padding: 0; }
+.terminal-page .terminal-card { display: flex; flex-direction: column; min-height: calc(100dvh - 76px); border: 0; border-radius: 0; background: #0c110f; }
+.terminal-toolbar { display: flex; align-items: center; gap: 20px; padding: 0 18px; min-height: 52px; border-bottom: 1px solid #29342d; background: #101512; }
+.terminal-title, .connection-actions { display: flex; align-items: center; gap: 14px; }
+.terminal-title h1 { margin: 0; font: 400 13px var(--mono); }
+.terminal-title a { display: grid; place-items: center; width: 36px; height: 40px; font-size: 20px; }
+.terminal-modes { display: flex; align-self: stretch; gap: 4px; }
+.terminal-toolbar button { min-height: 44px; padding: 0 12px; border: 0; background: transparent; color: var(--muted); font: 11px var(--mono); cursor: pointer; }
+.terminal-modes button { border-bottom: 1px solid transparent; }
+.terminal-modes button[aria-pressed=true] { color: var(--text); border-bottom-color: var(--lime); }
+.connection-actions { margin-left: auto; font-size: 10px; color: var(--muted); }
+.connection-actions button { color: var(--lime); }
+.local-terminal, .browser-terminal { flex: 1; min-width: 0; }
+.terminal-page .terminal-surface, .terminal-page .terminal-card:not(.is-connected) .local-terminal-surface { height: calc(100dvh - 129px); min-height: 240px; padding: 14px 18px; background: #0c110f; }
 .terminal-surface .xterm { height: 100%; }
 .terminal-surface .xterm-helper-textarea { outline: none !important; }
-.terminal-status { margin: 0; padding: 10px 16px; color: var(--muted); border-top: 1px solid var(--line); font: 11px/1.6 var(--mono); overflow-wrap: anywhere; }
-.terminal-keys { display: flex; gap: 6px; padding: 10px 12px; overflow-x: auto; border-top: 1px solid var(--line); scrollbar-width: thin; }
-.terminal-keys button { flex: 1 0 38px; min-height: 40px; padding: 7px; background: #17201a; border: 1px solid #344337; border-radius: 4px; color: var(--muted); font-size: 11px; touch-action: manipulation; }
-.terminal-keys button:hover { outline-offset: -2px; color: var(--lime); }
-.is-connected .connector-setup { display: flex; align-items: center; justify-content: flex-end; padding: 8px 16px; }
-.is-connected .connector-setup > p, .is-connected .connector-setup details { display: none; }
+.terminal-keys { display: none; }
+#connector-dialog { width: min(460px, calc(100vw - 32px)); padding: 0; color: var(--text); background: #111714; border: 1px solid #465440; border-radius: 4px; }
+#connector-dialog::backdrop { background: #0009; }
+.connector-setup { padding: 24px; font: 12px/1.8 var(--mono); }
+.connector-dialog-heading { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
+.connector-dialog-heading h2 { margin: 0; font: 400 16px var(--mono); }
+#connector-close { width: 36px; height: 36px; border: 0; background: none; color: var(--muted); font-size: 24px; cursor: pointer; }
+.connector-form { display: flex; flex-wrap: wrap; gap: 10px; }
+.connector-form label { width: 100%; color: var(--muted); }
+.connector-form input { flex: 1; min-width: 100px; padding: 10px; font-size: 16px; background: #0c110f; color: var(--text); border: 1px solid #465440; border-radius: 3px; }
+.connector-setup details { margin-top: 20px; color: var(--muted); }
+.connector-setup summary { cursor: pointer; min-height: 36px; }
+.connector-setup a { color: var(--lime); text-decoration: underline; text-underline-offset: 3px; }
+.connector-setup code { color: var(--text); overflow-wrap: anywhere; }
+#connector-error { color: var(--orange); }
+@media (pointer: coarse), (max-width: 700px) {
+  .terminal-keys { display: flex; gap: 4px; padding: 6px 8px; border-top: 1px solid #29342d; }
+  .terminal-keys button { flex: 1; min-width: 0; min-height: 44px; padding: 4px; background: transparent; border: 0; border-radius: 3px; color: var(--muted); font-size: 11px; touch-action: manipulation; }
+  .terminal-page .terminal-surface, .terminal-page .terminal-card:not(.is-connected) .local-terminal-surface { height: calc(100dvh - 186px); padding: 10px; }
+}
 @media (max-width: 600px) {
-  .connector-form label { width: 100%; }
-  .connector-form input { font-size: 16px; }
-  .connector-setup, .terminal-modes { padding-left: 14px; padding-right: 14px; }
-  .terminal-surface { padding: 10px 8px; }
-  .terminal-keys { gap: 4px; padding: 8px; }
-  .terminal-keys button { min-height: 44px; flex-basis: 30px; }
+  .terminal-toolbar { flex-wrap: wrap; gap: 0 12px; padding: 0 8px; }
+  .terminal-title { gap: 8px; }
+  .terminal-modes { order: 3; width: 100%; min-height: 44px; }
+  .connection-actions { gap: 2px; }
+  .connection-actions span { font-size: 9px; }
+  .terminal-page .terminal-surface, .terminal-page .terminal-card:not(.is-connected) .local-terminal-surface { height: calc(100dvh - 220px); }
+  .terminal-page .terminal-card { min-height: calc(100dvh - 66px); }
 }

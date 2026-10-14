@@ -1,7 +1,6 @@
 .home-page { padding-top: clamp(32px, 4vw, 52px); padding-bottom: 58px; }
 .home-intro { display: flex; align-items: flex-end; justify-content: space-between; gap: 36px; margin-bottom: 42px; }
-.home-address { color: var(--muted); font-size: 11px; letter-spacing: .04em; }
-.home-heading h1 { font-size: clamp(42px, 5.6vw, 72px); line-height: .98; letter-spacing: -.055em; font-weight: 400; margin: 20px 0 0; }
+.home-heading h1 { font-size: clamp(42px, 5.6vw, 72px); line-height: .98; letter-spacing: -.055em; font-weight: 400; margin: 0; }
 .home-heading h1 span { color: var(--lime); }
 .home-description { max-width: 295px; color: var(--muted); font-size: 12px; line-height: 1.9; margin: 0 0 5px; }
 .orbit { position: relative; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: radial-gradient(ellipse at center, #18211970, transparent 68%); }
@@ -38,3 +37,5 @@
 }
 
 @media (min-width: 1000px) { .home-heading h1 br { display: none; } .home-intro { align-items: flex-end; } }
+
+.orbit-footer { justify-content: flex-end; }

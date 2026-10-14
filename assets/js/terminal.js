@@ -143,6 +143,5 @@ try {
   cwd = result.cwd;
   ready = true;
   status.textContent = result.warning || 'Browser files · saved on this device';
-  write('Ark / WebAssembly\nBrowser filesystem. Native programs use This computer.\n\n');
   render();
 } catch (error) { status.textContent = error.message; }

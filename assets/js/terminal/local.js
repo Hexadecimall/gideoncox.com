@@ -11,6 +11,11 @@ const connectButton = connectForm.querySelector('button[type=submit]');
 const disconnectButton = root.querySelector('#connector-disconnect');
 const status = root.querySelector('#connector-status');
 const surface = root.querySelector('.local-terminal-surface');
+const dialog = root.querySelector('#connector-dialog');
+const openButton = root.querySelector('#connector-open');
+const errorOutput = root.querySelector('#connector-error');
+openButton.addEventListener('click', () => { dialog.showModal(); tokenInput.focus(); });
+root.querySelector('#connector-close').addEventListener('click', () => dialog.close());
 const endpoint = 'http://127.0.0.1:8770';
 let token = '';
 let session = '';
@@ -73,11 +78,15 @@ function disconnected(message) {
   connectForm.hidden = false;
   terminal && (terminal.options.disableStdin = true);
   status.textContent = message;
+  openButton.hidden = false;
 }
 function fail(error) {
   const id = session;
   if (id) call('/disconnect', { session: id }).catch(() => {});
-  disconnected(error instanceof TypeError ? 'Could not reach the connector. Start it locally and allow local network access if prompted.' : error.message);
+  disconnected('Connection failed');
+  errorOutput.textContent = error instanceof TypeError ? 'Connector unreachable at 127.0.0.1:8770.' : error.message;
+  errorOutput.hidden = false;
+  if (!dialog.open) dialog.showModal();
 }
 async function poll() {
   const id = session;
@@ -88,7 +97,7 @@ async function poll() {
     // A write callback applies backpressure so large native output cannot
     // accumulate indefinitely in the terminal renderer.
     if (result.output) await new Promise(resolve => terminal.write(result.output, resolve));
-    if (result.ended) { disconnected('Ark exited. Connect to start another session.'); return; }
+    if (result.ended) { disconnected('Shell exited'); return; }
     pollTimer = setTimeout(poll, result.output ? 20 : 90);
   } catch (error) { if (session === id) fail(error); }
 }
@@ -98,6 +107,7 @@ connectForm.addEventListener('submit', async event => {
   connecting = true; connectButton.disabled = true;
   token = tokenInput.value.trim();
   status.textContent = 'Connecting…';
+  errorOutput.hidden = true;
   try {
     surface.hidden = false;
     setupTerminal();
@@ -111,7 +121,9 @@ connectForm.addEventListener('submit', async event => {
     terminal.options.disableStdin = false;
     connectForm.hidden = true;
     disconnectButton.hidden = false;
-    status.textContent = 'Connected to this computer · Ark';
+    status.textContent = 'Connected';
+    openButton.hidden = true;
+    dialog.close();
     terminal.focus();
     poll();
   } catch (error) { fail(error); }
@@ -127,6 +139,7 @@ tabs.forEach(tab => tab.addEventListener('click', () => {
   const local = tab.dataset.terminalMode === 'local';
   browserPanel.hidden = local;
   localPanel.hidden = !local;
+  root.querySelector('.connection-actions').hidden = !local;
   tabs.forEach(button => button.setAttribute('aria-pressed', String(button === tab)));
   resize();
   window.dispatchEvent(new Event('terminal-mode-changed'));

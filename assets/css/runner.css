@@ -171,3 +171,5 @@
   .runner-actions { margin: 0; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
   .runner-actions .tool-button { padding: 10px 6px; font-size: 10px; }
 }
+
+.runner-toolbar { justify-content: flex-end; }

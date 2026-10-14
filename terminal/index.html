@@ -21,18 +21,18 @@
    Ark · random crap
   </title>
   <link href="../assets/icons/favicon.svg" rel="icon" type="image/svg+xml"/>
-  <link href="../assets/css/base.css?v=20261014-2" rel="stylesheet"/>
-  <link href="../assets/css/navigation.css?v=20261014-2" rel="stylesheet"/>
-  <link href="../assets/css/tools.css?v=20261014-2" rel="stylesheet"/>
-  <link href="../assets/css/motion.css?v=20261014-2" rel="stylesheet"/>
-  <link href="../assets/vendor/xterm/xterm.css?v=20261014-2" rel="stylesheet"/>
-  <link href="../assets/css/terminal.css?v=20261014-2" rel="stylesheet"/>
-  <link href="../assets/css/workspace.css?v=20261014-2" rel="stylesheet"/>
-  <link href="../assets/css/quote.css?v=20261014-2" rel="stylesheet"/>
-  <link href="/assets/css/doodle.css?v=20261014-2" rel="stylesheet"/>
-  <link href="/assets/css/ambient.css?v=20261014-2" rel="stylesheet"/>
+  <link href="../assets/css/base.css?v=20261014-4" rel="stylesheet"/>
+  <link href="../assets/css/navigation.css?v=20261014-4" rel="stylesheet"/>
+  <link href="../assets/css/tools.css?v=20261014-4" rel="stylesheet"/>
+  <link href="../assets/css/motion.css?v=20261014-4" rel="stylesheet"/>
+  <link href="../assets/vendor/xterm/xterm.css?v=20261014-4" rel="stylesheet"/>
+  <link href="../assets/css/workspace.css?v=20261014-4" rel="stylesheet"/>
+  <link href="../assets/css/quote.css?v=20261014-4" rel="stylesheet"/>
+  <link href="/assets/css/doodle.css?v=20261014-4" rel="stylesheet"/>
+  <link href="/assets/css/ambient.css?v=20261014-4" rel="stylesheet"/>
+  <link href="../assets/css/terminal.css?v=20261014-4" rel="stylesheet"/>
  </head>
- <body class="workspace-view">
+ <body class="workspace-view terminal-page">
   <header id="site-header">
    <div class="shell nav">
     <button aria-controls="site-menu" aria-expanded="false" aria-label="Open menu" class="brand menu-toggle" id="menu-toggle">
@@ -75,7 +75,7 @@
          </button>
         </div>
        </div>
-       <p class="tool-note" id="drawing-status" role="status">
+       <p class="sr-only" id="drawing-status" role="status">
         Loading…
        </p>
       </div>
@@ -248,84 +248,44 @@
    </div>
   </header>
   <main class="workspace-page shell" id="top">
-   <nav aria-label="Workspace" class="workspace-nav">
-    <a href="../" aria-label="Back to main page">
-     ←
-    </a>
-    <a aria-current="page" href="/terminal/">
-     Terminal
-    </a>
-   </nav>
    <section aria-label="Terminal" class="workspace-panel terminal-card" id="terminal">
-    <div class="tool-heading">
-     <h3>
-      Ark
-     </h3>
-     <div class="terminal-heading-actions">
-      <span>
-       Terminal
-      </span>
+    <div class="terminal-toolbar">
+     <div class="terminal-title"><a href="/" aria-label="Back to main page">←</a><h1>Ark</h1></div>
+     <div aria-label="Terminal mode" class="terminal-modes" role="group">
+      <button aria-pressed="true" data-terminal-mode="local">This computer</button>
+      <button aria-pressed="false" data-terminal-mode="browser">Browser files</button>
+     </div>
+     <div class="connection-actions">
+      <span id="connector-status" role="status">Disconnected</span>
+      <button id="connector-open" type="button">Connect</button>
+      <button id="connector-disconnect" type="button" hidden>Disconnect</button>
      </div>
     </div>
-    <div aria-label="Terminal mode" class="terminal-modes" role="group">
-     <button aria-pressed="true" class="tool-button" data-terminal-mode="local">
-      This computer
-     </button>
-     <button aria-pressed="false" class="tool-button" data-terminal-mode="browser">
-      Browser files
-     </button>
-    </div>
-    <div class="local-terminal">
+    <dialog id="connector-dialog" aria-labelledby="connector-title">
      <div class="connector-setup">
-      <p>Connect to your installed Ark shell.</p>
-      <details>
-       <summary>
-        Set up the connector
-       </summary>
-       <ol>
-        <li>
-         Install Ark and Python 3 on macOS, Linux, or WSL. On a Chromebook, use its Linux environment.
-        </li>
-        <li>
-         <a download="" href="../connector/ark_connector.py">
-          Download the connector
-         </a>
-         and run
-         <code>
-          python3 ark_connector.py
-         </code>
-         .
-        </li>
-        <li>
-         Paste the pairing token below. Keep the connector running.
-        </li>
-       </ol>
-       <p>
-        Connected commands use your real account and files. Browser files stay separate.
-       </p>
-      </details>
+      <div class="connector-dialog-heading"><h2 id="connector-title">Connect to Ark</h2><button id="connector-close" type="button" aria-label="Close connection setup">×</button></div>
       <form class="connector-form">
-       <label for="connector-token">
-        Pairing token
-       </label>
-       <input autocomplete="off" id="connector-token" required="" spellcheck="false" type="password"/>
-       <button class="tool-button" type="submit">
-        Connect
-       </button>
+       <label for="connector-token">Pairing token</label>
+       <input autocomplete="off" id="connector-token" required spellcheck="false" type="password"/>
+       <button class="tool-button" type="submit">Connect</button>
       </form>
-      <button class="tool-button" hidden="" id="connector-disconnect">
-       Disconnect
-      </button>
+      <p id="connector-error" role="alert" hidden></p>
+      <details>
+       <summary>Connector setup</summary>
+       <p>Requires Ark and Python 3 on macOS, Linux, WSL, or a Chromebook’s Linux environment.</p>
+       <p><a download href="../connector/ark_connector.py">Download connector</a></p>
+       <code>python3 ark_connector.py</code>
+       <p>Use the token it prints. Keep it running while connected.</p>
+      </details>
      </div>
+    </dialog>
+    <div class="local-terminal">
      <div class="terminal-surface local-terminal-surface" aria-label="Local terminal">
      </div>
-     <p class="terminal-status" id="connector-status" role="status">
-      Not connected
-     </p>
     </div>
     <div class="browser-terminal" hidden="">
      <div class="terminal-surface browser-terminal-surface" aria-label="Browser terminal"></div>
-     <p class="terminal-status" role="status">Loading Ark…</p>
+     <p class="terminal-status sr-only" role="status">Loading Ark…</p>
     </div>
     <div class="terminal-keys" role="group" aria-label="Terminal keyboard">
      <button type="button" data-terminal-key="Escape">Esc</button>
@@ -339,25 +299,6 @@
     </div>
    </section>
   </main>
-  <footer class="shell footer">
-   <span>
-    g. /
-    <span id="year">
-     2026
-    </span>
-   </span>
-   <div class="footer-links">
-    <a href="../#top">
-     Back to top ↑
-    </a>
-    <a href="https://github.com/Hexadecimall" rel="noopener noreferrer" target="_blank">
-     GitHub ↗
-    </a>
-    <a href="/settings/">
-     Settings
-    </a>
-   </div>
-  </footer>
   <script src="../assets/js/navigation.js" type="module">
   </script>
   <script src="../assets/js/cps.js" type="module">
@@ -368,10 +309,10 @@
   </script>
   <script src="../assets/vendor/addon-fit/addon-fit.js">
   </script>
-  <script src="../assets/js/terminal.js" type="module">
+  <script src="../assets/js/terminal.js?v=20261014-3" type="module">
   </script>
   <script src="../assets/js/terminal/keyboard.js" type="module"></script>
-  <script src="../assets/js/terminal/local.js" type="module">
+  <script src="../assets/js/terminal/local.js?v=20261014-3" type="module">
   </script>
   <script src="/assets/js/tools.js" type="module"></script>
   <script src="/assets/js/doodle.js" type="module"></script>
