@@ -3,7 +3,6 @@ const context = canvas.getContext('2d');
 const scatter = document.querySelector('#orbit-scatter');
 const pause = document.querySelector('#orbit-pause');
 const status = document.querySelector('#orbit-status');
-const live = document.querySelector('.orbit-live');
 const motion = matchMedia('(prefers-reduced-motion: reduce)');
 let engine;
 let points;
@@ -72,7 +71,6 @@ function start() {
   pause.textContent = reduced() ? 'Motion off' : stopped ? 'Play' : 'Pause';
   pause.disabled = reduced();
   pause.setAttribute('aria-pressed', String(stopped));
-  live.textContent = stopped ? '○ still' : '● live';
   if (!stopped && visible && !document.hidden) frame = requestAnimationFrame(tick);
   draw();
 }

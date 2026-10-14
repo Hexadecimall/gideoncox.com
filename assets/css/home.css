@@ -5,7 +5,6 @@
 .home-description { max-width: 295px; color: var(--muted); font-size: 12px; line-height: 1.9; margin: 0 0 5px; }
 .orbit { position: relative; border-top: 1px solid var(--line); border-bottom: 1px solid var(--line); background: radial-gradient(ellipse at center, #18211970, transparent 68%); }
 .orbit-heading { position: absolute; top: 20px; left: 0; right: 0; display: flex; justify-content: space-between; color: var(--muted); font-size: 10px; letter-spacing: .08em; pointer-events: none; }
-.orbit-live { color: var(--lime); }
 #orbit-canvas { width: 100%; height: clamp(300px, 40vw, 440px); image-rendering: auto; cursor: crosshair; touch-action: pan-y; }
 #orbit-canvas:focus-visible { outline-offset: -3px; }
 .orbit-footer { display: flex; justify-content: space-between; align-items: center; gap: 12px; padding: 0 0 18px; }
