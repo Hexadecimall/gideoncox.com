@@ -18,7 +18,9 @@
   border: 1px solid transparent;
   border-radius: 3px;
 }
-.workspace-nav a:first-child { margin-right: auto; padding-left: 0; }
+.workspace-nav a:first-child { margin-right: auto; }
+.workspace-nav a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; }
+.workspace-nav a[aria-label="Back to main page"] { width: 44px; padding: 0; font-size: 22px; line-height: 1; }
 .workspace-nav a[aria-current=page] { color: var(--lime); border-color: #465440; background: #18221980; }
 .workspace-panel {
   min-width: 0;
@@ -27,7 +29,7 @@
   border: 1px solid var(--line);
   border-radius: 4px;
 }
-.workspace-view .local-terminal-surface { height: max(420px, calc(100dvh - 365px)); }
+.workspace-view .terminal-surface { height: clamp(280px, calc(100dvh - 330px), 760px); }
 .workspace-view .terminal-output { height: max(360px, calc(100dvh - 350px)); }
 .workspace-view .editor-layout { min-height: max(480px, calc(100dvh - 255px)); grid-template-columns: 220px minmax(0, 1fr); }
 .workspace-view .editor-surface { flex: 1; min-height: 360px; }
@@ -46,3 +48,11 @@
 .zed-placeholder h1 { margin: 0 0 16px; font-size: 26px; font-weight: 500; }
 .zed-placeholder p { color: var(--text); font-size: 14px; line-height: 1.8; margin: 0 0 8px; }
 .zed-placeholder .zed-detail { color: var(--muted); font-size: 12px; margin-bottom: 28px; }
+
+.workspace-view .terminal-card:not(.is-connected) .local-terminal-surface { height: 240px; }
+@media (max-width: 600px) {
+  .workspace-view .terminal-surface { height: clamp(250px, calc(100dvh - 310px), 540px); }
+  .workspace-view .terminal-card:not(.is-connected) .local-terminal-surface { height: 160px; }
+  .workspace-nav { margin-bottom: 16px; }
+  .zed-placeholder { min-height: 340px; }
+}

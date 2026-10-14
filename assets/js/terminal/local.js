@@ -1,3 +1,5 @@
+import { createDisplay } from './display.js';
+
 // The pairing token stays in memory. Browser files never go to the connector.
 const root = document.querySelector('#terminal');
 const browserPanel = root.querySelector('.browser-terminal');
@@ -38,45 +40,14 @@ function resize() {
   fit.fit();
   if (session) call('/resize', { session, columns: terminal.cols, rows: terminal.rows }).catch(fail);
 }
-function terminalPreferences() {
-  const preferences = window.sitePreferences?.values || {};
-  return {
-    fontSize: preferences.terminalFontSize || 13,
-    cursorStyle: preferences.terminalCursor || 'bar',
-    cursorBlink: preferences.terminalBlink !== false,
-    scrollback: preferences.terminalScrollback || 2500,
-  };
-}
-window.addEventListener('site-preferences-changed', () => {
-  if (!terminal) return;
-  Object.assign(terminal.options, terminalPreferences());
-  terminal.options.theme = { ...terminal.options.theme, cursor: window.sitePreferences.values.accent };
-  resize();
-});
 function setupTerminal() {
-  if (terminal) { terminal.reset(); return; }
-  terminal = new window.Terminal({
-    fontFamily: 'ui-monospace, SFMono-Regular, Menlo, Consolas, monospace',
-    fontSize: 13,
-    lineHeight: 1.2,
-    cursorBlink: true,
-    cursorStyle: 'bar',
-    scrollback: 2500,
-    ...terminalPreferences(),
-    allowProposedApi: false,
-    screenReaderMode: true,
-    theme: {
-      background: '#0c110f', foreground: '#d6e0d2', cursor: '#c6f277', selectionBackground: '#c6f27740',
-      black: '#0c110f', red: '#eb8c7b', green: '#c6f277', yellow: '#e3cb83',
-      blue: '#88c9dc', magenta: '#c0adf7', cyan: '#91d5b9', white: '#edf1ef',
-      brightBlack: '#758673', brightRed: '#ffb09d', brightGreen: '#d9ffa2', brightYellow: '#f8e2a0',
-      brightBlue: '#b2e6f3', brightMagenta: '#d9caff', brightCyan: '#b0efcf', brightWhite: '#ffffff',
-    },
+  if (terminal) return;
+  ({ terminal, fit } = createDisplay(surface));
+  terminal.options.disableStdin = true;
+  terminal.onResize(() => {
+    if (session) call('/resize', { session, columns: terminal.cols, rows: terminal.rows }).catch(fail);
   });
-  fit = new window.FitAddon.FitAddon();
-  terminal.loadAddon(fit);
-  terminal.open(surface);
-  terminal.onData(text => {
+  const sendInput = text => {
     const id = session;
     if (!id) return;
     // Preserve keystroke order even when several requests are in flight.
@@ -88,12 +59,16 @@ function setupTerminal() {
         await call('/input', { session: id, text: chunks.slice(offset, offset + 8192).join('') });
       }
     }).catch(fail);
+  };
+  terminal.onData(sendInput);
+  window.addEventListener('terminal-input', event => {
+    if (!localPanel.hidden && session) { terminal.focus(); sendInput(event.detail); }
   });
-  new ResizeObserver(resize).observe(surface);
 }
 function disconnected(message) {
   clearTimeout(pollTimer);
   session = ''; token = '';
+  root.classList.remove('is-connected');
   disconnectButton.hidden = true;
   connectForm.hidden = false;
   terminal && (terminal.options.disableStdin = true);
@@ -129,6 +104,9 @@ connectForm.addEventListener('submit', async event => {
     fit.fit();
     const result = await call('/connect', { columns: terminal.cols, rows: terminal.rows });
     session = result.session;
+    terminal.reset();
+    root.classList.add('is-connected');
+    root.querySelector('.connector-setup details').open = false;
     tokenInput.value = '';
     terminal.options.disableStdin = false;
     connectForm.hidden = true;
@@ -151,7 +129,10 @@ tabs.forEach(tab => tab.addEventListener('click', () => {
   localPanel.hidden = !local;
   tabs.forEach(button => button.setAttribute('aria-pressed', String(button === tab)));
   resize();
+  window.dispatchEvent(new Event('terminal-mode-changed'));
 }));
 window.addEventListener('pagehide', () => {
   if (session) call('/disconnect', { session }, true).catch(() => {});
 });
+
+setupTerminal();

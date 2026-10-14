@@ -271,3 +271,17 @@
     min-height: 40px;
   }
 }
+
+.tool-button, .tool-shortcuts a { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; }
+.small-tool { border-radius: 8px; }
+.tool-shortcuts a { border-radius: 5px; }
+@media (max-width: 600px) {
+  .tool-shortcuts { gap: 8px; margin-bottom: 20px; }
+  .tool-shortcuts a { flex: 1 1 calc(50% - 8px); }
+  .tool-heading { padding: 14px 16px; }
+  .drawing-toolbar { flex-wrap: wrap; gap: 16px; }
+  .drawing-actions { margin-left: auto; }
+  .ink-button { width: 44px; height: 44px; border-radius: 5px; }
+  .drawing-inks { gap: 10px; }
+  #cps-panel { position: fixed; top: 76px; left: 12px; right: 12px; width: auto; max-height: calc(100dvh - 90px); overflow-y: auto; }
+}

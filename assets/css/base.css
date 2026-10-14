@@ -156,3 +156,16 @@ html[data-motion=reduced] *, html[data-motion=reduced] *::before, html[data-moti
   transition: none !important;
   scroll-behavior: auto !important;
 }
+
+/* Consistent hit areas and outlines, including icon-only navigation. */
+:where(button, a, input, select, summary) { -webkit-tap-highlight-color: transparent; }
+:where(button, a, summary) { touch-action: manipulation; }
+:where(a, button, input, textarea, select, summary):focus-visible { outline-offset: 2px; }
+@media (hover: hover) {
+  :where(a, button:not(:disabled), input:not(:disabled)):hover { outline-offset: 2px; }
+}
+@media (max-width: 600px) {
+  .shell { padding-left: 16px; padding-right: 16px; }
+  .footer-links { flex-wrap: wrap; gap: 12px 20px; }
+  .footer-links a { display: inline-flex; align-items: center; min-height: 44px; }
+}

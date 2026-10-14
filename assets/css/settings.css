@@ -12,3 +12,9 @@
 .preference output { min-width: 20px; color: var(--text); }
 .preferences-footer { display: flex; flex-wrap: wrap; align-items: center; gap: 18px; margin-top: 24px; color: var(--muted); font-size: 12px; }
 @media (max-width: 760px) { .preferences-grid { grid-template-columns: minmax(0, 1fr); } }
+
+@media (max-width: 600px) {
+  .preferences-grid fieldset { padding: 18px 14px; }
+  .preference { flex-wrap: wrap; gap: 10px; }
+  .preference select, .preference input[type=number] { font-size: 16px; min-height: 44px; }
+}

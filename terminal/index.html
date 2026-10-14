@@ -215,9 +215,6 @@
     <a aria-current="page" href="../terminal/">
      Terminal
     </a>
-    <a href="../editor/">
-     Zed
-    </a>
    </nav>
    <section aria-label="Terminal" class="workspace-panel terminal-card" id="terminal">
     <div class="tool-heading">
@@ -240,9 +237,7 @@
     </div>
     <div class="local-terminal">
      <div class="connector-setup">
-      <p>
-       Run Ark on this computer.
-      </p>
+      <p>Connect to your installed Ark shell.</p>
       <details>
        <summary>
         Set up the connector
@@ -252,7 +247,7 @@
          Install Ark and Python 3 on macOS, Linux, or WSL. On a Chromebook, use its Linux environment.
         </li>
         <li>
-         <a download="" href="connector/ark_connector.py">
+         <a download="" href="../connector/ark_connector.py">
           Download the connector
          </a>
          and run
@@ -282,32 +277,25 @@
        Disconnect
       </button>
      </div>
-     <div class="local-terminal-surface" hidden="">
+     <div class="terminal-surface local-terminal-surface" aria-label="Local terminal">
      </div>
      <p class="terminal-status" id="connector-status" role="status">
       Not connected
      </p>
     </div>
     <div class="browser-terminal" hidden="">
-     <div aria-label="Terminal output" aria-live="polite" class="terminal-output" role="log" tabindex="0">
-     </div>
-     <form class="terminal-form">
-      <label class="sr-only" for="terminal-input">
-       Ark command
-      </label>
-      <span aria-hidden="true" class="terminal-prompt">
-       ~ $
-      </span>
-      <input autocapitalize="off" autocomplete="off" disabled="" id="terminal-input" spellcheck="false"/>
-     </form>
-     <div class="terminal-browser-footer">
-      <p class="terminal-status" role="status">
-       Loading Ark…
-      </p>
-      <button class="tool-button" data-terminal-stop="" disabled="">
-       Stop
-      </button>
-     </div>
+     <div class="terminal-surface browser-terminal-surface" aria-label="Browser terminal"></div>
+     <p class="terminal-status" role="status">Loading Ark…</p>
+    </div>
+    <div class="terminal-keys" role="group" aria-label="Terminal keyboard">
+     <button type="button" data-terminal-key="Escape">Esc</button>
+     <button type="button" data-terminal-key="Tab">Tab</button>
+     <button type="button" data-terminal-key="ControlC">Ctrl C</button>
+     <button type="button" data-terminal-key="ArrowUp" aria-label="Up arrow">↑</button>
+     <button type="button" data-terminal-key="ArrowDown" aria-label="Down arrow">↓</button>
+     <button type="button" data-terminal-key="ArrowLeft" aria-label="Left arrow">←</button>
+     <button type="button" data-terminal-key="ArrowRight" aria-label="Right arrow">→</button>
+     <button type="button" data-terminal-key="Enter">Enter</button>
     </div>
    </section>
   </main>
@@ -342,6 +330,7 @@
   </script>
   <script src="../assets/js/terminal.js" type="module">
   </script>
+  <script src="../assets/js/terminal/keyboard.js" type="module"></script>
   <script src="../assets/js/terminal/local.js" type="module">
   </script>
  </body>

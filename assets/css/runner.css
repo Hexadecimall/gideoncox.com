@@ -161,3 +161,13 @@
     margin-left:auto;
   }
 }
+
+.runner-overlay p:empty { display: none; }
+.runner-overlay > div:has(p:empty) { border: 0; background: transparent; padding: 0; }
+.runner-overlay .tool-button { min-height: 44px; }
+@media (max-width: 600px) {
+  .runner-toolbar { flex-direction: column; align-items: stretch; padding: 14px; }
+  .runner-toolbar p { font-size: 10px; line-height: 1.7; max-width: none; }
+  .runner-actions { margin: 0; display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 8px; }
+  .runner-actions .tool-button { padding: 10px 6px; font-size: 10px; }
+}
