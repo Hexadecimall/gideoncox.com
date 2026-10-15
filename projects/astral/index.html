@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+ <head>
+  <script src="/assets/js/preferences.js">
+  </script>
+  <meta charset="utf-8"/>
+  <meta content="width=device-width, initial-scale=1" name="viewport"/>
+  <meta content="#0b0e11" name="theme-color"/>
+  <meta content="Astral decompiler: source downloads, a verified source installer, and build instructions for macOS and Linux." name="description"/>
+  <link href="https://gideoncox.com/projects/astral/" rel="canonical"/>
+  <meta content="index,follow,max-image-preview:large" name="robots"/>
+  <meta content="website" property="og:type"/>
+  <meta content="random crap" property="og:site_name"/>
+  <meta content="Astral · random crap" property="og:title"/>
+  <meta content="Astral decompiler: source downloads, a verified source installer, and build instructions for macOS and Linux." property="og:description"/>
+  <meta content="https://gideoncox.com/projects/astral/" property="og:url"/>
+  <meta content="summary" name="twitter:card"/>
+  <meta content="random crap" name="twitter:title"/>
+  <meta content="Astral decompiler: source downloads, a verified source installer, and build instructions for macOS and Linux." name="twitter:description"/>
+  <title>
+   Astral · random crap
+  </title>
+  <link href="/assets/icons/favicon.svg" rel="icon" type="image/svg+xml"/>
+  <link href="/assets/css/base.css?v=20261014-4" rel="stylesheet"/>
+  <link href="/assets/css/navigation.css?v=20261014-4" rel="stylesheet"/>
+  <link href="/assets/css/tools.css?v=20261014-4" rel="stylesheet"/>
+  <link href="/assets/css/motion.css?v=20261014-4" rel="stylesheet"/>
+  <link href="/assets/css/workspace.css?v=20261014-4" rel="stylesheet"/>
+  <link href="/assets/css/quote.css?v=20261014-4" rel="stylesheet"/>
+  <link href="/assets/css/doodle.css?v=20261014-4" rel="stylesheet"/>
+  <link href="/assets/css/ambient.css?v=20261014-4" rel="stylesheet"/>
+  <link href="/assets/css/projects.css" rel="stylesheet"/>
+ </head>
+ <body class="workspace-view">
+  <header id="site-header">
+   <div class="shell nav">
+    <button aria-controls="site-menu" aria-expanded="false" aria-label="Open menu" class="brand menu-toggle" id="menu-toggle">
+     <span class="brand-mark">
+      g.
+     </span>
+    </button>
+    <div class="header-actions">
+     <aside class="doodle-section" aria-label="Doodle pad">
+      <button class="quote-toggle" id="doodle-toggle" aria-label="Doodle pad" aria-controls="doodle-panel" aria-expanded="false"><span class="label-full">Doodle pad</span><span class="label-short" aria-hidden="true">Doodle</span></button>
+      <div class="small-tool" id="doodle-panel" hidden>
+      <div class="tool-heading">
+       <h3>
+        Doodle pad
+       </h3>
+       <span>
+        
+       </span>
+      </div>
+      <div class="doodle-surface">
+       <canvas aria-label="Drawing pad. Drag to draw. Arrow keys move the brush, Shift plus arrows draw, and Space adds a dot." height="96" id="drawing" role="img" tabindex="0" width="160">
+       </canvas>
+      </div>
+      <div class="tool-body">
+       <div class="drawing-toolbar">
+        <div aria-label="Ink color" class="drawing-inks" role="group">
+         <button aria-label="Lime ink" aria-pressed="true" class="ink-button" data-ink="c6f277" disabled="" style="--swatch:#c6f277">
+         </button>
+         <button aria-label="Blue ink" aria-pressed="false" class="ink-button" data-ink="88c9dc" disabled="" style="--swatch:#88c9dc">
+         </button>
+         <button aria-label="Purple ink" aria-pressed="false" class="ink-button" data-ink="c0adf7" disabled="" style="--swatch:#c0adf7">
+         </button>
+        </div>
+        <div class="drawing-actions">
+         <button class="tool-button" disabled="" id="undo-drawing">
+          Undo
+         </button>
+         <button class="tool-button" disabled="" id="clear-drawing">
+          Clear
+         </button>
+        </div>
+       </div>
+       <p class="sr-only" id="drawing-status" role="status">
+        Loading…
+       </p>
+      </div>
+      </div>     </aside>
+
+     <aside aria-label="Quote of the day" class="quote-section">
+      <button aria-controls="quote-panel" aria-expanded="false" class="quote-toggle" id="quote-toggle" aria-label="Quote of the day">
+       <span class="label-full">Quote of the day</span><span class="label-short" aria-hidden="true">Quote</span>
+      </button>
+      <div class="small-tool" hidden="" id="quote-panel">
+       <div class="quote-body">
+        <div class="quote-heading">
+         <span>
+          Quote of the day
+         </span>
+         <time id="quote-date">
+         </time>
+        </div>
+        <p id="quote-status" role="status">
+         Loading…
+        </p>
+        <figure hidden="" id="quote-content">
+         <blockquote id="quote-text">
+         </blockquote>
+         <figcaption id="quote-author">
+         </figcaption>
+        </figure>
+        <div class="quote-footer">
+         <a href="https://dumbapis.com/docs/daily-quote/" rel="noopener noreferrer" target="_blank">
+          Source ↗
+         </a>
+         <button class="tool-button" hidden="" id="quote-retry">
+          Retry
+         </button>
+        </div>
+       </div>
+      </div>
+     </aside>
+     <aside aria-label="CPS tester" class="cps-section" id="cps-tester">
+      <button aria-controls="cps-panel" aria-expanded="false" class="cps-toggle" id="cps-toggle" aria-label="CPS tester">
+       <span class="label-full">CPS tester</span><span class="label-short" aria-hidden="true">CPS</span>
+      </button>
+      <div class="small-tool cps-card" hidden="" id="cps-panel">
+       <div class="tool-body">
+        <div class="cps-heading">
+         <span>
+          5-second test
+         </span>
+         <button class="tool-button" hidden="" id="cps-reset">
+          Try again
+         </button>
+        </div>
+        <div class="cps-stats">
+         <div>
+          <output id="cps-score">
+           0.0
+          </output>
+          <span>
+           clicks / second
+          </span>
+         </div>
+         <div>
+          <output id="cps-clicks">
+           0
+          </output>
+          <span>
+           clicks
+          </span>
+         </div>
+         <div>
+          <output id="cps-time">
+           5.0
+          </output>
+          <span>
+           seconds left
+          </span>
+         </div>
+        </div>
+        <button class="cps-target" id="cps-target">
+         <strong>
+          Click to start
+         </strong>
+        </button>
+        <div aria-hidden="true" class="cps-track">
+         <div id="cps-progress">
+         </div>
+        </div>
+        <p class="sr-only" id="cps-status" role="status">
+         Your first click starts the timer.
+        </p>
+       </div>
+      </div>
+     </aside>
+    </div>
+   </div>
+   <div class="site-menu" hidden="" id="site-menu">
+    <div class="shell">
+     <nav aria-label="Site navigation" class="menu-bar">
+      <div class="menu-group">
+       <button aria-controls="projects-panel" aria-expanded="false" data-menu-panel="projects">
+        <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+         <path d="M3 7V5h6l2 2h10v12H3Z">
+         </path>
+        </svg>
+        projects
+        <span aria-hidden="true" class="menu-arrow">
+         ›
+        </span>
+       </button>
+       <div aria-label="projects" class="menu-panel" hidden="" id="projects-panel" role="region">
+        <div class="menu-children">
+         <a href="/projects/astral/">Astral</a>
+         <a href="/projects/ark/">Ark</a>
+         <a href="/projects/">All projects</a>
+        </div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="tools-panel" aria-expanded="false" data-menu-panel="tools">
+        <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+         <path d="M14 4a6 6 0 0 0-5 8l-6 6 3 3 6-6a6 6 0 0 0 8-7l-4 4-4-4 4-4Z">
+         </path>
+        </svg>
+        tools
+        <span aria-hidden="true" class="menu-arrow">
+         ›
+        </span>
+       </button>
+       <div aria-label="tools" class="menu-panel" hidden="" id="tools-panel" role="region">
+        <div class="menu-children">
+         <a href="/terminal/">
+          Terminal
+         </a>
+         <a href="/editor/">
+          Zed
+         </a>
+        </div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="games-panel" aria-expanded="false" data-menu-panel="games">
+        <svg aria-hidden="true" class="menu-icon" viewBox="0 0 24 24"><path d="M7 7h10l4 11-3 2-4-4h-4l-4 4-3-2Z M7 10v4 M5 12h4 M16 11h.01 M18 13h.01"/></svg>
+        games <span aria-hidden="true" class="menu-arrow">›</span>
+       </button>
+       <div aria-label="games" class="menu-panel" hidden id="games-panel" role="region">
+        <div class="menu-children"><a href="/games/hop/">Hop</a><a href="/games/supersatisfaction/">SuperSatisfaction</a></div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="uncategorized-panel" aria-expanded="false" data-menu-panel="uncategorized">
+        <svg aria-hidden="true" class="menu-icon" viewBox="0 0 24 24"><path d="M3 7V5h6l2 2h10v12H3Z"/></svg>
+        uncategorized <span aria-hidden="true" class="menu-arrow">›</span>
+       </button>
+       <div aria-label="uncategorized" class="menu-panel" hidden id="uncategorized-panel" role="region">
+        <div class="menu-children"><a href="/uncategorized/typing/">Typing tester</a></div>
+       </div>
+      </div>
+      <a href="https://github.com/Hexadecimall" rel="noopener noreferrer" target="_blank">
+       <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+        <circle cx="6" cy="5" r="2">
+        </circle>
+        <circle cx="6" cy="19" r="2">
+        </circle>
+        <circle cx="18" cy="6" r="2">
+        </circle>
+        <path d="M6 7v10M18 8v2c0 4-12 2-12 7">
+        </path>
+       </svg>
+       github
+       <span aria-hidden="true" class="menu-arrow">
+        ↗
+       </span>
+      </a>
+      <a href="/settings/">
+       settings
+      </a>
+     </nav>
+    </div>
+   </div>
+  </header>
+  <main class="project-page shell" id="top">
+   <nav class="project-nav" aria-label="Projects"><a href="/projects/" aria-label="Back to projects">←</a><span>projects / Astral</span></nav>
+   <header class="project-intro">
+    <h1>Astral</h1><p>A decompiler that turns binaries into readable C. Built on Ghidra’s native core, with a command-line interface and C, C++, and Rust bindings.</p>
+    <div class="project-links"><a href="#install">Install Astral ↓</a><a href="https://github.com/Hexadecimall/Astral" target="_blank" rel="noopener noreferrer">Source ↗</a></div>
+    <div class="project-meta"><span>C / C++ / Rust</span><span>Ghidra core · no JVM</span><span>2.3.0 source snapshot</span></div>
+   </header>
+   <section class="project-section" id="install">
+    <h2>Apple Silicon Mac</h2><p>A ready-to-run command-line build for macOS 13+. Includes the decompiler and processor specifications. No compiler needed. Not notarized.</p>
+    <div class="project-links"><a href="/downloads/astral-2.3.0-macos-arm64.tar.gz" download>Download for Apple Silicon ↓</a><a href="/downloads/astral-2.3.0-macos-arm64.sha256" download>SHA-256</a></div>
+    <p>Extract the archive, then run this inside the extracted folder:</p>
+    <div class="project-command"><pre id="astral-native-command">sh install.sh
+~/.local/bin/astral --help</pre><button data-copy-command="astral-native-command" aria-label="Copy Mac installation commands">copy</button></div>
+    <p>The installer uses <code>~/.local</code>. You can also run <code>./bin/astral</code> directly from the folder.</p>
+   </section>
+   <section class="project-section">
+    <h2>Build from source</h2><p>macOS and Linux. Downloads verified source and builds the command-line tools and libraries on your computer.</p>
+    <div class="project-links"><a href="/downloads/astral-install.sh" download>Download source installer ↓</a><a href="https://github.com/Hexadecimall/Astral/archive/07cd79bb22875d498eb31947e276e1b5b1277a2c.zip">Download source ZIP ↓</a></div>
+    <p>Needs CMake 3.20+, a C++17 compiler, Cargo, and zlib development headers. Installs under <code>~/.local</code>.</p>
+    <div class="project-command"><pre id="astral-install-command">curl -fLO https://gideoncox.com/downloads/astral-install.sh
+sh astral-install.sh</pre><button data-copy-command="astral-install-command" aria-label="Copy Astral install command">copy</button></div>
+    <details><summary>Desktop app &amp; install options</summary><p>Add <code>--gui</code> to build the desktop app; Qt 6 development libraries must already be installed. Use <code>--prefix /absolute/path</code> for another location, or <code>--jobs 2</code> to limit build parallelism.</p><p>The Mac bundle above contains the CLI, not the desktop GUI. Windows users can build the command-line version inside WSL.</p></details>
+    <details><summary>Source verification</summary><p>Pinned public revision: <code>07cd79bb</code>. The installer checks the archive’s SHA-256 before building. <a href="/downloads/astral-install.sh">Read the installer</a>.</p></details>
+   </section>
+   <section class="project-section"><h2>Use it</h2><div class="project-command"><pre id="astral-use-command">~/.local/bin/astral --help
+~/.local/bin/astral decompile --all ./program</pre><button data-copy-command="astral-use-command" aria-label="Copy Astral usage commands">copy</button></div><p>Astral can learn function names from binaries and source, explain its naming choices, and expose the decompiler as a library. <a href="https://github.com/Hexadecimall/Astral#readme">Full documentation ↗</a></p></section>
+  </main>
+  <footer class="shell footer">
+   <span>
+    g. /
+    <span id="year">
+     2026
+    </span>
+   </span>
+   <div class="footer-links">
+    <a href="#top">
+     Back to top ↑
+    </a>
+    <a href="https://github.com/Hexadecimall" rel="noopener noreferrer" target="_blank">
+     GitHub ↗
+    </a>
+    <a href="/settings/">
+     Settings
+    </a>
+   </div>
+  </footer>
+  <script src="/assets/js/navigation.js" type="module">
+  </script>
+  <script src="/assets/js/cps.js" type="module">
+  </script>
+  <script src="/assets/js/quote.js" type="module">
+  </script>
+  <script src="/assets/js/tools.js" type="module"></script>
+  <script src="/assets/js/doodle.js" type="module"></script>
+  <script src="/assets/js/ambient.js" type="module"></script>
+  <script src="/assets/js/projects.js" type="module"></script>
+ </body>
+</html>

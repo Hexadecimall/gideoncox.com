@@ -4,6 +4,7 @@ from pathlib import Path
 import re
 import subprocess
 import sys
+import tarfile
 
 root = Path(__file__).resolve().parents[1]
 patterns = [
@@ -17,6 +18,17 @@ for path in root.rglob('*'):
     if not path.is_file() or any(part in {'.git', '.cache', 'target', '__pycache__', 'vendor'} for part in relative.parts):
         continue
     if path == Path(__file__).resolve():
+        continue
+    if path.name.endswith(('.tar.gz', '.tgz')):
+        with tarfile.open(path) as archive:
+            for member in archive.getmembers():
+                if member.uname or member.gname or member.uid or member.gid:
+                    failures.append(f'{relative}:{member.name}: archive contains owner metadata')
+                if not member.isfile():
+                    continue
+                data = archive.extractfile(member).read().decode('utf-8', errors='ignore')
+                if any(pattern.search(data) for pattern in patterns):
+                    failures.append(f'{relative}:{member.name}: private residue detected')
         continue
     if path.suffix == '.wasm':
         text = subprocess.check_output(['strings', str(path)], text=True)

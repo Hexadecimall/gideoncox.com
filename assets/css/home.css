@@ -34,3 +34,7 @@
 
 
 .orbit-footer { justify-content: flex-end; }
+@media (min-width: 601px) and (max-width: 900px) {
+  .home-destinations { grid-template-columns: 1fr; }
+  .home-destinations a, .home-destinations a:first-child, .home-destinations a:last-child { border: 0; border-bottom: 1px solid var(--line); padding: 22px 0; gap: 10px; }
+}

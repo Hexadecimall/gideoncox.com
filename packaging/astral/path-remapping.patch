@@ -1,0 +1,20 @@
+--- a/CMakeLists.txt
++++ b/CMakeLists.txt
+@@ -17,7 +17,7 @@
+ # -ffile-prefix-map covers the debug info, __FILE__ and anything else the
+ # compiler stamps a path into. It is a compiler flag, not a linker one, so it
+ # has to reach every target that compiles a source file here.
+-foreach(_root ${CMAKE_CURRENT_SOURCE_DIR} $ENV{HOME})
++foreach(_root $ENV{HOME} ${CMAKE_CURRENT_SOURCE_DIR})
+     if(_root)
+         if(_root STREQUAL ${CMAKE_CURRENT_SOURCE_DIR})
+             set(_as /astral)
+@@ -242,6 +242,8 @@
+     endif()
+ endforeach()
+ 
++string(APPEND _remap "${_rustflag_separator}--remap-path-prefix=${CMAKE_CURRENT_SOURCE_DIR}=/astral")
++
+ if(ASTRAL_BUILD_TUI AND CARGO_EXECUTABLE)
+     file(GLOB_RECURSE CLI_SOURCES
+         ${CMAKE_CURRENT_SOURCE_DIR}/cli/src/*.rs

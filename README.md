@@ -1,6 +1,6 @@
 # random crap
 
-A static personal site with an interactive particle field, a header doodle pad, Hop, a CPS tester, daily quotes, an Ark terminal, and a reserved page for Zed.
+A static personal site with Astral and Ark project pages, verified downloads, an interactive particle field, a header doodle pad, Hop, SuperSatisfaction, a typing tester, an Ark terminal, and a reserved page for Zed.
 
 ## Preview
 
@@ -16,6 +16,10 @@ Open `http://127.0.0.1:8767/`. The checked-in WebAssembly and terminal display a
 
 - `index.html` — homepage, navigation, and search metadata.
 - `games/hop/` — the standalone game, linked under Games in the site menu.
+- `games/supersatisfaction/` — bubble wrap, a sand rake, and magnetic beads.
+- `projects/` — Astral and Ark descriptions, installation, and source links.
+- `downloads/` — versioned Astral CLI bundle, checksum, and pinned source installer.
+- `packaging/astral/` — portable-bundle installer and its included instructions.
 - `terminal/`, `editor/`, `settings/` — full tool and customization pages.
 - `assets/css/` — base styles and separate styles for each interface.
 - `assets/js/` — page behavior; terminal runtime modules live in `terminal/`.
@@ -23,6 +27,7 @@ Open `http://127.0.0.1:8767/`. The checked-in WebAssembly and terminal display a
 - `assets/vendor/` — pinned xterm.js and fit addon, including licenses.
 - `src/field/` — doodle rasterizer in C.
 - `src/hop/` — fixed-step game physics in C.
+- `src/satisfaction/` — magnetic bead springs in C, compiled to WebAssembly.
 - `src/ark/` — Ark lexer, parser, expander, and the browser ABI bridge.
 - `src/orbit/` — the homepage particle simulation, compiled to WebAssembly.
 - `src/terminal/` — Rust filesystem and browser commands.
@@ -90,3 +95,15 @@ The header drawing pad saves its pixels on this device between pages. The homepa
 `/uncategorized/typing/` provides 15/30/60-second tests, 25/50/100-word tests, and seven keyboard practice lessons. Tests start on the first character. The timer uses elapsed time rather than counting animation frames. Corrected mistakes still count against attempt accuracy; WPM uses currently correct characters divided by five and elapsed minutes. Practice requires the completed text to match, and 95% attempt accuracy marks a lesson complete. Best test scores, lesson progress, and test options stay in local storage on the current device.
 
 The caret and text scroll smoothly, practice keys respond to presses, and a thin progress line tracks the test. Motion follows the site's accessibility preference. While typing, Tab focuses restart and Enter starts a fresh test.
+
+## Project downloads
+
+Astral is pinned to public revision `07cd79bb22875d498eb31947e276e1b5b1277a2c` (2.3.0). The source installer verifies its archive SHA-256 before configuring CMake and defaults to an unprivileged CLI/library install. GUI builds are opt-in and need Qt 6. It does not install system dependencies automatically.
+
+The macOS arm64 archive was built from that same source with `CMAKE_OSX_DEPLOYMENT_TARGET=13.0`, `MACOSX_DEPLOYMENT_TARGET=13.0`, Release mode, and the GUI disabled. Apply `packaging/astral/path-remapping.patch` to that source before building: the more specific source-root mapping must follow the home-directory mapping. After installing into a staging prefix, `scripts/package-astral.py PREFIX SOURCE` packages the result. It contains the CLI, processor specs, and dependency license notices. Only system libraries are linked dynamically. The bundle installer and the relocated command were tested with a real binary decompilation; older macOS versions and Linux are not runtime-tested here. The package is not Developer ID signed or notarized. Its SHA-256 accompanies the archive. Archive owner names/IDs are removed, and the public audit scans archive contents as well as source and WASM.
+
+Ark links to its public Homebrew tap and versioned source. There are no fabricated release download links.
+
+## SuperSatisfaction
+
+Bubble wrap supports clicking, dragging, touch, and keyboard activation. Sound is opt-in. Sand stores persistent rake strokes until reset. Magnetic beads use fixed-step WASM spring physics; hover repels and holding attracts. Animation pauses offscreen or when the tab is hidden, with an explicit pause control. Arrow keys and Space operate the canvas modes, and reduced-motion settings remove decorative transitions.
