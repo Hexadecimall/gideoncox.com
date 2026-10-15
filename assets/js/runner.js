@@ -108,18 +108,20 @@ function draw() {
       context.lineTo(x + 3, top + 17);
       context.fill();
     } else if (kind === 3) {
+      const top = Math.max(0, engine.runner_obstacle(i, 4));
+      const height = 201 - top;
       context.fillStyle = '#30333c';
-      context.fillRect(x, 148, width, 53);
+      context.fillRect(x, top, width, height);
       context.strokeStyle = '#8b91a0';
-      context.strokeRect(x + .5, 148.5, width - 1, 52);
+      context.strokeRect(x + .5, top + .5, width - 1, height - 1);
+      context.strokeStyle = '#414651';
+      for (let rib = x + 15; rib < x + width; rib += 23) {
+        context.beginPath(); context.moveTo(rib, top); context.lineTo(rib, 190); context.stroke();
+      }
       context.fillStyle = '#c0adf7';
       context.fillRect(x, 196, width, 5);
       context.fillStyle = '#151b20';
       for (let mark = 6; mark < width - 6; mark += 13) context.fillRect(x + mark, 196, 5, 5);
-      context.strokeStyle = '#48515b';
-      for (const offset of [10, width - 10]) {
-        context.beginPath(); context.moveTo(x + offset, 0); context.lineTo(x + offset, 148); context.stroke();
-      }
     } else {
       context.fillStyle = '#3b3028';
       context.fillRect(x, 218 - height, width, height);
@@ -347,7 +349,7 @@ new IntersectionObserver(entries => {
 
 draw();
 try {
-  const response = await fetch(new URL('../wasm/runner.wasm', import.meta.url));
+  const response = await fetch(new URL('../wasm/runner.wasm?v=2', import.meta.url));
   if (!response.ok) throw new Error('Game unavailable');
   const { instance } = await WebAssembly.instantiate(await response.arrayBuffer());
   engine = instance.exports;

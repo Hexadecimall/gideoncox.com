@@ -87,4 +87,6 @@ The header drawing pad saves its pixels on this device between pages. The homepa
 
 ## Typing tester
 
-`/uncategorized/typing/` provides 15/30/60-second tests, 25/50/100-word tests, and seven keyboard practice lessons. Tests start on the first character. The timer uses elapsed time rather than counting animation frames. Corrected mistakes still count against attempt accuracy; WPM uses currently correct characters divided by five and elapsed minutes. Practice requires the completed text to match, and 95% attempt accuracy marks a lesson complete. Best test scores and lesson progress stay in local storage on the current device.
+`/uncategorized/typing/` provides 15/30/60-second tests, 25/50/100-word tests, and seven keyboard practice lessons. Tests start on the first character. The timer uses elapsed time rather than counting animation frames. Corrected mistakes still count against attempt accuracy; WPM uses currently correct characters divided by five and elapsed minutes. Practice requires the completed text to match, and 95% attempt accuracy marks a lesson complete. Best test scores, lesson progress, and test options stay in local storage on the current device.
+
+The caret and text scroll smoothly, practice keys respond to presses, and a thin progress line tracks the test. Motion follows the site's accessibility preference. While typing, Tab focuses restart and Enter starts a fresh test.

@@ -30,7 +30,7 @@ static void place(int i, float x) {
     obstacles[i].kind = kind;
     uint32_t width = random_value();
     obstacles[i].width = kind == GAP ? 78 + width % 35
-        : kind == OVERHANG ? 76 + width % 25 : kind == FLYER ? 30 : 22 + width % 14;
+        : kind == OVERHANG ? 105 + width % 56 : kind == FLYER ? 30 : 22 + width % 14;
     obstacles[i].height = 26 + random_value() % 17;
 }
 
@@ -67,7 +67,8 @@ static float obstacle_top(const Obstacle *obstacle) {
         float phase = (int)(distance * 0.3f) % 40;
         return 173 + (phase < 20 ? phase : 40 - phase) * 0.2f;
     }
-    if (obstacle->kind == OVERHANG) return 148;
+    // A ceiling leaves a crouching lane, with no route over the top.
+    if (obstacle->kind == OVERHANG) return -280;
     return GROUND - obstacle->height;
 }
 

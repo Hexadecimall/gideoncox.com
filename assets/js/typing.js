@@ -8,23 +8,33 @@ const words = find('typing-words');
 const lessonSelect = find('typing-lesson');
 const results = find('typing-result');
 const status = find('typing-status');
+const page = document.querySelector('.typing-page');
+const caret = document.createElement('span');
+caret.className = 'typing-caret';
+const motionQuery = matchMedia('(prefers-reduced-motion: reduce)');
+const motionAllowed = () => document.documentElement.dataset.motion !== 'reduced'
+  && (document.documentElement.dataset.motion === 'full' || !motionQuery.matches);
 const storageKey = 'typing-progress-v1';
 let saved = { best: {}, lessons: {} };
 try {
   const value = JSON.parse(localStorage.getItem(storageKey));
   if (value?.best && value?.lessons && typeof value.best === 'object' && typeof value.lessons === 'object') saved = value;
 } catch {}
-let mode = 'time';
-let seconds = 30;
-let wordCount = 50;
-let punctuation = false;
-let numbers = false;
-let showKeyboard = true;
-let lessonIndex = 0;
+const options = saved.options || {};
+let mode = ['time', 'words', 'practice'].includes(options.mode) ? options.mode : 'time';
+let seconds = [15, 30, 60].includes(options.seconds) ? options.seconds : 30;
+let wordCount = [25, 50, 100].includes(options.wordCount) ? options.wordCount : 50;
+let punctuation = options.punctuation === true;
+let numbers = options.numbers === true;
+let showKeyboard = options.showKeyboard !== false;
+let lessonIndex = Number.isInteger(options.lessonIndex) ? Math.max(0, Math.min(lessons.length - 1, options.lessonIndex)) : 0;
 let session;
 let characters = [];
 let frame = 0;
 let completed = false;
+let renderedValue = '';
+let entrance;
+const heldKeys = new Set();
 const keyNodes = new Map();
 
 for (const row of ['1234567890', 'qwertyuiop', "asdfghjkl;'", 'zxcvbnm,./', ' ']) {
@@ -55,6 +65,8 @@ function save() {
   try { localStorage.setItem(storageKey, JSON.stringify(saved)); } catch {}
 }
 function controls() {
+  saved.options = { mode, seconds, wordCount, punctuation, numbers, showKeyboard, lessonIndex };
+  save();
   document.querySelectorAll('[data-mode]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.mode === mode)));
   find('time-options').hidden = mode !== 'time';
   find('word-options').hidden = mode !== 'words';
@@ -69,6 +81,7 @@ function controls() {
 }
 function setText(text) {
   characters = [];
+  renderedValue = '';
   words.replaceChildren(...text.split(' ').map((word, index, all) => {
     const group = document.createElement('span');
     group.className = 'typing-word';
@@ -81,32 +94,49 @@ function setText(text) {
     }
     return group;
   }));
+  words.append(caret);
   find('typing-target').textContent = text;
   words.style.transform = '';
 }
 function render() {
   const value = session.value;
-  characters.forEach((span, index) => {
-    span.className = 'typing-char' + (index < value.length ? value[index] === session.target[index] ? ' correct' : ' incorrect' : '');
-  });
+  // Only repaint changed characters; long timed tests contain thousands of spans.
+  for (let index = 0; index < Math.max(value.length, renderedValue.length); index++) {
+    if (value[index] === renderedValue[index]) continue;
+    characters[index].className = 'typing-char' + (index < value.length ? value[index] === session.target[index] ? ' correct' : ' incorrect' : '');
+  }
+  renderedValue = value;
   const current = characters[Math.min(value.length, characters.length - 1)];
-  current?.classList.add('current');
   if (current) {
-    const top = current.getBoundingClientRect().top - words.getBoundingClientRect().top;
+    const bounds = current.getBoundingClientRect();
+    const origin = words.getBoundingClientRect();
+    const top = bounds.top - origin.top;
     const lineHeight = parseFloat(getComputedStyle(words).lineHeight);
     words.style.transform = `translateY(-${Math.max(0, top - lineHeight)}px)`;
+    caret.style.transform = `translate(${bounds.left - origin.left}px, ${top}px)`;
   }
   const expected = session.target[value.length];
   const physicalKey = ({ ':': ';', '?': '/', '!': '1', '"': "'" })[expected] || expected?.toLowerCase();
   for (const [key, node] of keyNodes) node.classList.toggle('next-key', key === physicalKey);
   const shift = expected && (/[A-Z:?!"]/.test(expected));
-  find('typing-finger').textContent = (shift ? 'shift + ' : '') + fingerFor(expected);
+  find('typing-finger').textContent = (shift ? 'shift + ' : '') + fingerFor(physicalKey);
+}
+function animateEntry(element) {
+  entrance?.cancel();
+  if (motionAllowed()) entrance = element.animate(
+    [{ opacity: 0, transform: 'translateY(7px)' }, { opacity: 1, transform: 'translateY(0)' }],
+    { duration: 220, easing: 'cubic-bezier(.2,.7,.2,1)' },
+  );
+}
+function syncFocus() {
+  page.classList.toggle('is-typing', document.activeElement === input && session.startedAt !== null && !completed);
 }
 function reset(focus = false) {
   cancelAnimationFrame(frame);
   const text = mode === 'practice' ? lessons[lessonIndex].text : makeText(mode === 'time' ? 600 : wordCount, { punctuation, numbers });
   session = new TypingSession(text, mode === 'time' ? seconds : 0, mode === 'practice');
   completed = false;
+  page.classList.remove('is-typing');
   results.hidden = true;
   field.hidden = false;
   find('typing-live')?.removeAttribute('hidden');
@@ -118,12 +148,14 @@ function reset(focus = false) {
   controls();
   setText(text);
   render();
+  animateEntry(field);
   updateMetrics(performance.now());
   if (focus) input.focus({ preventScroll: true });
 }
 function finish(now) {
   if (completed) return;
   completed = true;
+  page.classList.remove('is-typing');
   cancelAnimationFrame(frame);
   input.readOnly = true;
   const metric = session.metrics(now);
@@ -131,6 +163,7 @@ function finish(now) {
   find('typing-live').hidden = true;
   find('typing-keyboard').hidden = true;
   results.hidden = false;
+  animateEntry(results);
   find('result-wpm').value = metric.wpm;
   find('result-accuracy').value = `${metric.accuracy}%`;
   find('result-raw').value = metric.raw;
@@ -160,7 +193,9 @@ function updateMetrics(now) {
   const metric = session.metrics(now);
   const progress = mode === 'time' ? `${Math.ceil(metric.remaining)}s` : `${Math.floor(metric.progress * 100)}%`;
   if (find('typing-progress').textContent !== progress) find('typing-progress').textContent = progress;
-  find('typing-speed').textContent = session.startedAt === null ? '' : `${metric.wpm} wpm · ${metric.accuracy}%`;
+  find('typing-speed').textContent = session.startedAt === null ? '' : `${metric.elapsed < 1 ? '—' : metric.wpm} wpm · ${metric.accuracy}%`;
+  const fraction = mode === 'time' ? metric.elapsed / seconds : metric.progress;
+  find('typing-rail').style.transform = `scaleX(${Math.min(1, fraction)})`;
   if (session.finished) finish(now);
 }
 function tick(now) {
@@ -174,6 +209,7 @@ function acceptInput() {
   input.value = session.value;
   render();
   updateMetrics(performance.now());
+  syncFocus();
   if (wasReady && session.startedAt !== null && !completed) {
     status.textContent = 'Test started.';
     frame = requestAnimationFrame(tick);
@@ -190,17 +226,33 @@ input.addEventListener('keydown', event => {
   find('typing-caps').hidden = !event.getModifierState('CapsLock');
   if (['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) event.preventDefault();
   if (event.key === 'Escape') { input.blur(); return; }
+  if (event.key === 'Tab' && !event.shiftKey) {
+    event.preventDefault(); find('typing-restart').focus(); return;
+  }
+  const key = ({ ':': ';', '?': '/', '!': '1', '"': "'" })[event.key] || event.key.toLowerCase();
+  heldKeys.add(key);
+  keyNodes.get(key)?.classList.add('pressed-key');
   if (event.key === 'Enter') {
     event.preventDefault();
     if (!completed) { input.value += ' '; acceptInput(); }
   }
 });
+document.addEventListener('keyup', event => {
+  const key = ({ ':': ';', '?': '/', '!': '1', '"': "'" })[event.key] || event.key.toLowerCase();
+  heldKeys.delete(key);
+  keyNodes.get(key)?.classList.remove('pressed-key');
+});
 field.addEventListener('click', () => input.focus({ preventScroll: true }));
-input.addEventListener('focus', () => field.classList.add('is-focused'));
-input.addEventListener('blur', () => field.classList.remove('is-focused'));
+input.addEventListener('focus', () => { field.classList.add('is-focused'); syncFocus(); });
+input.addEventListener('blur', () => {
+  field.classList.remove('is-focused');
+  for (const key of heldKeys) keyNodes.get(key)?.classList.remove('pressed-key');
+  heldKeys.clear();
+  syncFocus();
+});
 new ResizeObserver(() => { if (session && !completed) render(); }).observe(field);
 document.addEventListener('visibilitychange', () => { if (session.startedAt !== null && !completed) updateMetrics(performance.now()); });
-window.addEventListener('site-preferences-changed', () => { if (!completed) render(); });
+window.addEventListener('site-preferences-changed', () => { if (!motionAllowed()) entrance?.cancel(); if (!completed) render(); });
 
 document.querySelectorAll('[data-mode]').forEach(button => button.addEventListener('click', () => { mode = button.dataset.mode; reset(); }));
 document.querySelectorAll('[data-seconds]').forEach(button => button.addEventListener('click', () => { seconds = Number(button.dataset.seconds); reset(); }));

@@ -11,7 +11,12 @@
 #typing-restart { margin-left: auto; font-size: 24px; }
 #typing-lesson { max-width: 100%; background: transparent; border: 0; border-radius: 3px; color: var(--muted); font: 12px var(--mono); padding: 12px 8px; min-height: 44px; }
 #typing-lesson option { color: var(--text); background: var(--bg); }
-.typing-test { padding-top: clamp(32px, 7vh, 72px); }
+.typing-test { position: relative; padding-top: clamp(24px, 4vh, 42px); }
+.typing-rail { position: absolute; top: -1px; left: 0; right: 0; height: 1px; overflow: hidden; }
+#typing-rail { display: block; height: 100%; background: var(--lime); transform: scaleX(0); transform-origin: left; transition: transform 120ms linear; }
+.typing-heading, .typing-options { transition: opacity 180ms ease; }
+.is-typing .typing-heading, .is-typing .typing-options { opacity: .4; }
+.is-typing :is(.typing-heading, .typing-options):is(:hover, :focus-within) { opacity: 1; }
 .typing-live { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; min-height: 52px; color: var(--lime); }
 #typing-progress { font-size: 26px; font-variant-numeric: tabular-nums; }
 #typing-speed { color: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
@@ -19,21 +24,24 @@
 .typing-field { position: relative; cursor: text; padding: 14px 0; border-bottom: 1px solid transparent; }
 .typing-field:focus-within { border-bottom-color: var(--line); }
 .typing-viewport { height: 156px; overflow: hidden; }
-#typing-words { position: relative; color: #64716c; font: 400 27px/52px var(--mono); font-variant-ligatures: none; transition: transform 100ms ease; }
+#typing-words { position: relative; color: #78847e; font: 400 27px/52px var(--mono); font-variant-ligatures: none; transition: transform 150ms cubic-bezier(.2,.7,.2,1); }
 .typing-word { display: inline-block; white-space: pre; }
-.typing-char { position: relative; }
+.typing-char { position: relative; transition: color 90ms ease; }
 .typing-char.correct { color: var(--text); }
 .typing-char.incorrect { color: #f18b89; text-decoration: underline; text-decoration-color: #f18b8970; }
-.typing-char.current::before { content: ''; position: absolute; left: -1px; top: 0; height: 1.2em; width: 2px; background: var(--lime); opacity: .55; }
-.is-focused .typing-char.current::before { opacity: 1; }
+.typing-caret { position: absolute; left: -1px; top: 0; height: 1.15em; width: 2px; border-radius: 1px; background: var(--lime); opacity: .4; pointer-events: none; transition: transform 80ms linear, opacity 160ms ease; }
+.is-focused .typing-caret { opacity: 1; }
+.typing-page:not(.is-typing) .is-focused .typing-caret { animation: caret-idle 1.2s ease-in-out infinite; }
+@keyframes caret-idle { 50% { opacity: .25; } }
 #typing-input { position: absolute; left: 0; top: 20px; width: 1px; height: 28px; opacity: 0; padding: 0; border: 0; font-size: 16px; resize: none; }
 #typing-input:focus { outline: none; }
-#typing-keyboard { max-width: 550px; margin: 38px auto 0; }
+#typing-keyboard { max-width: 550px; margin: 14px auto 0; }
 .keyboard-finger { min-height: 24px; color: var(--muted); text-align: center; font-size: 10px; }
 .keyboard-row { display: flex; justify-content: center; gap: 5px; margin-top: 5px; }
-.keyboard-row span { display: grid; place-items: center; width: 36px; height: 34px; border: 1px solid #303b31; border-radius: 4px; color: #718078; font-size: 12px; }
+.keyboard-row span { display: grid; place-items: center; width: 36px; height: 32px; border: 1px solid #303b31; border-radius: 4px; color: #718078; font-size: 12px; transition: background 120ms ease, border-color 120ms ease, color 120ms ease, transform 80ms ease; }
 .keyboard-row .keyboard-space { width: 200px; height: 25px; }
 .keyboard-row .next-key { border-color: var(--lime); color: var(--lime); background: #c6f2770c; }
+.keyboard-row .pressed-key { transform: translateY(2px); color: var(--bg); background: var(--lime); border-color: var(--lime); }
 .result-stats { display: flex; flex-wrap: wrap; gap: 36px 64px; padding: 20px 0; }
 .result-stats > div { display: flex; flex-direction: column; gap: 9px; }
 .result-stats span { font-size: 12px; color: var(--muted); }
@@ -61,4 +69,7 @@
   .result-stats { gap: 28px; }
   .result-stats output { font-size: 42px; }
   .result-details { gap: 12px; font-size: 11px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  html:not([data-motion=full]) .typing-page *, html:not([data-motion=full]) .typing-page *::before { animation: none; transition: none; }
 }

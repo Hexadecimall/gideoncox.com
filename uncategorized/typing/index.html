@@ -29,7 +29,7 @@
   <link href="/assets/css/quote.css?v=20261014-4" rel="stylesheet"/>
   <link href="/assets/css/doodle.css?v=20261014-4" rel="stylesheet"/>
   <link href="/assets/css/ambient.css?v=20261014-4" rel="stylesheet"/>
-  <link href="/assets/css/typing.css" rel="stylesheet"/>
+  <link href="/assets/css/typing.css?v=2" rel="stylesheet"/>
  </head>
  <body class="workspace-view">
   <header id="site-header">
@@ -279,9 +279,10 @@
      <label class="sr-only" for="typing-lesson">Practice lesson</label><select id="typing-lesson"></select>
      <button id="keyboard-toggle" aria-pressed="true">keyboard</button>
     </div>
-    <button id="typing-restart" aria-label="Restart test" title="Restart">↻</button>
+    <button id="typing-restart" aria-label="Restart test" title="Restart (Tab, then Enter)">↻</button>
    </div>
    <section class="typing-test" aria-label="Typing test">
+    <div class="typing-rail" aria-hidden="true"><span id="typing-rail"></span></div>
     <div class="typing-live" id="typing-live" aria-hidden="true"><span id="typing-progress">30<span>s</span></span><span id="typing-caps" hidden>caps lock</span><span id="typing-speed"></span></div>
     <div class="typing-field" id="typing-field">
      <div class="typing-viewport"><div id="typing-words" aria-hidden="true"></div></div>
@@ -334,6 +335,6 @@
   <script src="/assets/js/tools.js" type="module"></script>
   <script src="/assets/js/doodle.js" type="module"></script>
   <script src="/assets/js/ambient.js" type="module"></script>
-  <script src="/assets/js/typing.js?v=1" type="module"></script>
+  <script src="/assets/js/typing.js?v=2" type="module"></script>
  </body>
 </html>
