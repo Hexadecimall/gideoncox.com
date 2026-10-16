@@ -100,7 +100,7 @@ async function start() {
   document.querySelectorAll('button, input, select').forEach(control => { control.disabled = false; });
   document.querySelector('#save').addEventListener('click', safely(save));
   document.querySelector('#new').addEventListener('click', safely(newFile));
-  filename.addEventListener('change', safely(() => zed.set_file_path(filePath())));
+  filename.addEventListener('input', safely(() => zed.set_file_path(root + filename.value)));
   files.addEventListener('change', safely(async () => {
     const path = files.value;
     if (!path) return;
