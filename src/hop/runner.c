@@ -10,6 +10,8 @@ typedef struct { float x, width, height; int kind; } Obstacle;
 static Obstacle obstacles[4];
 static float y, velocity, distance, speed, x, angle, launch_time;
 static int state, jumps, launched, duck_held, crouching;
+static int health = 1, max_health = 1, arena, air_dash;
+static float invulnerable, dash_left, dash_cooldown, dash_duration = .24f, dash_recharge = 4;
 
 static float player_height(void) { return crouching ? 12.0f : SIZE; }
 static uint32_t seed;
@@ -36,6 +38,9 @@ static void place(int i, float x) {
 
 EXPORT("runner_reset")
 void runner_reset(uint32_t value) {
+    health = max_health = 1;
+    invulnerable = dash_left = dash_cooldown = 0;
+    arena = air_dash = 0;
     seed = value ? value : 1;
     y = GROUND - SIZE;
     velocity = distance = 0;
@@ -48,6 +53,48 @@ void runner_reset(uint32_t value) {
     state = 1;
     jumps = 0;
     for (int i = 0; i < 4; ++i) place(i, 640 + i * 355);
+}
+
+
+// Campaign parameters stay outside the deterministic obstacle generator.
+EXPORT("runner_configure")
+void runner_configure(int hearts, float duration, float recharge, int aerial) {
+    max_health = hearts < 1 ? 1 : hearts > 9 ? 9 : hearts;
+    health = max_health;
+    dash_duration = duration < .15f ? .15f : duration > .8f ? .8f : duration;
+    dash_recharge = recharge < 1 ? 1 : recharge;
+    air_dash = aerial != 0;
+}
+
+EXPORT("runner_hit")
+int runner_hit(void) {
+    if (state != 1 || invulnerable > 0 || dash_left > 0) return 0;
+    --health;
+    invulnerable = 1.25f;
+    if (health <= 0) state = 2;
+    return 1;
+}
+
+EXPORT("runner_heal")
+void runner_heal(int amount) {
+    if (amount > 0 && state == 1) { health += amount; if (health > max_health) health = max_health; }
+}
+
+EXPORT("runner_dash")
+int runner_dash(void) {
+    if (state != 1 || dash_cooldown > 0 || (jumps && !air_dash)) return 0;
+    dash_left = dash_duration;
+    dash_cooldown = dash_recharge;
+    return 1;
+}
+
+EXPORT("runner_arena")
+void runner_arena(int enabled) {
+    arena = enabled != 0;
+    for (int i = 0; i < 4; i++) {
+        if (arena) obstacles[i].x = 10000 + i * 400;
+        else place(i, 760 + i * 355);
+    }
 }
 
 EXPORT("runner_jump")
@@ -86,6 +133,9 @@ void runner_step(float dt) {
         return;
     }
     if (state != 1) return;
+    if (invulnerable > 0) invulnerable -= dt;
+    if (dash_cooldown > 0) dash_cooldown -= dt;
+    if (dash_left > 0) dash_left -= dt;
     int next_crouch = duck_held && jumps == 0 && y + player_height() >= GROUND - 1;
     if (next_crouch != crouching) {
         float old_height = player_height();
@@ -95,7 +145,7 @@ void runner_step(float dt) {
     float body_height = player_height();
     speed = 210 + distance * 0.008f;
     if (speed > 355) speed = 355;
-    float travel = speed * dt;
+    float travel = arena ? 0 : speed * dt * (dash_left > 0 ? 1.7f : 1);
     distance += travel;
     for (int i = 0; i < 4; ++i) {
         float incoming = 0;
@@ -131,9 +181,11 @@ void runner_step(float dt) {
         float edge = o->x + o->width;
         int left_corner = right >= o->x && left < o->x && right - o->x <= 10;
         int right_corner = left <= edge && right > edge && edge - left <= 10;
-        if (jumps > 0 && velocity > 0 && previous_bottom <= top + 1
+        if (!arena && invulnerable <= 0 && dash_left <= 0 && jumps > 0 && velocity > 0 && previous_bottom <= top + 1
             && y + body_height >= top && (left_corner || right_corner)) {
             y = top - SIZE;
+            if (health > 1) { runner_hit(); velocity = -390; return; }
+            health = 0;
             velocity = -780;
             launched = 1;
             state = 3;
@@ -157,9 +209,16 @@ void runner_step(float dt) {
         float top = obstacle_top(o);
         float bottom = o->kind == FLYER ? top + 22 : o->kind == OVERHANG ? 201 : GROUND;
         if (PLAYER_X + SIZE - 3 > o->x && PLAYER_X + 3 < o->x + o->width
-            && y + body_height - 2 > top && y + 2 < bottom) state = 2;
+            && y + body_height - 2 > top && y + 2 < bottom) runner_hit();
     }
-    if (y > 280) state = 2;
+    if (y > 280) {
+        if (state == 1) {
+            // Falling cannot chain damage or leave the player below the world.
+            invulnerable = dash_left = 0;
+            runner_hit();
+            if (state == 1) { y = GROUND - SIZE; velocity = 0; jumps = crouching = 0; }
+        }
+    }
 }
 
 EXPORT("runner_value")
@@ -176,6 +235,11 @@ float runner_value(int key) {
         case 8: return launched;
         case 9: return launch_time;
         case 10: return crouching;
+        case 11: return health;
+        case 12: return invulnerable;
+        case 13: return dash_left;
+        case 14: return dash_cooldown;
+        case 15: return max_health;
         default: return 0;
     }
 }

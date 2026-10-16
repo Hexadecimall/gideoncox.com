@@ -173,3 +173,31 @@
 }
 
 .runner-toolbar { justify-content: flex-end; }
+.hop-hud { display: flex; justify-content: space-between; gap: 12px; border-bottom: 1px solid var(--line); padding: 12px 20px; font: 12px var(--mono); color: var(--muted); }
+#hop-health { color: var(--lime); letter-spacing: 3px; }
+.hop-campaign { margin-top: 28px; font-family: var(--mono); }
+.hop-profile-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
+.hop-profile-row h2 { font-size: 18px; font-weight: 400; }
+#hop-profile, #hop-loadout { font-size: 12px; color: var(--muted); }
+.hop-stage-list { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; margin: 12px 0; }
+.hop-stage-choice { background: transparent; border: 1px solid var(--line); border-radius: 3px; padding: 14px; color: var(--text); font: 12px var(--mono); cursor: pointer; }
+.hop-stage-choice[aria-pressed=true] { border-color: var(--lime); color: var(--lime); background: #c6f27708; }
+.hop-stage-choice:disabled { opacity: .35; cursor: default; }
+.hop-progression-panel { padding: 16px 0; border-top: 1px solid var(--line); }
+.hop-progression-panel summary { font-size: 14px; padding: 8px 0; cursor: pointer; color: var(--muted); }
+#hop-skill-tree, #hop-upgrades { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 18px; padding: 14px 0; }
+.hop-skill-branch h3 { font: 12px var(--mono); color: var(--muted); margin: 0 0 18px; }
+.hop-node { display: flex; flex-direction: column; align-items: stretch; text-align: left; gap: 10px; position: relative; width: 100%; min-height: 120px; margin: 0 0 18px; padding: 16px; color: var(--text); background: #17201b; border: 1px solid var(--line); border-radius: 4px; font: 12px var(--mono); cursor: pointer; }
+.hop-node small { color: var(--muted); line-height: 1.6; }
+.hop-node output { color: var(--lime); font-size: 10px; margin-top: auto; }
+.hop-node.is-owned { border-color: #71844d; background: #c6f2770a; }
+.hop-node:disabled { cursor: default; }
+.hop-node.is-locked { opacity: .45; }
+.hop-skill-branch .hop-node + .hop-node::before { content: ''; position: absolute; height: 18px; border-left: 1px solid #71844d; top: -19px; left: 50%; }
+.hop-controls dl { display: grid; grid-template-columns: 100px 1fr; gap: 14px; font-size: 12px; line-height: 1.6; }
+.hop-controls dd { color: var(--muted); margin: 0; }
+.runner-actions { flex-wrap: wrap; }
+.runner:fullscreen .hop-hud { flex-shrink: 0; }
+@media(max-width: 600px) { .hop-stage-list { grid-template-columns: repeat(2, 1fr); } #hop-skill-tree { gap: 6px; } .hop-node { padding: 10px 7px; font-size: 11px; min-height: 156px; } .hop-node small { font-size: 10px; } #hop-upgrades { grid-template-columns: 1fr; } #hop-upgrades .hop-node { min-height: 100px; } .hop-hud { padding: 10px 12px; font-size: 10px; } .runner-actions { grid-template-columns: repeat(3, 1fr); } }
+.hop-auto-fire { display: flex; align-items: center; gap: 10px; font-size: 12px; padding: 14px 0; }
+.hop-auto-fire input { accent-color: var(--lime); width: 18px; height: 18px; }

@@ -1,3 +1,5 @@
+import { playSound, setSound } from './hop/audio.js';
+import { createCampaign } from './hop/campaign.js';
 const canvas = document.querySelector('#hop-canvas');
 const context = canvas.getContext('2d');
 const overlay = document.querySelector('#hop-overlay');
@@ -23,6 +25,13 @@ const reducedMotion = { get matches() {
 const jumpCodes = () => [preferences().jumpKey || 'Space', 'ArrowUp', 'KeyW'];
 const duckCodes = () => [preferences().duckKey || 'ArrowDown', 'KeyS'];
 let engine;
+let campaign;
+let firing = false;
+const fireButton = document.querySelector('#hop-fire');
+const dashButton = document.querySelector('#hop-dash');
+const jumpButton = document.querySelector('#hop-jump');
+const exitButton = document.querySelector('#hop-exit');
+const autoFire = document.querySelector('#hop-auto-fire');
 let mode = 'loading';
 let frame = 0;
 let lastTime = 0;
@@ -43,7 +52,7 @@ function draw() {
   const crouching = Boolean(engine?.runner_value(10));
   const scroll = reducedMotion.matches ? 0 : distance;
   context.save();
-  context.fillStyle = preferences().hopSky || '#101619';
+  context.fillStyle = (preferences().hopSky && preferences().hopSky !== '#101619' ? preferences().hopSky : campaign?.sky) || '#101619';
   context.fillRect(0, 0, 720, 280);
   if (launched && !reducedMotion.matches) {
     const zoom = launchTime < .65 ? 1 + 1.2 * Math.min(1, launchTime / .22)
@@ -185,6 +194,7 @@ function draw() {
     context.fillRect(x + 4 + i * 9, y - 20, 5, 3);
   }
   context.restore();
+  campaign?.draw(context, reducedMotion.matches);
   if (launched && launchTime >= .6) {
     context.save();
     if (!reducedMotion.matches && launchTime < 2) {
@@ -223,8 +233,11 @@ function gameOver() {
     bestOutput.value = String(best);
     try { localStorage.setItem('hop-best', String(best)); } catch {}
   }
-  message.textContent = `${score} m`;
-  start.textContent = 'Retry';
+  message.textContent = campaign?.finish() || `${score} m`;
+  firing = false;
+  exitButton.disabled = true;
+  fireButton.disabled = dashButton.disabled = jumpButton.disabled = true;
+  start.textContent = campaign?.won ? 'Play again' : 'Retry';
   overlay.hidden = false;
   pauseButton.disabled = true;
   duckButton.disabled = true;
@@ -240,7 +253,8 @@ function tick(now) {
   while (accumulator >= 1 / 120 && mode === 'running') {
     engine.runner_step(1 / 120);
     accumulator -= 1 / 120;
-    if (engine.runner_value(4) === 2) gameOver();
+    campaign?.step(1 / 120, firing || autoFire.checked);
+    if (engine.runner_value(4) === 2 || campaign?.won) gameOver();
   }
   particles = particles.filter(p => {
     p.x -= elapsed * 180;
@@ -249,6 +263,7 @@ function tick(now) {
     return p.life > 0;
   });
   scoreOutput.value = String(Math.floor(engine.runner_value(2) / 12));
+  campaign?.updateHud();
   draw();
   if (mode === 'running') frame = requestAnimationFrame(tick);
 }
@@ -257,10 +272,13 @@ function run() {
   if (!engine) return;
   if (mode !== 'paused') {
     engine.runner_reset(crypto.getRandomValues(new Uint32Array(1))[0]);
+    campaign?.begin();
     particles = [];
     scoreOutput.value = '0';
   }
   mode = 'running';
+  exitButton.disabled = false;
+  fireButton.disabled = jumpButton.disabled = false;
   duckButton.disabled = false;
   overlay.hidden = true;
   pauseButton.disabled = false;
@@ -274,6 +292,8 @@ function run() {
 function pause() {
   if (mode !== 'running') return;
   mode = 'paused';
+  firing = false;
+  fireButton.disabled = dashButton.disabled = jumpButton.disabled = true;
   duckKeys.clear(); duckPointer = false; setDuck();
   duckButton.disabled = true;
   stopFrame();
@@ -287,7 +307,9 @@ function pause() {
 
 function jump() {
   if (mode !== 'running') return;
-  if (engine.runner_jump() && !reducedMotion.matches) {
+  if (!engine.runner_jump()) return;
+  playSound('jump');
+  if (!reducedMotion.matches) {
     for (let i = 0; i < 5; i++) particles.push({ x: 110 + i * 4, y: engine.runner_value(0) + 22, vy: 25 + i * 12, life: .3 });
   }
 }
@@ -316,6 +338,7 @@ canvas.addEventListener('pointerdown', event => {
   jump();
 });
 canvas.addEventListener('keydown', event => {
+  if (['KeyJ', 'KeyK', 'ShiftLeft', 'ShiftRight'].includes(event.code)) { event.preventDefault(); if (mode === 'running') { if (event.code === 'KeyJ') { firing = true; campaign?.fire(); } else if (!event.repeat && engine.runner_dash()) playSound('dash'); } return; }
   if ([...jumpCodes(), ...duckCodes(), 'KeyP', 'Escape', 'Enter'].includes(event.code)) event.preventDefault();
   if (event.repeat) return;
   if (duckCodes().includes(event.code) && mode === 'running') { duckKeys.add(event.code); setDuck(); return; }
@@ -324,7 +347,7 @@ canvas.addEventListener('keydown', event => {
   else if (event.code === 'KeyP') mode === 'paused' ? run() : pause();
   else if (event.code === 'Escape') pause();
 });
-document.addEventListener('keyup', event => { duckKeys.delete(event.code); setDuck(); });
+document.addEventListener('keyup', event => { if (event.code === 'KeyJ') firing = false; duckKeys.delete(event.code); setDuck(); });
 window.addEventListener('blur', pause);
 duckButton.addEventListener('pointerdown', event => {
   if (event.button !== 0 || mode !== 'running') return;
@@ -349,11 +372,12 @@ new IntersectionObserver(entries => {
 
 draw();
 try {
-  const response = await fetch(new URL('../wasm/runner.wasm?v=2', import.meta.url));
+  const response = await fetch(new URL('../wasm/runner.wasm?v=3', import.meta.url));
   if (!response.ok) throw new Error('Game unavailable');
   const { instance } = await WebAssembly.instantiate(await response.arrayBuffer());
   engine = instance.exports;
   engine.runner_reset(7);
+  campaign = createCampaign(engine);
   mode = 'ready';
   start.disabled = false;
   start.textContent = 'Start';
@@ -366,3 +390,17 @@ try {
 }
 
 window.addEventListener('site-preferences-changed', () => { if (mode !== 'running') draw(); });
+
+// Pointer controls stay separate so jump, fire, and duck can be held together.
+jumpButton.addEventListener('pointerdown', event => { event.preventDefault(); jump(); });
+jumpButton.addEventListener('keydown', event => { if (['Enter', ' '].includes(event.key)) { event.preventDefault(); jump(); } });
+dashButton.addEventListener('click', () => { if (mode === 'running' && engine.runner_dash()) playSound('dash'); canvas.focus({ preventScroll: true }); });
+fireButton.addEventListener('pointerdown', event => { if (mode !== 'running') return; event.preventDefault(); fireButton.setPointerCapture(event.pointerId); firing = true; campaign?.fire(); });
+for (const type of ['pointerup', 'pointercancel', 'lostpointercapture']) fireButton.addEventListener(type, () => { firing = false; });
+fireButton.addEventListener('keydown', event => { if (['Enter', ' '].includes(event.key) && mode === 'running') { event.preventDefault(); firing = true; campaign?.fire(); } });
+fireButton.addEventListener('keyup', () => { firing = false; });
+fireButton.addEventListener('blur', () => { firing = false; });
+
+exitButton.addEventListener('click', () => { if (mode === 'running' || mode === 'paused') { gameOver(); draw(); } });
+
+document.querySelector('#hop-sound').addEventListener('click', event => { const enabled = event.currentTarget.getAttribute('aria-pressed') !== 'true'; setSound(enabled); event.currentTarget.setAttribute('aria-pressed', String(enabled)); event.currentTarget.textContent = enabled ? 'Sound on' : 'Sound off'; });

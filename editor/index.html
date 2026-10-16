@@ -6,17 +6,17 @@
   <meta charset="utf-8"/>
   <meta content="width=device-width, initial-scale=1" name="viewport"/>
   <meta content="#0b0e11" name="theme-color"/>
-  <meta content="Browser games, interactive tools, and WebAssembly experiments. Play Hop, draw on the doodle pad, and test your clicking speed." name="description"/>
+  <meta content="Zed’s editor compiled to WebAssembly, with browser-local files, keyboard editing, and import and export." name="description"/>
   <link href="https://gideoncox.com/editor/" rel="canonical"/>
   <meta content="index,follow,max-image-preview:large" name="robots"/>
   <meta content="website" property="og:type"/>
   <meta content="random crap" property="og:site_name"/>
-  <meta content="Editor · random crap" property="og:title"/>
-  <meta content="Browser games, interactive tools, and WebAssembly experiments. Play Hop, draw on the doodle pad, and test your clicking speed." property="og:description"/>
+  <meta content="Zed · random crap" property="og:title"/>
+  <meta content="Zed’s editor compiled to WebAssembly, with browser-local files, keyboard editing, and import and export." property="og:description"/>
   <meta content="https://gideoncox.com/editor/" property="og:url"/>
   <meta content="summary" name="twitter:card"/>
   <meta content="random crap" name="twitter:title"/>
-  <meta content="Browser games, interactive tools, and WebAssembly experiments. Play Hop, draw on the doodle pad, and test your clicking speed." name="twitter:description"/>
+  <meta content="Zed’s editor compiled to WebAssembly, with browser-local files, keyboard editing, and import and export." name="twitter:description"/>
   <title>
    Zed · random crap
   </title>
@@ -25,13 +25,13 @@
   <link href="../assets/css/navigation.css?v=20261014-4" rel="stylesheet"/>
   <link href="../assets/css/tools.css?v=20261014-4" rel="stylesheet"/>
   <link href="../assets/css/motion.css?v=20261014-4" rel="stylesheet"/>
-  <link href="../assets/css/editor.css?v=20261014-4" rel="stylesheet"/>
+  <link href="../assets/css/zed-page.css?v=20261015-1" rel="stylesheet"/>
   <link href="../assets/css/workspace.css?v=20261014-4" rel="stylesheet"/>
   <link href="../assets/css/quote.css?v=20261014-4" rel="stylesheet"/>
   <link href="/assets/css/doodle.css?v=20261014-4" rel="stylesheet"/>
   <link href="/assets/css/ambient.css?v=20261014-4" rel="stylesheet"/>
  </head>
- <body class="workspace-view">
+ <body class="workspace-view zed-browser-view">
   <header id="site-header">
    <div class="shell nav">
     <button aria-controls="site-menu" aria-expanded="false" aria-label="Open menu" class="brand menu-toggle" id="menu-toggle">
@@ -256,27 +256,22 @@
    </div>
   </header>
   <main class="workspace-page shell" id="top">
-   <nav aria-label="Workspace" class="workspace-nav">
-    <a href="../" aria-label="Back to main page">
-     ←
-    </a>
-    <a aria-current="page" href="/editor/">
-     Zed
-    </a>
+   <nav aria-label="Workspace" class="workspace-nav zed-nav">
+    <a href="/" aria-label="Back to main page">←</a>
+    <h1>Zed</h1>
+    <details class="zed-about">
+     <summary>about</summary>
+     <div>
+      <p>Zed’s editor, compiled to WebAssembly. Files you save stay in this browser.</p>
+      <p>This browser port supports editing and local files. Native terminals, Git, language-server processes, and collaboration are unavailable. Workspace history lasts for this session.</p>
+      <a href="/assets/vendor/zed/source.tar.gz">Modified source ↓</a>
+      <a href="https://github.com/zed-industries/zed" target="_blank" rel="noopener noreferrer">Upstream ↗</a>
+      <a href="/assets/vendor/zed/LICENSE-GPL">License</a>
+     </div>
+    </details>
    </nav>
-   <section aria-labelledby="zed-title" class="workspace-panel zed-placeholder">
-    <div aria-hidden="true" class="zed-mark">
-     z.
-    </div>
-    <h1 id="zed-title">
-     Zed
-    </h1>
-    <p>
-     The browser build isn’t ready yet.
-    </p>
-    <p class="zed-detail">
-     This spot is reserved for the real editor.
-    </p>
+   <section class="workspace-panel zed-frame-wrap" aria-label="Zed browser editor">
+    <iframe class="zed-frame" src="/editor/app/" title="Zed editor" allow="clipboard-read; clipboard-write" loading="eager"></iframe>
    </section>
   </main>
   <footer class="shell footer">

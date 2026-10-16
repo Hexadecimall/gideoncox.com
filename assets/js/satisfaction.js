@@ -1,3 +1,4 @@
+import { TOYS, createToys } from './satisfaction/toys.js';
 const canvas = document.querySelector('#satisfaction-canvas');
 const context = canvas.getContext('2d');
 const sheet = document.querySelector('#bubble-sheet');
@@ -23,6 +24,9 @@ let previousPoint = null;
 let popCount = 0;
 let lastSound = 0;
 let visible = true;
+const toys = createToys(context, tone);
+const isToy = () => Object.hasOwn(TOYS, mode);
+const animated = () => mode !== 'bubbles' && mode !== 'rake';
 const reducedMotion = () => document.documentElement.dataset.motion === 'reduced'
   || (document.documentElement.dataset.motion !== 'full' && matchMedia('(prefers-reduced-motion: reduce)').matches);
 
@@ -68,8 +72,8 @@ sheet.addEventListener('pointerdown', event => {
 sheet.addEventListener('pointermove', event => {
   if (draggingBubbles) pop(document.elementFromPoint(event.clientX, event.clientY)?.closest('.bubble'));
 });
-window.addEventListener('pointerup', () => { draggingBubbles = false; pressed = false; previousPoint = null; });
-window.addEventListener('pointercancel', () => { draggingBubbles = false; pressed = false; previousPoint = null; });
+window.addEventListener('pointerup', () => { draggingBubbles = false; pressed = false; previousPoint = null; toys.up(); });
+window.addEventListener('pointercancel', () => { draggingBubbles = false; pressed = false; previousPoint = null; toys.up(); });
 
 function resetSand() {
   sandContext.fillStyle = '#c4ad7d'; sandContext.fillRect(0, 0, 720, 440);
@@ -95,6 +99,7 @@ function rake(from, to) {
   }
 }
 function draw() {
+  if (isToy()) { toys.draw(); return; }
   if (mode === 'rake') { context.drawImage(sand, 0, 0); return; }
   context.fillStyle = '#10171a'; context.fillRect(0, 0, 720, 440);
   if (!engine) return;
@@ -110,48 +115,53 @@ function draw() {
 }
 function stop() { cancelAnimationFrame(frame); frame = 0; previousTime = 0; accumulator = 0; }
 function tick(now) {
-  if (paused || document.hidden || mode !== 'magnet') { stop(); return; }
+  if (paused || document.hidden || !animated()) { stop(); return; }
   accumulator += previousTime ? Math.min((now - previousTime) / 1000, .05) : 0;
   previousTime = now;
   while (accumulator >= 1 / 120) {
-    engine?.beads_step(1 / 120, pointer.x, pointer.y, Number(pressed));
+    if (isToy()) toys.step(1 / 120);
+    else engine?.beads_step(1 / 120, pointer.x, pointer.y, Number(pressed));
     accumulator -= 1 / 120;
   }
   draw();
   frame = requestAnimationFrame(tick);
 }
-function resume() { if (!frame && !paused && visible && mode === 'magnet' && !document.hidden) frame = requestAnimationFrame(tick); }
+function resume() { if (!frame && !paused && visible && animated() && !document.hidden) frame = requestAnimationFrame(tick); }
 function reset() {
   pressed = false; previousPoint = null; popCount = 0;
   for (const bubble of sheet.children) bubble.setAttribute('aria-pressed', 'false');
   sheet.classList.remove('is-resetting');
   if (!reducedMotion()) requestAnimationFrame(() => sheet.classList.add('is-resetting'));
-  resetSand(); engine?.beads_reset(); draw();
-  status.textContent = mode === 'bubbles' ? 'New bubble sheet.' : mode === 'rake' ? 'Fresh sand.' : 'Beads reset.';
+  resetSand(); engine?.beads_reset(); if (isToy()) toys.reset(mode); draw();
+  status.textContent = isToy() ? `${TOYS[mode].label} reset.` : mode === 'bubbles' ? 'New bubble sheet.' : mode === 'rake' ? 'Fresh sand.' : 'Beads reset.';
 }
 function choose(next) {
-  mode = next; stop(); pressed = false; previousPoint = null;
+  mode = next; stop(); paused = reducedMotion(); pauseButton.textContent = paused ? 'resume' : 'pause'; pressed = false; previousPoint = null;
+  document.querySelector('.satisfaction-stage').classList.toggle('canvas-mode', mode !== 'bubbles');
   sheet.hidden = mode !== 'bubbles'; canvas.hidden = mode === 'bubbles';
-  pauseButton.hidden = mode !== 'magnet';
-  soundButton.hidden = mode !== 'bubbles';
+  pauseButton.hidden = !animated();
+  soundButton.hidden = false;
+  document.querySelectorAll('.satisfaction-tuning label').forEach(label => { label.hidden = !isToy(); });
   for (const button of modes) button.setAttribute('aria-pressed', String(button.dataset.satisfactionMode === mode));
   canvas.setAttribute('aria-label', mode === 'rake' ? 'Sand rake. Drag to draw grooves. Arrow keys move; Space holds the rake.' : 'Magnetic beads. Move to push, hold to pull. Arrow keys move; Space attracts.');
+  if (isToy()) canvas.setAttribute('aria-label', TOYS[mode].hint + ' Arrow keys move; Space interacts.');
   reset(); resume();
 }
 function move(event) {
   const bounds = canvas.getBoundingClientRect();
   const next = { x: (event.clientX - bounds.left) * 720 / bounds.width, y: (event.clientY - bounds.top) * 440 / bounds.height };
   if (pressed && mode === 'rake') rake(previousPoint || next, next);
+  if (isToy()) toys.move(next);
   pointer = next; previousPoint = next;
   if (mode === 'rake') draw();
 }
 canvas.addEventListener('pointerdown', event => {
   if (event.button !== 0) return;
-  canvas.focus({ preventScroll: true }); canvas.setPointerCapture(event.pointerId); pressed = true; move(event);
+  canvas.focus({ preventScroll: true }); canvas.setPointerCapture(event.pointerId); pressed = true; move(event); if (isToy()) toys.down(pointer); resume();
 });
 canvas.addEventListener('pointermove', move);
 canvas.addEventListener('pointerleave', () => { if (!pressed) pointer = { x: -1000, y: -1000 }; });
-canvas.addEventListener('lostpointercapture', () => { pressed = false; previousPoint = null; });
+canvas.addEventListener('lostpointercapture', () => { pressed = false; previousPoint = null; toys.up(); });
 canvas.addEventListener('keydown', event => {
   if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', ' '].includes(event.key)) return;
   event.preventDefault();
@@ -164,15 +174,21 @@ canvas.addEventListener('keydown', event => {
   if (event.key === 'ArrowDown') pointer.y += 10;
   pointer.x = Math.max(0, Math.min(720, pointer.x)); pointer.y = Math.max(0, Math.min(440, pointer.y));
   if (mode === 'rake' && pressed) { rake(from, pointer); draw(); }
+  if (isToy()) { if (event.key === ' ' && !event.repeat) toys.down(pointer); else toys.move(pointer); resume(); }
 });
-canvas.addEventListener('keyup', event => { if (event.key === ' ') pressed = false; });
-canvas.addEventListener('blur', () => { pressed = false; pointer = { x: -1000, y: -1000 }; });
+canvas.addEventListener('keyup', event => { if (event.key === ' ') { pressed = false; toys.up(); } });
+canvas.addEventListener('blur', () => { pressed = false; toys.up(); pointer = { x: -1000, y: -1000 }; });
 for (const button of modes) button.addEventListener('click', () => choose(button.dataset.satisfactionMode));
 document.querySelector('#satisfaction-reset').addEventListener('click', reset);
 soundButton.addEventListener('click', () => { sound = !sound; soundButton.setAttribute('aria-pressed', String(sound)); soundButton.textContent = sound ? 'sound on' : 'sound off'; if (sound) tone(); });
 pauseButton.addEventListener('click', () => { paused = !paused; pauseButton.textContent = paused ? 'resume' : 'pause'; paused ? stop() : resume(); });
 document.addEventListener('visibilitychange', () => document.hidden ? stop() : resume());
 new IntersectionObserver(([entry]) => { visible = entry.isIntersecting; visible ? resume() : stop(); }).observe(canvas);
+document.querySelector('#satisfaction-palette').addEventListener('change', event => { toys.setPalette(Number(event.target.value)); draw(); });
+document.querySelector('#satisfaction-speed').addEventListener('input', event => toys.setSpeed(Number(event.target.value)));
+document.querySelector('#satisfaction-fullscreen').addEventListener('click', async () => {
+  try { if (document.fullscreenElement) await document.exitFullscreen(); else await document.querySelector('.satisfaction-workspace').requestFullscreen(); } catch { status.textContent = 'Fullscreen is unavailable.'; }
+});
 choose('bubbles');
 try {
   const response = await fetch('/assets/wasm/satisfaction.wasm');

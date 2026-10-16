@@ -25,7 +25,7 @@
   <link href="/assets/css/navigation.css?v=20261014-4" rel="stylesheet"/>
   <link href="/assets/css/tools.css?v=20261014-4" rel="stylesheet"/>
   <link href="/assets/css/workspace.css?v=20261014-4" rel="stylesheet"/>
-  <link href="/assets/css/runner.css?v=20261014-4" rel="stylesheet"/>
+  <link href="/assets/css/runner.css?v=20261015-5" rel="stylesheet"/>
   <link href="/assets/css/motion.css?v=20261014-4" rel="stylesheet"/>
   <link href="/assets/css/quote.css?v=20261014-4" rel="stylesheet"/>
   <link href="/assets/css/doodle.css?v=20261014-4" rel="stylesheet"/>
@@ -282,8 +282,9 @@
         </span>
        </div>
       </div>
+      <div class="hop-hud"><span id="hop-route">Outskirts</span><output id="hop-health" aria-label="Health">♥♥♥</output></div>
       <div class="runner-stage">
-       <canvas aria-label="Hop runner game. Space, Up, or tap to jump. Jump again in the air for a double jump. Hold Down or S to duck. P or Escape pauses." height="280" id="hop-canvas" role="img" tabindex="0" width="720">
+       <canvas aria-label="Hop runner game. Space, Up, or tap to jump. Jump again in the air for a double jump. Hold Down or S to duck. J fires. K or Shift dashes. P or Escape pauses." height="280" id="hop-canvas" role="img" tabindex="0" width="720">
        </canvas>
        <div class="runner-overlay" id="hop-overlay">
         <div>
@@ -299,6 +300,9 @@
         Space / tap to jump · Down / S to duck · jump twice to double jump (nah really)
        </p>
        <div class="runner-actions">
+        <button class="tool-button" id="hop-jump" disabled>Jump</button>
+        <button class="tool-button" id="hop-fire" disabled title="Hold J to fire">Fire</button>
+        <button class="tool-button" id="hop-dash" disabled title="K or Shift to dash">Dash</button>
         <button class="tool-button" disabled="" id="hop-duck">
          Hold to duck
         </button>
@@ -308,12 +312,29 @@
         <button class="tool-button" disabled="" id="hop-pause">
          Pause
         </button>
+        <button class="tool-button" id="hop-exit" disabled>End run</button>
+        <button class="tool-button" id="hop-sound" aria-pressed="false">Sound off</button>
        </div>
       </div>
       <p class="sr-only" id="hop-status" role="status">
        Loading game.
       </p>
-     </article>  </main>
+     </article>
+   <section class="hop-campaign" id="hop-campaign" aria-label="Hop progression">
+    <div class="hop-profile-row"><h2>Progress</h2><output id="hop-profile"></output></div>
+    <div class="hop-stage-list" aria-label="Choose stage"></div>
+    <p id="hop-loadout"></p>
+    <details class="hop-progression-panel" open><summary>Skill tree</summary>
+     <div id="hop-skill-tree"></div>
+     <button class="tool-button" id="hop-respec">Refund skill points</button>
+    </details>
+    <details class="hop-progression-panel"><summary>Upgrades</summary><div id="hop-upgrades"></div></details>
+    <details class="hop-progression-panel hop-controls"><summary>Controls</summary>
+     <label class="hop-auto-fire"><input id="hop-auto-fire" type="checkbox"> Auto fire</label>
+     <dl><dt>Jump</dt><dd>Space / W / ↑</dd><dt>Double jump</dt><dd>jump twice to double jump (nah really)</dd><dt>Duck</dt><dd>S / ↓</dd><dt>Fire</dt><dd>hold J</dd><dt>Dash</dt><dd>K / Shift</dd><dt>Pause</dt><dd>Escape / P</dd></dl>
+    </details>
+   </section>
+  </main>
   <footer class="shell footer">
    <span>
     g. /
@@ -341,7 +362,7 @@
   </script>
   <script src="/assets/js/quote.js" type="module">
   </script>
-  <script src="/assets/js/runner.js?v=2" type="module">
+  <script src="/assets/js/runner.js?v=3" type="module">
   </script>
   <script src="/assets/js/doodle.js" type="module"></script>
   <script src="/assets/js/ambient.js" type="module"></script>

@@ -1,6 +1,6 @@
 # random crap
 
-A static personal site with Astral and Ark project pages, verified downloads, an interactive particle field, a header doodle pad, Hop, SuperSatisfaction, a typing tester, an Ark terminal, and a reserved page for Zed.
+A static personal site with Astral and Ark project pages, verified downloads, an interactive particle field, a header doodle pad, Hop, SuperSatisfaction, a typing tester, an Ark terminal, and a browser port of Zed’s editor.
 
 ## Preview
 
@@ -16,7 +16,7 @@ Open `http://127.0.0.1:8767/`. The checked-in WebAssembly and terminal display a
 
 - `index.html` — homepage, navigation, and search metadata.
 - `games/hop/` — the standalone game, linked under Games in the site menu.
-- `games/supersatisfaction/` — bubble wrap, a sand rake, and magnetic beads.
+- `games/supersatisfaction/` — twelve interactive toys, with optional sound and canvas controls.
 - `projects/` — Astral and Ark descriptions, installation, and source links.
 - `downloads/` — versioned Astral CLI bundle, checksum, and pinned source installer.
 - `packaging/astral/` — portable-bundle installer and its included instructions.
@@ -24,7 +24,7 @@ Open `http://127.0.0.1:8767/`. The checked-in WebAssembly and terminal display a
 - `assets/css/` — base styles and separate styles for each interface.
 - `assets/js/` — page behavior; terminal runtime modules live in `terminal/`.
 - `assets/wasm/` — compiled modules served by the site.
-- `assets/vendor/` — pinned xterm.js and fit addon, including licenses.
+- `assets/vendor/` — pinned terminal libraries and the Zed WASM distribution, with source and licenses.
 - `src/field/` — doodle rasterizer in C.
 - `src/hop/` — fixed-step game physics in C.
 - `src/satisfaction/` — magnetic bead springs in C, compiled to WebAssembly.
@@ -55,7 +55,7 @@ Requires Python 3 and Ark on macOS/Linux, or inside WSL on Windows. A Chromebook
 
 **Browser files** runs without a connector. Both modes use xterm.js, with selectable text, scrollback, saved display preferences, and an on-screen row for Escape, Tab, Control-C, arrow keys, and Enter. Browser input supports history, completion, cursor editing, and multiline shell commands. Ark's C++ lexer, parser, and expander compile to WebAssembly; Rust supplies the filesystem and commands, and a worker executes the parsed shell tree. It supports variables, quoting, arithmetic expansion, command substitution, pipes, redirects, functions, `if`, word-list `for`, and `while`. It does not launch native executables, background jobs, or C-style `for` loops. `grep` matches literal text. Workspace limits are 2,000 entries, 512 KiB per text file, and 4 MiB total file contents.
 
-Browser files are stored in IndexedDB. Clearing site data removes them. Copy important contents before clearing storage. If persistent storage is unavailable, the terminal reports that files are temporary. The public editor page is a placeholder for a real Zed web port. The earlier browser editor prototype is retained in source and tests but is not presented as Zed.
+Browser files are stored in IndexedDB. Clearing site data removes them. Copy important contents before clearing storage. If persistent storage is unavailable, the terminal reports that files are temporary. Zed uses a separate browser file store; its files are not currently shared with Ark.
 
 ## Customization
 
@@ -82,7 +82,7 @@ python3 tests/connector_test.py
 python3 scripts/audit-public.py
 ```
 
-The native connector check requires Ark, runs with a temporary home, and verifies authentication, origin rejection, a real disk write/read, PTY resizing, and disconnect. Browser UI checks should also cover keyboard access, shared editor files, game pause/fullscreen, and narrow screens.
+The native connector check requires Ark, runs with a temporary home, and verifies authentication, origin rejection, a real disk write/read, PTY resizing, and disconnect. Browser UI checks should also cover keyboard access, editor file round trips, game pause/fullscreen, and narrow screens.
 
 ## Hosting
 
@@ -104,6 +104,27 @@ The macOS arm64 archive was built from that same source with `CMAKE_OSX_DEPLOYME
 
 Ark links to its public Homebrew tap and versioned source. There are no fabricated release download links.
 
+## Hop campaign
+
+Hop combines the existing fixed-step WASM runner with a JavaScript combat layer. Three stages lead into telegraphed boss fights; Endless keeps the route running. Drones, player/enemy projectiles, damage grace, dash protection, and health are active gameplay systems. J fires, K/Shift dashes, and the touch controls support simultaneous input. Auto fire is available in Controls, and synthesized sound effects are opt-in. Escape pauses, and End run banks earned rewards.
+
+XP, credits, stage unlocks, nine skill nodes, and three equipment upgrade tracks persist in `hop-campaign` browser storage. Skill ranks modify movement, maximum health, shot damage, piercing, repair, and cooldowns. Skill refunds are free. Purchases are disabled during runs; rewards are settled once when a run ends. Clearing browser storage removes progression. The progression model and real WASM/combat integration have regression checks in `tests/hop-campaign.test.mjs`.
+
 ## SuperSatisfaction
 
-Bubble wrap supports clicking, dragging, touch, and keyboard activation. Sound is opt-in. Sand stores persistent rake strokes until reset. Magnetic beads use fixed-step WASM spring physics; hover repels and holding attracts. Animation pauses offscreen or when the tab is hidden, with an explicit pause control. Arrow keys and Space operate the canvas modes, and reduced-motion settings remove decorative transitions.
+Bubble wrap supports clicking, dragging, touch, and keyboard activation. Sound is opt-in. Sand stores persistent rake strokes until reset. Magnetic beads use fixed-step WASM spring physics; hover repels and holding attracts. Animation pauses offscreen or when the tab is hidden, with an explicit pause control. Nine additional canvas toys cover ripples, falling sand, symmetry drawing, domino chains, plucked strings, pendulum waves, spirographs, fireworks, and animated sorting. These simulations live in `assets/js/satisfaction/toys.js`. Palette and speed controls apply to the new toys. Arrow keys and Space operate the canvas modes; reduced-motion mode starts animations paused. Fullscreen is available for the entire workspace.
+
+## Zed browser port
+
+The editor uses the real `editor::Editor` and GPUI Web from `zed-industries/zed`, based on revision `1a28cff4b409169bac058bca40dfbfeb7621d19b`. Browser adapters replace native filesystem access, scheduling, parser cleanup, and dependency selection. The page provides browser-local files, import/export, keyboard editing, and font-size adjustment. Native terminal processes, language-server processes, Git, and collaboration are unavailable. SQLite runs genuine in-memory databases for session metadata; documents are persisted separately by the browser filesystem. Clearing site data removes saved documents.
+
+`assets/vendor/zed/source.tar.gz` contains the corresponding modified sources, dependency license files, and build instructions. Building requires Rust 1.98.1, Zig 0.17.0, and wasm-bindgen CLI 0.2.120. The target archive tool must be `zig ar`; the build script configures it explicitly. The browser runs on a single-threaded event loop and does not require cross-origin isolation headers.
+
+Package a rebuilt source tree and check the vendored distribution with:
+
+```sh
+python3 packaging/zed/package-source.py /path/to/zed-browser assets/vendor/zed/source.tar.gz
+python3 packaging/zed/audit.py assets/vendor/zed
+```
+
+The separate vendor audit checks local build paths, archive ownership and entries, and credential-shaped values. Upstream source retains its original product names and licenses. First-party website files still use the normal public audit.

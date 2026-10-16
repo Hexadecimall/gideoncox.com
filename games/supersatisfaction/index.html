@@ -29,7 +29,7 @@
   <link href="/assets/css/quote.css?v=20261014-4" rel="stylesheet"/>
   <link href="/assets/css/doodle.css?v=20261014-4" rel="stylesheet"/>
   <link href="/assets/css/ambient.css?v=20261014-4" rel="stylesheet"/>
-  <link href="/assets/css/satisfaction.css" rel="stylesheet"/>
+  <link href="/assets/css/satisfaction.css?v=2" rel="stylesheet"/>
  </head>
  <body class="workspace-view">
   <header id="site-header">
@@ -257,13 +257,24 @@
   </header>
   <main class="satisfaction-page shell" id="top">
    <div class="satisfaction-heading"><a href="/" aria-label="Back to main page">←</a><h1>SuperSatisfaction</h1></div>
-   <div class="satisfaction-controls" aria-label="Satisfaction controls">
+   <div class="satisfaction-workspace"><div class="satisfaction-controls" aria-label="Satisfaction controls">
     <button data-satisfaction-mode="bubbles" aria-pressed="true">bubbles</button>
     <button data-satisfaction-mode="rake" aria-pressed="false">sand rake</button>
     <button data-satisfaction-mode="magnet" aria-pressed="false" disabled>magnets</button>
+    <button data-satisfaction-mode="ripples" aria-pressed="false">ripples</button>
+    <button data-satisfaction-mode="pour" aria-pressed="false">falling sand</button>
+    <button data-satisfaction-mode="symmetry" aria-pressed="false">symmetry</button>
+    <button data-satisfaction-mode="dominoes" aria-pressed="false">dominoes</button>
+    <button data-satisfaction-mode="strings" aria-pressed="false">strings</button>
+    <button data-satisfaction-mode="pendulums" aria-pressed="false">pendulum wave</button>
+    <button data-satisfaction-mode="spirograph" aria-pressed="false">spirograph</button>
+    <button data-satisfaction-mode="fireworks" aria-pressed="false">fireworks</button>
+    <button data-satisfaction-mode="sorting" aria-pressed="false">sorting</button>
+
     <div class="satisfaction-options"><button id="satisfaction-sound" aria-pressed="false">sound off</button><button id="satisfaction-pause" hidden>pause</button><button id="satisfaction-reset">reset</button></div>
    </div>
    <div class="satisfaction-stage"><div class="bubble-sheet" id="bubble-sheet" aria-label="Bubble wrap"></div><canvas id="satisfaction-canvas" width="720" height="440" tabindex="0" role="img" hidden></canvas></div>
+   <div class="satisfaction-tuning"><label>palette <select id="satisfaction-palette"><option value="0">moss</option><option value="1">sunset</option><option value="2">gold</option><option value="3">ice</option></select></label><label>speed <input id="satisfaction-speed" type="range" min="0.25" max="2" step="0.25" value="1"></label><button class="tool-button" id="satisfaction-fullscreen">Fullscreen</button></div></div>
    <p class="sr-only" id="satisfaction-status" role="status"></p>
   </main>
   <footer class="shell footer">
@@ -294,6 +305,6 @@
   <script src="/assets/js/tools.js" type="module"></script>
   <script src="/assets/js/doodle.js" type="module"></script>
   <script src="/assets/js/ambient.js" type="module"></script>
-  <script src="/assets/js/satisfaction.js" type="module"></script>
+  <script src="/assets/js/satisfaction.js?v=2" type="module"></script>
  </body>
 </html>
