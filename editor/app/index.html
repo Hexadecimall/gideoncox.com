@@ -4,27 +4,10 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>Zed editor</title>
-<link rel="stylesheet" href="/assets/css/zed-app.css?v=20261015-1">
+<link rel="stylesheet" href="/assets/css/zed-app.css?v=20261016-2">
 </head>
 <body>
-<div class="file-bar" aria-label="Editor files">
- <select id="files" aria-label="Open a saved file" disabled><option value="">files</option></select>
- <input id="filename" value="untitled.txt" aria-label="File name" spellcheck="false" disabled>
- <button id="new" disabled>New</button>
- <button id="save" disabled>Save</button>
- <button id="import-button" disabled>Import</button>
- <button id="export" disabled>Export</button>
- <label class="font-control"><span aria-hidden="true">Aa</span><input id="font-size" aria-label="Editor font size" type="number" min="10" max="32" value="14" disabled></label>
- <output id="status" aria-live="polite"></output>
- <input id="import" type="file" hidden>
-</div>
 <div id="loading" role="status">Loading Zed…</div>
-<dialog id="file-confirm">
- <form method="dialog">
-  <p id="confirm-message"></p>
-  <div class="dialog-actions"><button value="cancel" autofocus>Cancel</button><button id="confirm-action" value="confirm">Discard</button></div>
- </form>
-</dialog>
-<script src="/assets/js/zed-app.js?v=20261015-2" type="module"></script>
+<script src="/assets/js/zed-app.js?v=20261016-2" type="module"></script>
 </body>
 </html>

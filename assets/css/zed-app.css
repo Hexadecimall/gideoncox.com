@@ -1,25 +1,22 @@
-:root { color-scheme: dark; font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; color: #e5e8e4; background: #11151a; }
+:root { color-scheme: dark; color: #abb2bf; background: #282c34; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif; }
 * { box-sizing: border-box; }
 html, body { width: 100%; height: 100%; margin: 0; overflow: hidden; }
-body { display: flex; flex-direction: column; font-size: 12px; }
-.file-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 4px; padding: 7px 9px; border-bottom: 1px solid #303b31; flex-shrink: 0; }
-button, input, select { font: inherit; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 3px; min-height: 34px; }
-button { padding: 6px 9px; cursor: pointer; }
-button:hover:not(:disabled), button:focus-visible, select:focus-visible, input:focus-visible { border-color: #c6f277; outline: none; background: #c6f2770a; }
-button:disabled, input:disabled, select:disabled { opacity: .4; cursor: default; }
-input, select { padding: 6px; }
-select { max-width: 150px; color: #aab5b0; }
-select option { background: #11151a; }
-#filename { width: 180px; flex: 1; min-width: 100px; max-width: 280px; border-bottom-color: #303b31; }
-.font-control { display: flex; align-items: center; gap: 2px; margin-left: auto; color: #aab5b0; }
-#font-size { width: 55px; }
-#status { color: #aab5b0; font-size: 11px; }
-#loading { position: absolute; inset: 45% 20px auto; text-align: center; color: #aab5b0; line-height: 1.8; overflow-wrap: anywhere; }
-#loading[hidden] { display: none; }
-dialog { width: min(360px, calc(100vw - 32px)); background: #161c20; color: inherit; border: 1px solid #526447; border-radius: 5px; padding: 20px; }
-dialog::backdrop { background: #0007; }
-dialog p { margin: 0 0 18px; line-height: 1.6; }
-.dialog-actions { display: flex; justify-content: flex-end; gap: 8px; }
-#confirm-action { border-color: #526447; }
-canvas { flex: 1 1 0; min-height: 0; width: 100% !important; height: 0 !important; }
-@media (max-width: 540px) { .file-bar { gap: 1px; padding: 5px; } button, input, select { min-height: 40px; } #filename { max-width: none; } .font-control { margin-left: auto; } #status:empty { display: none; } }
+body > canvas { display: block; width: 100% !important; height: 100dvh !important; outline: none; }
+#loading { position: absolute; inset: 45% 20px auto; text-align: center; font-size: 13px; line-height: 1.8; overflow-wrap: anywhere; }
+[hidden] { display: none !important; }
+/* These dialogs replace OS file pickers; all workspace chrome is rendered by Zed. */
+.browser-file-dialog { width: min(480px, calc(100vw - 28px)); max-height: calc(100dvh - 28px); overflow: auto; background: #282c34; color: #abb2bf; border: 1px solid #464c58; border-radius: 6px; padding: 20px; font-size: 13px; box-shadow: 0 16px 64px #0008; }
+.browser-file-dialog::backdrop { background: #0006; }
+.browser-file-dialog h2 { margin: 0 0 18px; font-size: 15px; font-weight: 500; color: #e0e4ec; }
+.browser-file-dialog label { display: block; color: #858c98; }
+.browser-file-dialog select, .browser-file-dialog input:not([type=file]) { display: block; width: 100%; margin: 8px 0 12px; background: #21252b; border: 1px solid #414754; border-radius: 3px; padding: 8px; color: #abb2bf; font: 12px ui-monospace, monospace; }
+.browser-file-dialog option { padding: 4px 6px; }
+.browser-file-dialog button { padding: 8px 12px; border: 1px solid #414754; background: #313640; color: #e0e4ec; border-radius: 3px; cursor: pointer; font: inherit; }
+.browser-file-dialog button:hover { background: #3a414e; }
+.browser-file-dialog button:disabled { opacity: .5; cursor: wait; }
+.browser-file-dialog :focus-visible { outline: 1px solid #c6f277; outline-offset: 2px; }
+.dialog-actions, .dialog-imports { display: flex; flex-wrap: wrap; gap: 8px; }
+.dialog-actions { justify-content: flex-end; margin-top: 18px; }
+.dialog-error { color: #e5c07b; line-height: 1.5; overflow-wrap: anywhere; }
+.dialog-error:empty { display: none; }
+@media (max-width: 600px) { .browser-file-dialog button { min-height: 42px; } }

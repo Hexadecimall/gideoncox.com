@@ -3,9 +3,13 @@
 
 export function editor_text(): string;
 
+export function list_browser_paths(): Promise<string>;
+
 export function list_files(): Promise<string>;
 
 export function open_file(path: string): Promise<void>;
+
+export function read_browser_file(path: string): Promise<Uint8Array>;
 
 export function save_file(path: string): Promise<void>;
 
@@ -22,20 +26,31 @@ export function start(): void;
  */
 export function wasm_thread_entry_point(ptr: number): void;
 
+export function workspace_has_dirty_buffers(): boolean;
+
+export function workspace_ready(): boolean;
+
+export function write_browser_file(path: string, bytes: Uint8Array): Promise<void>;
+
 export type InitInput = RequestInfo | URL | Response | BufferSource | WebAssembly.Module;
 
 export interface InitOutput {
     readonly memory: WebAssembly.Memory;
     readonly memcmp: (a: number, b: number, c: number) => number;
+    readonly strlen: (a: number) => number;
     readonly editor_text: (a: number) => void;
+    readonly list_browser_paths: () => number;
     readonly list_files: () => number;
     readonly open_file: (a: number, b: number) => number;
+    readonly read_browser_file: (a: number, b: number) => number;
     readonly save_file: (a: number, b: number) => number;
     readonly set_editor_text: (a: number, b: number, c: number) => void;
     readonly set_file_path: (a: number, b: number, c: number) => void;
     readonly set_font_size: (a: number, b: number) => void;
     readonly start: () => void;
-    readonly strlen: (a: number) => number;
+    readonly workspace_has_dirty_buffers: () => number;
+    readonly workspace_ready: () => number;
+    readonly write_browser_file: (a: number, b: number, c: number, d: number) => number;
     readonly zed_sqlite_log: (a: number) => number;
     readonly zed_sqlite_now: () => number;
     readonly zed_sqlite_random: (a: number, b: number) => number;
@@ -73,14 +88,15 @@ export interface InitOutput {
     readonly iswupper: (a: number) => number;
     readonly towlower: (a: number) => number;
     readonly iswxdigit: (a: number) => number;
-    readonly __wasm_bindgen_func_elem_20305: (a: number, b: number, c: number, d: number) => void;
-    readonly __wasm_bindgen_func_elem_20593: (a: number, b: number, c: number, d: number) => void;
-    readonly __wasm_bindgen_func_elem_18571: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_18571_2: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_18571_3: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_18571_4: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_45018: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_18575: (a: number, b: number) => void;
+    readonly __wasm_bindgen_func_elem_24951: (a: number, b: number, c: number, d: number) => void;
+    readonly __wasm_bindgen_func_elem_25238: (a: number, b: number, c: number, d: number) => void;
+    readonly __wasm_bindgen_func_elem_23194: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_23194_2: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_23194_3: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_23194_4: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_23194_5: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_67723: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_23198: (a: number, b: number) => void;
     readonly __wbindgen_export: (a: number, b: number) => number;
     readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_export3: (a: number) => void;

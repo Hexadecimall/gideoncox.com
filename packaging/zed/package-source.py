@@ -12,7 +12,7 @@ parser.add_argument('workspace', type=Path)
 parser.add_argument('output', type=Path)
 args = parser.parse_args()
 root = args.workspace.resolve()
-files = [root / name for name in ['Cargo.toml', 'Cargo.lock', 'build.sh', 'check.sh', 'sqlite-cc.py', 'wasm-ar.sh', 'index.html', '.cargo/config.toml']]
+files = [root / name for name in ['Cargo.toml', 'Cargo.lock', 'build.sh', 'check.sh', 'sqlite-cc.py', 'wasm-ar.sh', 'workspace.html', '.cargo/config.toml']]
 for name in ['src', 'source', 'vendor', 'tests']:
     files.extend(path for path in (root / name).rglob('*') if path.is_file() and not path.is_symlink())
 files = sorted(set(files))
@@ -21,8 +21,11 @@ readme = '''# Zed browser port source
 Based on zed-industries/zed commit 1a28cff4b409169bac058bca40dfbfeb7621d19b.
 https://github.com/zed-industries/zed/tree/1a28cff4b409169bac058bca40dfbfeb7621d19b
 
-The entry point constructs Zed's actual Editor with GPUI Web. The browser port
-adapts filesystem IO, scheduling, settings, parsing, and dependency selection.
+The entry point constructs Zed's actual Workspace and MultiWorkspace with GPUI
+Web, including the upstream title bar, project panel, panes, tabs and editor.
+The browser port adapts filesystem IO, scheduling, settings, parsing, dialogs
+and dependency selection. The embedding page provides zedBrowserDialogs; its
+implementation is in assets/js/zed/ in the website repository.
 Native terminal processes, language-server processes, Git, and collaboration
 transport are not available in this browser build. Documents persist through the
 browser Fs; SQLite workspace metadata currently lives only for the session.
