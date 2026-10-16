@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Pair a browser terminal with a local Ark PTY. No third-party dependencies."""
 import argparse
+import base64
 import codecs
 import hmac
 import json
@@ -23,11 +24,14 @@ import termios
 
 MAX_INPUT = 65536
 IDLE_SECONDS = 30
+MAX_SESSIONS = 8
 
 
 class Session:
-    def __init__(self, executable):
+    def __init__(self, executable, encoding='utf8', columns=80, rows=24):
         self.id = secrets.token_urlsafe(24)
+        self.encoding = encoding
+        self.exit_code = None
         self.last_seen = time.monotonic()
         self.decoder = codecs.getincrementaldecoder('utf-8')('replace')
         self.pid, self.fd = pty.fork()
@@ -35,7 +39,7 @@ class Session:
             environment = dict(os.environ, TERM='xterm-256color', ARK_DEFAULT_TERMINAL='1', ARK_CHROME='0')
             os.execvpe(executable, [executable], environment)
         os.set_blocking(self.fd, False)
-        self.resize(80, 24)
+        self.resize(columns, rows)
 
     def resize(self, columns, rows):
         columns = max(20, min(240, int(columns)))
@@ -59,10 +63,19 @@ class Session:
             except OSError:
                 ended = True
                 break
-        return self.decoder.decode(b''.join(chunks), final=ended), ended
+        data = b''.join(chunks)
+        if ended:
+            try:
+                pid, status = os.waitpid(self.pid, os.WNOHANG)
+                if pid:
+                    self.exit_code = os.waitstatus_to_exitcode(status)
+            except ChildProcessError:
+                pass
+        if self.encoding == 'base64':
+            return base64.b64encode(data).decode('ascii'), ended
+        return self.decoder.decode(data, final=ended), ended
 
-    def write(self, text):
-        data = text.encode('utf-8')
+    def write(self, data):
         if len(data) > MAX_INPUT:
             raise ValueError('Input too large')
         deadline = time.monotonic() + 2
@@ -75,17 +88,21 @@ class Session:
     def close(self):
         # SIGHUP matches closing a terminal window. Only this PTY's process
         # groups are touched; unrelated terminals remain outside the session.
+        if self.fd is None:
+            return
         try:
             foreground = os.tcgetpgrp(self.fd)
-            if foreground != self.pid:
+            if foreground > 0 and foreground not in (self.pid, os.getpgrp()):
                 os.killpg(foreground, signal.SIGHUP)
         except (ProcessLookupError, OSError):
             pass
         try:
-            os.killpg(self.pid, signal.SIGHUP)
+            if self.exit_code is None:
+                os.killpg(self.pid, signal.SIGHUP)
         except ProcessLookupError:
             pass
         os.close(self.fd)
+        self.fd = None
         try:
             os.waitpid(self.pid, os.WNOHANG)
         except ChildProcessError:
@@ -101,16 +118,24 @@ class Connector(HTTPServer):
         self.origins = set(origins)
         self.executable = executable
         self.token = secrets.token_urlsafe(32)
-        self.session = None
+        self.sessions = {}
 
-    def close_session(self):
-        if self.session:
-            self.session.close()
-            self.session = None
+    def close_session(self, session_id=None):
+        ids = [session_id] if session_id else list(self.sessions)
+        for key in ids:
+            session = self.sessions.pop(key, None)
+            if session:
+                session.close()
+
+    def expire_sessions(self):
+        now = time.monotonic()
+        for key, session in list(self.sessions.items()):
+            if now - session.last_seen > IDLE_SECONDS:
+                self.close_session(key)
 
 
 class Handler(BaseHTTPRequestHandler):
-    server_version = 'ArkConnector/1'
+    server_version = 'ArkConnector/2'
 
     def log_message(self, *_):
         pass  # Never log pairing tokens, commands, or terminal output.
@@ -174,34 +199,46 @@ class Handler(BaseHTTPRequestHandler):
                 if not isinstance(body, dict):
                     raise ValueError('Invalid request')
             if url.path == '/connect' and self.command == 'POST':
-                if self.server.session:
-                    self.reply(409, {'error': 'A terminal is already connected'})
+                self.server.expire_sessions()
+                if len(self.server.sessions) >= MAX_SESSIONS:
+                    self.reply(409, {'error': 'The terminal session limit has been reached'})
                     return
-                self.server.session = Session(self.server.executable)
-                self.server.session.resize(body.get('columns', 80), body.get('rows', 24))
-                self.reply(200, {'session': self.server.session.id})
+                encoding = body.get('encoding', 'utf8')
+                if encoding not in ('utf8', 'base64'):
+                    raise ValueError('Unsupported terminal encoding')
+                columns, rows = int(body.get('columns', 80)), int(body.get('rows', 24))
+                session = Session(self.server.executable, encoding, columns, rows)
+                self.server.sessions[session.id] = session
+                self.reply(200, {'session': session.id, 'protocol': 2, 'encoding': encoding})
                 return
-            session = self.server.session
             session_id = body.get('session') if self.command == 'POST' else parse_qs(url.query).get('session', [''])[0]
-            if not session or not hmac.compare_digest(str(session_id), session.id):
+            session = self.server.sessions.get(str(session_id))
+            if not session:
                 self.reply(404, {'error': 'Session disconnected'})
                 return
             session.last_seen = time.monotonic()
             if url.path == '/output' and self.command == 'GET':
                 output, ended = session.read()
-                self.reply(200, {'output': output, 'ended': ended})
+                field = 'data' if session.encoding == 'base64' else 'output'
+                self.reply(200, {field: output, 'ended': ended, 'exitCode': session.exit_code})
                 if ended:
-                    self.server.close_session()
+                    self.server.close_session(session.id)
             elif url.path == '/input' and self.command == 'POST':
-                if not isinstance(body.get('text'), str):
-                    raise ValueError('Input must be text')
-                session.write(body['text'])
+                if session.encoding == 'base64':
+                    if not isinstance(body.get('data'), str):
+                        raise ValueError('Input must be base64 data')
+                    data = base64.b64decode(body['data'], validate=True)
+                else:
+                    if not isinstance(body.get('text'), str):
+                        raise ValueError('Input must be text')
+                    data = body['text'].encode('utf-8')
+                session.write(data)
                 self.reply(200, {})
             elif url.path == '/resize' and self.command == 'POST':
                 session.resize(body['columns'], body['rows'])
                 self.reply(200, {})
             elif url.path == '/disconnect' and self.command == 'POST':
-                self.server.close_session()
+                self.server.close_session(session.id)
                 self.reply(200, {})
             else:
                 self.reply(404, {'error': 'Unknown request'})
@@ -227,8 +264,7 @@ def main():
     try:
         while True:
             server.handle_request()
-            if server.session and time.monotonic() - server.session.last_seen > IDLE_SECONDS:
-                server.close_session()
+            server.expire_sessions()
     except KeyboardInterrupt:
         pass
     finally:

@@ -26,8 +26,13 @@ Web, including the upstream title bar, project panel, panes, tabs and editor.
 The browser port adapts filesystem IO, scheduling, settings, parsing, dialogs
 and dependency selection. The embedding page provides zedBrowserDialogs; its
 implementation is in assets/js/zed/ in the website repository.
-Native terminal processes, language-server processes, Git, and collaboration
-transport are not available in this browser build. Documents persist through the
+Zed's actual TerminalPanel and terminal_view use Alacritty's parser/grid with
+an optional authenticated local PTY bridge, zedNativeTerminal. Its JavaScript
+transport and pairing dialog are in assets/js/zed/native-terminal.js, and the
+local connector is connector/ark_connector.py in the website repository.
+Terminal sessions require user pairing and are not restored automatically.
+Tasks, language-server processes, Git, and collaboration transport remain
+unavailable. Browser documents are separate from native PTY files and persist through the
 browser Fs; SQLite workspace metadata currently lives only for the session.
 
 Requirements: Rust 1.98.1 with wasm32-unknown-unknown, Zig, Python 3, and a C/C++

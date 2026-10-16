@@ -19,4 +19,9 @@ body > canvas { display: block; width: 100% !important; height: 100dvh !importan
 .dialog-actions { justify-content: flex-end; margin-top: 18px; }
 .dialog-error { color: #e5c07b; line-height: 1.5; overflow-wrap: anywhere; }
 .dialog-error:empty { display: none; }
+.terminal-pair-dialog p { line-height: 1.6; }
+.terminal-pair-dialog details { margin: 16px 0; }
+.terminal-pair-dialog summary { cursor: pointer; }
+.terminal-pair-dialog a { color: #98c379; }
+.terminal-pair-dialog pre { overflow: auto; padding: 10px; background: #21252b; }
 @media (max-width: 600px) { .browser-file-dialog button { min-height: 42px; } }

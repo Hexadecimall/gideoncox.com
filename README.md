@@ -43,7 +43,7 @@ Open `http://127.0.0.1:8767/`. The checked-in WebAssembly and terminal display a
 python3 connector/ark_connector.py
 ```
 
-Paste its temporary pairing token into the site and choose Connect. The connector binds only to `127.0.0.1`, requires the token on every request, and accepts only the configured website origins. Tokens and terminal contents are not logged or stored by the site. Closing the connector or pressing Disconnect ends its PTY session. Closing the page disconnects it; an abandoned session times out after 30 seconds without requests.
+Paste its temporary pairing token into the site and choose Connect. The connector binds only to `127.0.0.1`, requires the token on every request, and accepts only the configured website origins. Pairing tokens stay in memory and are never logged or persisted. Terminal output is not logged by the connector. Up to eight independent PTY sessions can connect; closing one leaves the others running. Closing the connector ends all its sessions. Closing the page disconnects its sessions; an abandoned session times out after 30 seconds without requests.
 
 For the local preview, explicitly allow its origin:
 
@@ -51,7 +51,7 @@ For the local preview, explicitly allow its origin:
 python3 connector/ark_connector.py --origin http://127.0.0.1:8767
 ```
 
-Requires Python 3 and Ark on macOS/Linux, or inside WSL on Windows. A Chromebook needs its Linux environment enabled for native commands. Browser permissions or device management can block local connections. This mode runs with the connector user's real filesystem and process permissions.
+Requires Python 3.9+ and Ark on macOS/Linux, or inside WSL on Windows. A Chromebook needs its Linux environment enabled for native commands. Browser permissions or device management can block local connections. This mode runs with the connector user's real filesystem and process permissions.
 
 **Browser files** runs without a connector. Both modes use xterm.js, with selectable text, scrollback, saved display preferences, and an on-screen row for Escape, Tab, Control-C, arrow keys, and Enter. Browser input supports history, completion, cursor editing, and multiline shell commands. Ark's C++ lexer, parser, and expander compile to WebAssembly; Rust supplies the filesystem and commands, and a worker executes the parsed shell tree. It supports variables, quoting, arithmetic expansion, command substitution, pipes, redirects, functions, `if`, word-list `for`, and `while`. It does not launch native executables, background jobs, or C-style `for` loops. `grep` matches literal text. Workspace limits are 2,000 entries, 512 KiB per text file, and 4 MiB total file contents.
 
@@ -116,7 +116,9 @@ Bubble wrap supports clicking, dragging, touch, and keyboard activation. Sound i
 
 ## Zed browser port
 
-The editor uses the real `editor::Editor` and GPUI Web from `zed-industries/zed`, based on revision `1a28cff4b409169bac058bca40dfbfeb7621d19b`. Browser adapters replace native filesystem access, scheduling, parser cleanup, and dependency selection. The full-page app uses upstream `Workspace` and `MultiWorkspace`, including the title bar, project and outline panels, panes, tabs, command palette, search, and settings. A small `[g.]` title-bar button returns to the homepage. Browser file dialogs import files or folders into the browser filesystem; Open and Save use Zed’s own actions. Native terminal processes, language-server processes, Git, and collaboration are unavailable. SQLite runs genuine in-memory databases for session metadata; documents are persisted separately by the browser filesystem. Clearing site data removes saved documents.
+The editor uses the real `editor::Editor` and GPUI Web from `zed-industries/zed`, based on revision `1a28cff4b409169bac058bca40dfbfeb7621d19b`. Browser adapters replace native filesystem access, scheduling, parser cleanup, and dependency selection. The full-page app uses upstream `Workspace` and `MultiWorkspace`, including the title bar, project and outline panels, panes, tabs, command palette, search, and settings. A small `[g.]` title-bar button returns to the homepage. Browser file dialogs import files or folders into the browser filesystem; Open and Save use Zed’s own actions. Language-server processes, Git, and collaboration are unavailable. SQLite runs genuine in-memory databases for session metadata; documents are persisted separately by the browser filesystem. Clearing site data removes saved documents.
+
+Zed’s integrated terminal uses its upstream `TerminalPanel`, `terminal_view`, and Alacritty parser and grid. Open Terminal or New Terminal from the native View menu, then pair with the local connector described above. The pairing token stays in JavaScript memory and is never passed into WASM. Each tab has an independent PTY; raw bytes, resize requests, keyboard input, and ANSI colors go through Zed. Opening the page does not start terminal sessions. Automated tasks, startup commands, environment settings, and browser working directories are not sent to the host. Browser project files and the connector’s real filesystem remain separate.
 
 `assets/vendor/zed/source.tar.gz` contains the corresponding modified sources, dependency license files, and build instructions. Building requires Rust 1.98.1, Zig 0.17.0, and wasm-bindgen CLI 0.2.120. The target archive tool must be `zig ar`; the build script configures it explicitly. The browser runs on a single-threaded event loop and does not require cross-origin isolation headers.
 
