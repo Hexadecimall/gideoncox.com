@@ -9,7 +9,7 @@
 .orbit-footer p { margin: 0; color: var(--muted); font-size: 10px; }
 .orbit-controls { display: flex; gap: 8px; }
 .orbit-controls .tool-button { color: var(--muted); background: transparent; border-color: var(--line); min-width: 72px; }
-.home-destinations { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); margin-top: 26px; }
+.home-destinations { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin-top: 26px; }
 .home-destinations a { display: flex; flex-direction: column; gap: 15px; padding: 20px 24px; border-left: 1px solid var(--line); }
 .home-destinations a:first-child { border-left: 0; padding-left: 0; }
 .home-destinations a:last-child { padding-right: 0; }

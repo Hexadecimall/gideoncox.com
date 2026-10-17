@@ -1,0 +1,10 @@
+{
+  "enabled": false,
+  "provider": "stripe",
+  "apiBaseUrl": "",
+  "checkoutUrl": "",
+  "trialUrl": "",
+  "amountMinor": 3000,
+  "currency": "USD",
+  "trialHours": 24
+}

@@ -15,6 +15,7 @@ Open `http://127.0.0.1:8767/`. The checked-in WebAssembly and terminal display a
 ## Layout
 
 - `index.html` — homepage, navigation, and search metadata.
+- `projects/frame/` — Frame product page, development status, and launcher preview.
 - `games/hop/` — the standalone game, linked under Games in the site menu.
 - `games/supersatisfaction/` — twelve interactive toys, with optional sound and canvas controls.
 - `projects/` — Astral and Ark descriptions, installation, and source links.
@@ -89,6 +90,46 @@ The native connector check requires Ark, runs with a temporary home, and verifie
 Serve this repository root as a static site. `CNAME`, `robots.txt`, `sitemap.xml`, and `.nojekyll` are included for GitHub Pages. HTTPS is configured in the hosting settings, separately from these source files. The only external content request is the daily quote API; the terminal libraries are bundled locally.
 
 The header drawing pad saves its pixels on this device between pages. The homepage field stops while offscreen, paused, or hidden, and respects reduced-motion preferences.
+
+## Frame
+
+The Frame page describes the current Minecraft 1.8.9 client and links to an
+actual launcher screenshot. Public downloads and purchasing remain closed.
+The client source is private and is not part of this website. Only product-page
+content and approved public assets belong under `projects/frame/` and
+`assets/frame/`.
+The private-use installers contain OptiFine and must not be uploaded to this
+repository. A public package must omit it unless redistribution permission is
+available.
+
+Local Inter fonts and their license are under `assets/frame/fonts/`. Frame's
+product styles are isolated in `assets/css/frame.css`; shared navigation and
+site preferences retain their existing behavior.
+
+### Checkout
+
+`assets/frame/commerce.json` contains public checkout settings only. It must
+not contain payment API keys, webhook secrets, customer records, or license
+keys. Frame is priced at USD 30 for a one-time purchase. The price remains
+visible while sales are closed. Sales open only after a live merchant-owned
+checkout and payment fulfillment are configured. The component supports Stripe
+Payment Links and Lemon Squeezy hosted checkouts; it forwards discount codes for
+the provider to validate and does not calculate an authoritative discounted
+price in the browser.
+
+Set `apiBaseUrl` to the deployed private service's HTTPS URL to use verified
+checkout and license delivery. The site saves a random claim proof in session
+storage before creating checkout. The return page confirms payment through the
+service and offers a private `.frame-license` file. An unconfigured or unpaid
+checkout cannot download a license. The public source contains no signing keys,
+provider keys, customer records, or discount definitions.
+
+Sales and trial access remain closed in the public configuration. Trial access
+starts in a licensed launcher against a verified Minecraft account. Its original
+24-hour deadline is enforced by the private service and signed native leases;
+expiration preserves settings and worlds. A checkout redirect is not purchase
+confirmation. Deploy and validate the service and licensed client before
+enabling purchasing.
 
 ## Typing tester
 

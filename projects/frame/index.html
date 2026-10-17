@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0e11">
+  <title>Frame · Minecraft client</title>
+  <meta name="description" content="Frame is a native Minecraft 1.8.9 client with a customizable HUD, saved profiles, smooth zoom, and its own launcher.">
+  <link rel="canonical" href="https://gideoncox.com/projects/frame/">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="Frame · Minecraft client">
+  <meta property="og:description" content="A native Minecraft 1.8.9 client. Customizable HUD, saved profiles, smooth zoom, and a launcher.">
+  <meta property="og:url" content="https://gideoncox.com/projects/frame/">
+  <meta property="og:image" content="https://gideoncox.com/assets/frame/launcher.png">
+  <meta property="og:image:alt" content="Frame launcher with profile, account, version, and launch controls">
+  <meta name="twitter:card" content="summary_large_image">
+  <link rel="icon" type="image/svg+xml" href="../../assets/icons/favicon.svg">
+  <link rel="preload" href="../../assets/frame/fonts/Inter-Regular.ttf" as="font" type="font/ttf" crossorigin>
+  <link rel="stylesheet" href="../../assets/css/base.css?v=20261014-4">
+  <link rel="stylesheet" href="../../assets/css/navigation.css?v=20261014-4">
+  <link rel="stylesheet" href="../../assets/css/tools.css?v=20261014-4">
+  <link rel="stylesheet" href="../../assets/css/motion.css?v=20261014-4">
+  <link rel="stylesheet" href="../../assets/css/quote.css?v=20261014-4">
+  <link rel="stylesheet" href="../../assets/css/doodle.css?v=20261014-4">
+  <link rel="stylesheet" href="../../assets/css/frame.css?v=1">
+  <script src="../../assets/js/preferences.js"></script>
+</head>
+<body>
+  <a class="frame-skip" href="#main">Skip to content</a>
+<header id="site-header">
+   <div class="shell nav">
+    <button aria-controls="site-menu" aria-expanded="false" aria-label="Open menu" class="brand menu-toggle" id="menu-toggle">
+     <span class="brand-mark">
+      g.
+     </span>
+    </button>
+    <div class="header-actions">
+     <aside class="doodle-section" aria-label="Doodle pad">
+      <button class="quote-toggle" id="doodle-toggle" aria-label="Doodle pad" aria-controls="doodle-panel" aria-expanded="false"><span class="label-full">Doodle pad</span><span class="label-short" aria-hidden="true">Doodle</span></button>
+      <div class="small-tool" id="doodle-panel" hidden>
+      <div class="tool-heading">
+       <h3>
+        Doodle pad
+       </h3>
+       <span>
+        
+       </span>
+      </div>
+      <div class="doodle-surface">
+       <canvas aria-label="Drawing pad. Drag to draw. Arrow keys move the brush, Shift plus arrows draw, and Space adds a dot." height="96" id="drawing" role="img" tabindex="0" width="160">
+       </canvas>
+      </div>
+      <div class="tool-body">
+       <div class="drawing-toolbar">
+        <div aria-label="Ink color" class="drawing-inks" role="group">
+         <button aria-label="Lime ink" aria-pressed="true" class="ink-button" data-ink="c6f277" disabled="" style="--swatch:#c6f277">
+         </button>
+         <button aria-label="Blue ink" aria-pressed="false" class="ink-button" data-ink="88c9dc" disabled="" style="--swatch:#88c9dc">
+         </button>
+         <button aria-label="Purple ink" aria-pressed="false" class="ink-button" data-ink="c0adf7" disabled="" style="--swatch:#c0adf7">
+         </button>
+        </div>
+        <div class="drawing-actions">
+         <button class="tool-button" disabled="" id="undo-drawing">
+          Undo
+         </button>
+         <button class="tool-button" disabled="" id="clear-drawing">
+          Clear
+         </button>
+        </div>
+       </div>
+       <p class="sr-only" id="drawing-status" role="status">
+        Loading…
+       </p>
+      </div>
+      </div>     </aside>
+
+     <aside aria-label="Quote of the day" class="quote-section">
+      <button aria-controls="quote-panel" aria-expanded="false" class="quote-toggle" id="quote-toggle" aria-label="Quote of the day">
+       <span class="label-full">Quote of the day</span><span class="label-short" aria-hidden="true">Quote</span>
+      </button>
+      <div class="small-tool" hidden="" id="quote-panel">
+       <div class="quote-body">
+        <div class="quote-heading">
+         <span>
+          Quote of the day
+         </span>
+         <time id="quote-date">
+         </time>
+        </div>
+        <p id="quote-status" role="status">
+         Loading…
+        </p>
+        <figure hidden="" id="quote-content">
+         <blockquote id="quote-text">
+         </blockquote>
+         <figcaption id="quote-author">
+         </figcaption>
+        </figure>
+        <div class="quote-footer">
+         <a href="https://dumbapis.com/docs/daily-quote/" rel="noopener noreferrer" target="_blank">
+          Source ↗
+         </a>
+         <button class="tool-button" hidden="" id="quote-retry">
+          Retry
+         </button>
+        </div>
+       </div>
+      </div>
+     </aside>
+     <aside aria-label="CPS tester" class="cps-section" id="cps-tester">
+      <button aria-controls="cps-panel" aria-expanded="false" class="cps-toggle" id="cps-toggle" aria-label="CPS tester">
+       <span class="label-full">CPS tester</span><span class="label-short" aria-hidden="true">CPS</span>
+      </button>
+      <div class="small-tool cps-card" hidden="" id="cps-panel">
+       <div class="tool-body">
+        <div class="cps-heading">
+         <span>
+          5-second test
+         </span>
+         <button class="tool-button" hidden="" id="cps-reset">
+          Try again
+         </button>
+        </div>
+        <div class="cps-stats">
+         <div>
+          <output id="cps-score">
+           0.0
+          </output>
+          <span>
+           clicks / second
+          </span>
+         </div>
+         <div>
+          <output id="cps-clicks">
+           0
+          </output>
+          <span>
+           clicks
+          </span>
+         </div>
+         <div>
+          <output id="cps-time">
+           5.0
+          </output>
+          <span>
+           seconds left
+          </span>
+         </div>
+        </div>
+        <button class="cps-target" id="cps-target">
+         <strong>
+          Click to start
+         </strong>
+        </button>
+        <div aria-hidden="true" class="cps-track">
+         <div id="cps-progress">
+         </div>
+        </div>
+        <p class="sr-only" id="cps-status" role="status">
+         Your first click starts the timer.
+        </p>
+       </div>
+      </div>
+     </aside>
+    </div>
+   </div>
+   <div class="site-menu" hidden="" id="site-menu">
+    <div class="shell">
+     <nav aria-label="Site navigation" class="menu-bar">
+      <div class="menu-group">
+       <button aria-controls="projects-panel" aria-expanded="false" data-menu-panel="projects">
+        <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+         <path d="M3 7V5h6l2 2h10v12H3Z">
+         </path>
+        </svg>
+        projects
+        <span aria-hidden="true" class="menu-arrow">
+         ›
+        </span>
+       </button>
+       <div aria-label="projects" class="menu-panel" hidden="" id="projects-panel" role="region">
+        <div class="menu-children">
+         <a href="/projects/frame/">
+          Frame
+         </a>
+         <a href="/projects/astral/">Astral</a>
+         <a href="/projects/ark/">Ark</a>
+         <a href="/projects/">All projects</a>
+        </div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="tools-panel" aria-expanded="false" data-menu-panel="tools">
+        <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+         <path d="M14 4a6 6 0 0 0-5 8l-6 6 3 3 6-6a6 6 0 0 0 8-7l-4 4-4-4 4-4Z">
+         </path>
+        </svg>
+        tools
+        <span aria-hidden="true" class="menu-arrow">
+         ›
+        </span>
+       </button>
+       <div aria-label="tools" class="menu-panel" hidden="" id="tools-panel" role="region">
+        <div class="menu-children">
+         <a href="/terminal/">
+          Terminal
+         </a>
+         <a href="/editor/">
+          Zed
+         </a>
+        </div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="games-panel" aria-expanded="false" data-menu-panel="games">
+        <svg aria-hidden="true" class="menu-icon" viewBox="0 0 24 24"><path d="M7 7h10l4 11-3 2-4-4h-4l-4 4-3-2Z M7 10v4 M5 12h4 M16 11h.01 M18 13h.01"/></svg>
+        games <span aria-hidden="true" class="menu-arrow">›</span>
+       </button>
+       <div aria-label="games" class="menu-panel" hidden id="games-panel" role="region">
+        <div class="menu-children"><a href="/games/hop/">Hop</a></div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="uncategorized-panel" aria-expanded="false" data-menu-panel="uncategorized">
+        <svg aria-hidden="true" class="menu-icon" viewBox="0 0 24 24"><path d="M3 7V5h6l2 2h10v12H3Z"/></svg>
+        uncategorized <span aria-hidden="true" class="menu-arrow">›</span>
+       </button>
+       <div aria-label="uncategorized" class="menu-panel" hidden id="uncategorized-panel" role="region">
+        <div class="menu-children"><a href="/uncategorized/typing/">Typing tester</a></div>
+       </div>
+      </div>
+      <a href="https://github.com/Hexadecimall" rel="noopener noreferrer" target="_blank">
+       <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+        <circle cx="6" cy="5" r="2">
+        </circle>
+        <circle cx="6" cy="19" r="2">
+        </circle>
+        <circle cx="18" cy="6" r="2">
+        </circle>
+        <path d="M6 7v10M18 8v2c0 4-12 2-12 7">
+        </path>
+       </svg>
+       github
+       <span aria-hidden="true" class="menu-arrow">
+        ↗
+       </span>
+      </a>
+      <a href="../../settings/">
+       settings
+      </a>
+     </nav>
+    </div>
+   </div>
+  </header>
+  <main class="frame-page shell" id="main">
+    <nav class="frame-breadcrumb" aria-label="Breadcrumb"><a href="../../#projects">Projects</a><span aria-hidden="true">/</span><span aria-current="page">Frame</span></nav>
+    <section class="frame-intro" aria-labelledby="frame-title">
+      <div>
+        <div class="frame-wordmark"><img src="../../assets/frame/logo.svg" alt="" width="64" height="64"><h1 id="frame-title">Frame</h1></div>
+        <p class="frame-lead">A native client for Minecraft 1.8.9. Customize your HUD, save profiles, and launch from one place.</p>
+        <div class="frame-actions"><a class="frame-button frame-button-primary" href="#launcher">View the launcher <span aria-hidden="true">↗</span></a><a class="frame-text-link" href="#features">Features <span aria-hidden="true">↓</span></a></div>
+      </div>
+      <dl class="frame-facts">
+        <div><dt>Game</dt><dd>Minecraft Java 1.8.9</dd></div>
+        <div><dt>Implementation</dt><dd>Native C++ client</dd></div>
+        <div><dt>Current build</dt><dd>0.2.10 · Development preview</dd></div>
+        <div><dt>Availability</dt><dd><a href="#release">Public release in preparation</a></dd></div>
+      </dl>
+    </section>
+    <section class="frame-preview" id="launcher" aria-labelledby="launcher-title">
+      <div class="frame-section-label"><h2 id="launcher-title">The launcher</h2><span>Windows · 0.2.10</span></div>
+      <a class="frame-screenshot" href="../../assets/frame/launcher.png" aria-label="Open the full-size Frame launcher screenshot"><img src="../../assets/frame/launcher.png" alt="The Frame launcher: profile, account, Minecraft version, and Launch on the Home screen" width="1800" height="1140" fetchpriority="high"></a>
+      <p class="frame-caption">Profile, version, account, and Launch. Minecraft files and Java are prepared in the background.</p>
+    </section>
+    <section class="frame-features" id="features" aria-labelledby="features-title">
+      <div class="frame-section-heading"><p class="frame-kicker">In the client</p><h2 id="features-title">Settings that stay with your setup.</h2></div>
+      <dl class="frame-feature-list">
+        <div><dt>HUD editor</dt><dd>Move and resize widgets. Change text colors, backgrounds, opacity, scale, padding, and alignment.</dd></div>
+        <div><dt>Profiles</dt><dd>Keep separate module toggles, keybinds, options, and HUD layouts. Switching saves the setup you leave.</dd></div>
+        <div><dt>Zoom</dt><dd>Smooth FOV transitions with scroll-wheel adjustment, configurable limits, and independent sensitivity controls.</dd></div>
+        <div><dt>ClickGUI</dt><dd>Movable category panels and module settings panes, with saved positions and optional animations.</dd></div>
+        <div><dt>Game information</dt><dd>FPS, CPS, coordinates, armor durability, potion timers, and other configurable HUD widgets.</dd></div>
+        <div><dt>Launcher</dt><dd>Separate launch profiles, account selection, game preparation, local mod controls, server bookmarks, and logs.</dd></div>
+      </dl>
+    </section>
+    <section class="frame-purchase" id="purchase" aria-labelledby="purchase-title" data-frame-commerce="../../assets/frame/commerce.json">
+      <div class="frame-purchase-copy"><p class="frame-kicker">Access</p><h2 id="purchase-title">Get Frame</h2><p class="frame-purchase-price"><span data-commerce-price>$30.00</span><span class="frame-billing">One-time purchase</span></p><p class="frame-purchase-status" data-commerce-status role="status" aria-live="polite">Sales are not open yet.</p></div>
+      <div class="frame-purchase-controls">
+        <label for="frame-discount">Discount code</label>
+        <input id="frame-discount" data-discount-code type="text" maxlength="64" autocomplete="off" spellcheck="false" disabled>
+        <div class="frame-purchase-actions"><a class="frame-button frame-button-primary" data-buy-now aria-disabled="true" tabindex="-1">Buy now</a><a class="frame-button" data-trial aria-disabled="true" tabindex="-1">24-hour trial</a></div>
+        <p class="frame-trial-note">The trial is not available yet. Trial access will expire 24 hours after activation; settings and worlds will be kept.</p>
+      </div>
+    </section>
+    <section class="frame-release" id="release" aria-labelledby="release-title">
+      <div><p class="frame-kicker">Release status</p><h2 id="release-title">In development.</h2><p>Windows x64 and Linux x64 launcher builds are being tested. Public downloads and purchasing are not open yet.</p><p class="frame-release-note">The native game client currently targets Minecraft Java 1.8.9. macOS runtime validation is still pending.</p></div>
+      <div class="frame-changes"><h3>Latest changes · 0.2.10</h3><ul><li>Fixed disappearing labels and text rendering at different display scales.</li><li>Moved account selection and setup onto the launch screen.</li><li>Added explicit profile and version selection.</li><li>Improved settings persistence and error handling.</li></ul></div>
+    </section>
+    <p class="frame-disclaimer">Frame is an independent project and is not affiliated with Mojang or Microsoft. Authenticated play requires a Minecraft Java account. Offline accounts only work where the server permits them.</p>
+  </main>
+  <footer class="shell footer"><span>g. / 2026</span><div class="footer-links"><a href="../../#projects">All projects</a><a href="#main">Back to top ↑</a><a href="../../settings/">Site settings</a></div></footer>
+  <script src="../../assets/js/navigation.js" type="module"></script>
+  <script src="../../assets/js/tools.js" type="module"></script>
+  <script src="../../assets/js/cps.js" type="module"></script>
+  <script src="../../assets/js/quote.js" type="module"></script>
+  <script src="../../assets/js/doodle.js" type="module"></script>
+  <script src="../../assets/js/frame-commerce.mjs" type="module"></script>
+</body>
+</html>

@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Frame · Purchase</title>
+  <link rel="icon" type="image/svg+xml" href="../../../assets/icons/favicon.svg">
+  <link rel="stylesheet" href="../../../assets/css/base.css?v=20261014-4">
+  <link rel="stylesheet" href="../../../assets/css/navigation.css?v=20261014-4">
+  <link rel="stylesheet" href="../../../assets/css/tools.css?v=20261014-4">
+  <link rel="stylesheet" href="../../../assets/css/motion.css?v=20261014-4">
+  <link rel="stylesheet" href="../../../assets/css/quote.css?v=20261014-4">
+  <link rel="stylesheet" href="../../../assets/css/doodle.css?v=20261014-4">
+  <link rel="stylesheet" href="../../../assets/css/frame.css?v=2">
+  <script src="../../../assets/js/preferences.js"></script>
+</head>
+<body>
+  <a class="frame-skip" href="#main">Skip to content</a>
+<header id="site-header">
+   <div class="shell nav">
+    <button aria-controls="site-menu" aria-expanded="false" aria-label="Open menu" class="brand menu-toggle" id="menu-toggle">
+     <span class="brand-mark">
+      g.
+     </span>
+    </button>
+    <div class="header-actions">
+     <aside class="doodle-section" aria-label="Doodle pad">
+      <button class="quote-toggle" id="doodle-toggle" aria-label="Doodle pad" aria-controls="doodle-panel" aria-expanded="false"><span class="label-full">Doodle pad</span><span class="label-short" aria-hidden="true">Doodle</span></button>
+      <div class="small-tool" id="doodle-panel" hidden>
+      <div class="tool-heading">
+       <h3>
+        Doodle pad
+       </h3>
+       <span>
+        
+       </span>
+      </div>
+      <div class="doodle-surface">
+       <canvas aria-label="Drawing pad. Drag to draw. Arrow keys move the brush, Shift plus arrows draw, and Space adds a dot." height="96" id="drawing" role="img" tabindex="0" width="160">
+       </canvas>
+      </div>
+      <div class="tool-body">
+       <div class="drawing-toolbar">
+        <div aria-label="Ink color" class="drawing-inks" role="group">
+         <button aria-label="Lime ink" aria-pressed="true" class="ink-button" data-ink="c6f277" disabled="" style="--swatch:#c6f277">
+         </button>
+         <button aria-label="Blue ink" aria-pressed="false" class="ink-button" data-ink="88c9dc" disabled="" style="--swatch:#88c9dc">
+         </button>
+         <button aria-label="Purple ink" aria-pressed="false" class="ink-button" data-ink="c0adf7" disabled="" style="--swatch:#c0adf7">
+         </button>
+        </div>
+        <div class="drawing-actions">
+         <button class="tool-button" disabled="" id="undo-drawing">
+          Undo
+         </button>
+         <button class="tool-button" disabled="" id="clear-drawing">
+          Clear
+         </button>
+        </div>
+       </div>
+       <p class="sr-only" id="drawing-status" role="status">
+        Loading…
+       </p>
+      </div>
+      </div>     </aside>
+
+     <aside aria-label="Quote of the day" class="quote-section">
+      <button aria-controls="quote-panel" aria-expanded="false" class="quote-toggle" id="quote-toggle" aria-label="Quote of the day">
+       <span class="label-full">Quote of the day</span><span class="label-short" aria-hidden="true">Quote</span>
+      </button>
+      <div class="small-tool" hidden="" id="quote-panel">
+       <div class="quote-body">
+        <div class="quote-heading">
+         <span>
+          Quote of the day
+         </span>
+         <time id="quote-date">
+         </time>
+        </div>
+        <p id="quote-status" role="status">
+         Loading…
+        </p>
+        <figure hidden="" id="quote-content">
+         <blockquote id="quote-text">
+         </blockquote>
+         <figcaption id="quote-author">
+         </figcaption>
+        </figure>
+        <div class="quote-footer">
+         <a href="https://dumbapis.com/docs/daily-quote/" rel="noopener noreferrer" target="_blank">
+          Source ↗
+         </a>
+         <button class="tool-button" hidden="" id="quote-retry">
+          Retry
+         </button>
+        </div>
+       </div>
+      </div>
+     </aside>
+     <aside aria-label="CPS tester" class="cps-section" id="cps-tester">
+      <button aria-controls="cps-panel" aria-expanded="false" class="cps-toggle" id="cps-toggle" aria-label="CPS tester">
+       <span class="label-full">CPS tester</span><span class="label-short" aria-hidden="true">CPS</span>
+      </button>
+      <div class="small-tool cps-card" hidden="" id="cps-panel">
+       <div class="tool-body">
+        <div class="cps-heading">
+         <span>
+          5-second test
+         </span>
+         <button class="tool-button" hidden="" id="cps-reset">
+          Try again
+         </button>
+        </div>
+        <div class="cps-stats">
+         <div>
+          <output id="cps-score">
+           0.0
+          </output>
+          <span>
+           clicks / second
+          </span>
+         </div>
+         <div>
+          <output id="cps-clicks">
+           0
+          </output>
+          <span>
+           clicks
+          </span>
+         </div>
+         <div>
+          <output id="cps-time">
+           5.0
+          </output>
+          <span>
+           seconds left
+          </span>
+         </div>
+        </div>
+        <button class="cps-target" id="cps-target">
+         <strong>
+          Click to start
+         </strong>
+        </button>
+        <div aria-hidden="true" class="cps-track">
+         <div id="cps-progress">
+         </div>
+        </div>
+        <p class="sr-only" id="cps-status" role="status">
+         Your first click starts the timer.
+        </p>
+       </div>
+      </div>
+     </aside>
+    </div>
+   </div>
+   <div class="site-menu" hidden="" id="site-menu">
+    <div class="shell">
+     <nav aria-label="Site navigation" class="menu-bar">
+      <div class="menu-group">
+       <button aria-controls="projects-panel" aria-expanded="false" data-menu-panel="projects">
+        <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+         <path d="M3 7V5h6l2 2h10v12H3Z">
+         </path>
+        </svg>
+        projects
+        <span aria-hidden="true" class="menu-arrow">
+         ›
+        </span>
+       </button>
+       <div aria-label="projects" class="menu-panel" hidden="" id="projects-panel" role="region">
+        <div class="menu-children">
+         <a href="/projects/frame/">
+          Frame
+         </a>
+         <a href="/projects/astral/">Astral</a>
+         <a href="/projects/ark/">Ark</a>
+         <a href="/projects/">All projects</a>
+        </div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="tools-panel" aria-expanded="false" data-menu-panel="tools">
+        <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+         <path d="M14 4a6 6 0 0 0-5 8l-6 6 3 3 6-6a6 6 0 0 0 8-7l-4 4-4-4 4-4Z">
+         </path>
+        </svg>
+        tools
+        <span aria-hidden="true" class="menu-arrow">
+         ›
+        </span>
+       </button>
+       <div aria-label="tools" class="menu-panel" hidden="" id="tools-panel" role="region">
+        <div class="menu-children">
+         <a href="/terminal/">
+          Terminal
+         </a>
+         <a href="/editor/">
+          Zed
+         </a>
+        </div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="games-panel" aria-expanded="false" data-menu-panel="games">
+        <svg aria-hidden="true" class="menu-icon" viewBox="0 0 24 24"><path d="M7 7h10l4 11-3 2-4-4h-4l-4 4-3-2Z M7 10v4 M5 12h4 M16 11h.01 M18 13h.01"/></svg>
+        games <span aria-hidden="true" class="menu-arrow">›</span>
+       </button>
+       <div aria-label="games" class="menu-panel" hidden id="games-panel" role="region">
+        <div class="menu-children"><a href="/games/hop/">Hop</a></div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="uncategorized-panel" aria-expanded="false" data-menu-panel="uncategorized">
+        <svg aria-hidden="true" class="menu-icon" viewBox="0 0 24 24"><path d="M3 7V5h6l2 2h10v12H3Z"/></svg>
+        uncategorized <span aria-hidden="true" class="menu-arrow">›</span>
+       </button>
+       <div aria-label="uncategorized" class="menu-panel" hidden id="uncategorized-panel" role="region">
+        <div class="menu-children"><a href="/uncategorized/typing/">Typing tester</a></div>
+       </div>
+      </div>
+      <a href="https://github.com/Hexadecimall" rel="noopener noreferrer" target="_blank">
+       <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+        <circle cx="6" cy="5" r="2">
+        </circle>
+        <circle cx="6" cy="19" r="2">
+        </circle>
+        <circle cx="18" cy="6" r="2">
+        </circle>
+        <path d="M6 7v10M18 8v2c0 4-12 2-12 7">
+        </path>
+       </svg>
+       github
+       <span aria-hidden="true" class="menu-arrow">
+        ↗
+       </span>
+      </a>
+      <a href="../../../settings/">
+       settings
+      </a>
+     </nav>
+    </div>
+   </div>
+  </header>
+  <main class="shell frame-page frame-receipt" id="main" data-frame-checkout="../../../assets/frame/commerce.json">
+    <nav class="frame-breadcrumb" aria-label="Breadcrumb"><a href="../">Frame</a><span aria-hidden="true">/</span><span>Purchase</span></nav>
+    <section class="frame-receipt-card" aria-labelledby="payment-title">
+      <img src="../../../assets/frame/logo.svg" width="56" height="56" alt="Frame">
+      <h1 id="payment-title">Your purchase</h1>
+      <p data-payment-status role="status" aria-live="polite">Checking payment…</p>
+      <div class="frame-purchase-actions">
+        <button class="frame-button frame-button-primary" type="button" data-download-license disabled>Download license</button>
+        <button class="frame-button" type="button" data-check-payment>Check payment</button>
+      </div>
+      <p class="frame-trial-note">Keep the license file private. Import it in Frame to activate access.</p>
+    </section>
+  </main>
+  <footer class="shell footer"><span>g. / 2026</span><div class="footer-links"><a href="../">Frame</a><a href="../../../settings/">Site settings</a></div></footer>
+  <script src="../../../assets/js/navigation.js" type="module"></script>
+  <script src="../../../assets/js/tools.js" type="module"></script>
+  <script src="../../../assets/js/cps.js" type="module"></script>
+  <script src="../../../assets/js/quote.js" type="module"></script>
+  <script src="../../../assets/js/doodle.js" type="module"></script>
+  <script src="../../../assets/js/frame-checkout-return.mjs" type="module"></script>
+</body>
+</html>
