@@ -112,17 +112,33 @@ site preferences retain their existing behavior.
 not contain payment API keys, webhook secrets, customer records, or license
 keys. Frame is priced at USD 30 for a one-time purchase. The price remains
 visible while sales are closed. Sales open only after a live merchant-owned
-checkout and payment fulfillment are configured. The component supports Stripe
-Payment Links and Lemon Squeezy hosted checkouts; it forwards discount codes for
-the provider to validate and does not calculate an authoritative discounted
-price in the browser.
+checkout and payment fulfillment are configured. Enabled Stripe sales require
+the account API and a signed-in account with a verified email address. A hosted
+Payment Link alone cannot enable purchases. Stripe validates discount codes and
+the final price; the browser does not calculate an authoritative discount.
 
-Set `apiBaseUrl` to the deployed private service's HTTPS URL to use verified
-checkout and license delivery. The site saves a random claim proof in session
-storage before creating checkout. The return page confirms payment through the
-service and offers a private `.frame-license` file. An unconfigured or unpaid
-checkout cannot download a license. The public source contains no signing keys,
-provider keys, customer records, or discount definitions.
+Set `apiBaseUrl` to the deployed service's HTTPS URL. Host it on the same site as
+the website, preferably behind a same-origin reverse proxy, so browser cookie
+restrictions do not prevent sign-in. Account requests include the secure session
+cookie; authenticated actions also send a CSRF token kept only in memory.
+Verification and password-reset links use fragments that are removed before
+requests. The public source contains no provider secrets, customer records,
+license keys, or discount definitions.
+
+`projects/frame/account/` provides account creation, sign-in, email verification,
+password reset, purchases, license recovery, and installer downloads. Purchases
+belong to the server-side account. Clearing browser storage signs the visitor
+out but does not remove purchases; signing in again restores the library. The
+purchase return page confirms payment through the service and offers a private
+`.frame-license` file. Pending or revoked purchases cannot download an active
+license.
+
+Installer buttons request fresh, short-lived, single-use download capabilities
+and validate the installer identity before navigation. Paid installers are not
+static public assets. Configured native client builds use saved activation to
+request entitled update metadata and renew download access before applying an
+update. Account sessions, activation credentials, and download capabilities are
+separate.
 
 Sales and trial access remain closed in the public configuration. Trial access
 starts in a licensed launcher against a verified Minecraft account. Its original

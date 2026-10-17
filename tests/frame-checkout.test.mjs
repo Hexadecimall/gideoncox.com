@@ -6,6 +6,8 @@ import {validateCommerceConfig, buildCheckoutUrl, initCommerce} from '../assets/
 import {initCheckoutReturn} from '../assets/js/frame-checkout-return.mjs';
 
 const api = 'https://commerce.example.invalid';
+const csrf = 'a'.repeat(64);
+const accountSession = {authenticated: true, account: {id: 'ac_' + 'a'.repeat(64), email: 'buyer@example.invalid', verified: true}, csrf_token: csrf};
 const session = 'cs_live_TestCheckout123456';
 const destination = `https://checkout.stripe.com/c/pay/${session}#confirmation`;
 const licenseKey = 'fr_' + 'b'.repeat(64);
@@ -35,7 +37,7 @@ test('checkout saves a random claim proof before contacting the service and retr
   const fetcher = async (url, options) => {
     calls++;
     assert.equal(url, api + '/v1/checkout');
-    assert.equal(options.method, 'POST'); assert.equal(options.credentials, 'omit'); assert.equal(options.redirect, 'error');
+    assert.equal(options.method, 'POST'); assert.equal(options.credentials, 'include'); assert.equal(options.headers['X-Frame-CSRF'], csrf); assert.equal(options.redirect, 'error');
     const body = JSON.parse(options.body), pending = saved.saved();
     assert.match(pending.proof, /^[a-f0-9]{64}$/);
     const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pending.proof));
@@ -44,52 +46,52 @@ test('checkout saves a random claim proof before contacting the service and retr
     assert.equal(body.discount_code, 'SAVE5');
     return checkoutResponse();
   };
-  assert.equal(await startCheckout({api, discount: 'SAVE5', storage: saved, fetcher}), destination);
+  assert.equal(await startCheckout({api, csrf, discount: 'SAVE5', storage: saved, fetcher}), destination);
   const proof = saved.saved().proof;
-  assert.equal(await startCheckout({api, discount: 'SAVE5', storage: saved, fetcher}), destination);
+  assert.equal(await startCheckout({api, csrf, discount: 'SAVE5', storage: saved, fetcher}), destination);
   assert.equal(saved.saved().proof, proof); assert.equal(calls, 2);
 });
 
 test('checkout refuses unavailable storage before a request and never navigates to an untrusted URL', async () => {
   let requests = 0;
   const broken = {getItem: () => null, setItem: () => { throw new Error('storage disabled'); }};
-  await assert.rejects(startCheckout({api, storage: broken, fetcher: async () => { requests++; }}), /session storage/);
+  await assert.rejects(startCheckout({api, csrf, storage: broken, fetcher: async () => { requests++; }}), /session storage/);
   assert.equal(requests, 0);
   for (const url of ['javascript:alert(1)', 'https://checkout.stripe.com.evil.example/c/pay/' + session,
     'https://name:secret@checkout.stripe.com/c/pay/' + session, 'http://checkout.stripe.com/c/pay/' + session,
     'https://checkout.stripe.com/c/pay/cs_test_Example1234', destination.replace(session, 'cs_live_WrongSession123'),
     destination.replace('#confirmation', '?redirect=elsewhere')]) {
-    await assert.rejects(startCheckout({api, storage: storage(), fetcher: async () => response({session_id: session, checkout_url: url})}), /invalid/);
+    await assert.rejects(startCheckout({api, csrf, storage: storage(), fetcher: async () => response({session_id: session, checkout_url: url})}), /invalid/);
   }
 });
 
 test('only the matching session and proof can request a license and a repeated claim is recoverable', async () => {
   const saved = storage();
-  await startCheckout({api, storage: saved, fetcher: async () => checkoutResponse()});
+  await startCheckout({api, csrf, storage: saved, fetcher: async () => checkoutResponse()});
   const fetcher = async (url, options) => {
     assert.equal(url, api + '/v1/checkout/claim');
     assert.deepEqual(JSON.parse(options.body), {session_id: session, proof: saved.saved().proof});
     return response({license_key: licenseKey});
   };
-  const file = await claimCheckout({api, sessionId: session, storage: saved, fetcher});
+  const file = await claimCheckout({api, csrf, sessionId: session, storage: saved, fetcher});
   assert.deepEqual(JSON.parse(file), {version: 1, license_key: licenseKey});
   assert.equal(saved.saved().claimed, true);
-  assert.equal(await claimCheckout({api, sessionId: session, storage: saved, fetcher}), file);
-  await assert.rejects(claimCheckout({api, sessionId: 'cs_live_OtherSession1234', storage: saved, fetcher}), /same tab/);
-  await assert.rejects(claimCheckout({api, sessionId: session, storage: storage(), fetcher}), /same tab/);
+  assert.equal(await claimCheckout({api, csrf, sessionId: session, storage: saved, fetcher}), file);
+  await assert.rejects(claimCheckout({api, csrf, sessionId: 'cs_live_OtherSession1234', storage: saved, fetcher}), /same tab/);
+  await assert.rejects(claimCheckout({api, csrf, sessionId: session, storage: storage(), fetcher}), /same tab/);
   const proof = saved.saved().proof;
-  await startCheckout({api, storage: saved, fetcher: async () => checkoutResponse()});
+  await startCheckout({api, csrf, storage: saved, fetcher: async () => checkoutResponse()});
   assert.notEqual(saved.saved().proof, proof);
 });
 
 test('pending, malformed and oversized replies do not manufacture a paid license or expose provider bodies', async () => {
   const saved = storage();
-  await startCheckout({api, storage: saved, fetcher: async () => checkoutResponse()});
+  await startCheckout({api, csrf, storage: saved, fetcher: async () => checkoutResponse()});
   for (const fetcher of [async () => response({message: 'provider-private-body'}, 402),
     async () => response({license_key: '<script>injected</script>'}),
     async () => ({ok: true, text: async () => 'x'.repeat(16385)}),
     async () => { throw new Error('provider-private-body'); }]) {
-    await assert.rejects(claimCheckout({api, sessionId: session, storage: saved, fetcher}), error => {
+    await assert.rejects(claimCheckout({api, csrf, sessionId: session, storage: saved, fetcher}), error => {
       assert.ok(!error.message.includes('provider-private-body')); return true;
     });
   }
@@ -117,6 +119,7 @@ test('API purchase controls prevent duplicate clicks while opening a real hosted
   const started = new Promise(resolve => { entered = resolve; });
   const fetcher = async (url, options) => {
     if (options.method !== 'POST') return response(config);
+    if (url.endsWith('/v1/account/session')) return response(accountSession);
     postCount++; entered(); await gate; return checkoutResponse();
   };
   await initCommerce(root, {fetcher});
@@ -131,13 +134,13 @@ test('API purchase controls prevent duplicate clicks while opening a real hosted
 
 test('return page keeps license download disabled until the server confirms payment', async () => {
   const status = new Element('P'), check = new Element('BUTTON'), download = new Element('BUTTON'), saved = storage();
-  await startCheckout({api, storage: saved, fetcher: async () => checkoutResponse()});
+  await startCheckout({api, csrf, storage: saved, fetcher: async () => checkoutResponse()});
   const elements = new Map([['[data-payment-status]', status], ['[data-check-payment]', check], ['[data-download-license]', download]]);
   const view = {sessionStorage: saved, location: {href: `https://example.invalid/projects/frame/checkout/?session_id=${session}&paid=true`}};
   const root = {querySelector: key => elements.get(key), getAttribute: () => '/assets/frame/commerce.json', ownerDocument: {defaultView: view}};
-  await initCheckoutReturn(root, {view, fetcher: async (url, options) => options.method === 'POST' ? response({}, 402) : response(config)});
+  await initCheckoutReturn(root, {view, fetcher: async (url, options) => url.endsWith('/v1/account/session') ? response(accountSession) : options.method === 'POST' ? response({}, 409) : response(config)});
   assert.equal(download.disabled, true); assert.match(status.textContent, /still processing/);
-  await initCheckoutReturn(root, {view, fetcher: async (url, options) => options.method === 'POST' ? response({license_key: licenseKey}) : response(config)});
+  await initCheckoutReturn(root, {view, fetcher: async (url, options) => url.endsWith('/v1/account/session') ? response(accountSession) : options.method === 'POST' ? response({version: 1, license_key: licenseKey}) : response(config)});
   assert.equal(download.disabled, false); assert.match(status.textContent, /Payment confirmed/);
 });
 

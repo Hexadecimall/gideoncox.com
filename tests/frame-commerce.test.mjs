@@ -4,8 +4,8 @@ import test from 'node:test';
 import {validateCommerceConfig, validateCheckoutUrl, normalizeDiscountCode, buildCheckoutUrl, formatPrice, resolveConfigUrl, initCommerce} from '../assets/js/frame-commerce.mjs';
 
 const disabled = JSON.parse(await readFile(new URL('../assets/frame/commerce.json', import.meta.url), 'utf8'));
-const stripe = {...disabled, enabled: true, provider: 'stripe', checkoutUrl: 'https://buy.stripe.com/Abc123', amountMinor: 1999, currency: 'USD'};
-const lemon = {...stripe, provider: 'lemonsqueezy', checkoutUrl: 'https://frame-store.lemonsqueezy.com/checkout/buy/abc-123'};
+const stripe = {...disabled, enabled: true, provider: 'stripe', apiBaseUrl: 'https://commerce.example.invalid', checkoutUrl: 'https://buy.stripe.com/Abc123', amountMinor: 3000, currency: 'USD'};
+const lemon = {...stripe, apiBaseUrl: '', provider: 'lemonsqueezy', amountMinor: 1999, checkoutUrl: 'https://frame-store.lemonsqueezy.com/checkout/buy/abc-123'};
 
 test('public configuration shows the approved price while checkout remains closed', () => {
   assert.equal(validateCommerceConfig(disabled).enabled, false);
@@ -26,10 +26,10 @@ test('public configuration shows the approved price while checkout remains close
 
 test('configuration requires explicit boolean, valid provider, integer price and currency', () => {
   for (const patch of [{enabled: 'true'}, {provider: 'other'}, {amountMinor: -1}, {amountMinor: 0.1}, {amountMinor: NaN},
-    {amountMinor: 1e12}, {currency: 'usd'}, {currency: 'ZZZ'}, {trialHours: 48}, {checkoutUrl: ''}, {provider: ''}, {currency: ''}, {amountMinor: null}])
+    {amountMinor: 1e12}, {currency: 'usd'}, {currency: 'ZZZ'}, {trialHours: 48}, {apiBaseUrl: ''}, {provider: ''}, {currency: ''}, {amountMinor: null}])
     assert.throws(() => validateCommerceConfig({...stripe, ...patch}), JSON.stringify(patch));
   for (const value of [null, [], 1, 'checkout']) assert.throws(() => validateCommerceConfig(value));
-  assert.equal(validateCommerceConfig(stripe).amountMinor, 1999);
+  assert.equal(validateCommerceConfig(stripe).amountMinor, 3000);
   assert.ok(Object.isFrozen(validateCommerceConfig(stripe)));
 });
 
@@ -54,7 +54,7 @@ test('enabled live Stripe purchase and trial reject test payment links', () => {
 });
 
 test('discount is only a provider prefill, encoded once and preserves approved merchant parameters', () => {
-  const url = new URL(buildCheckoutUrl({...stripe, checkoutUrl: stripe.checkoutUrl + '?locale=en&utm_source=site'}, 'SAVE20'));
+  const url = new URL(validateCheckoutUrl(stripe.checkoutUrl + '?locale=en&utm_source=site&prefilled_promo_code=SAVE20', 'stripe'));
   assert.equal(url.searchParams.get('prefilled_promo_code'), 'SAVE20');
   assert.equal(url.searchParams.get('locale'), 'en');
   assert.equal(url.searchParams.get('utm_source'), 'site');
@@ -64,22 +64,22 @@ test('discount is only a provider prefill, encoded once and preserves approved m
   assert.equal(normalizeDiscountCode(' SAVE20 ', 'stripe'), 'SAVE20');
   for (const code of ['x'.repeat(65), 'SAVE&redirect=evil', '<script>', 'A B', '%26', '\u0000'])
     assert.throws(() => buildCheckoutUrl(lemon, code));
-  assert.throws(() => buildCheckoutUrl(stripe, 'SAVE_20'), /Stripe/);
+  assert.throws(() => normalizeDiscountCode('SAVE_20', 'stripe'), /Stripe/);
   assert.equal(normalizeDiscountCode('x'.repeat(64), 'lemonsqueezy').length, 64);
-  assert.equal(new URL(buildCheckoutUrl({...stripe, checkoutUrl: stripe.checkoutUrl + '?prefilled_promo_code=MERCHANT'})).searchParams.get('prefilled_promo_code'), 'MERCHANT');
+  assert.equal(new URL(validateCheckoutUrl(stripe.checkoutUrl + '?prefilled_promo_code=MERCHANT', 'stripe')).searchParams.get('prefilled_promo_code'), 'MERCHANT');
 });
 
 test('trial requires a separate configured hosted URL and never invents local entitlements', () => {
   assert.throws(() => buildCheckoutUrl(stripe, '', true), /Trial checkout/);
   const trial = {...stripe, trialUrl: 'https://buy.stripe.com/Trial123'};
   assert.equal(new URL(buildCheckoutUrl(trial, 'SAVE20', true)).pathname, '/Trial123');
-  assert.equal(new URL(buildCheckoutUrl(trial)).pathname, '/Abc123');
+  assert.throws(() => buildCheckoutUrl(trial), /Create a checkout session/);
 });
 
 test('price handles actual minor units for two-, zero- and three-decimal currencies', () => {
-  assert.equal(formatPrice(stripe, 'en-US'), '$19.99');
-  assert.equal(formatPrice({...stripe, currency: 'JPY', amountMinor: 1999}, 'en-US'), '¥1,999');
-  assert.match(formatPrice({...stripe, currency: 'KWD', amountMinor: 1999}, 'en-US'), /1\.999/);
+  assert.equal(formatPrice(stripe, 'en-US'), '$30.00');
+  assert.equal(formatPrice({...disabled, currency: 'JPY', amountMinor: 1999}, 'en-US'), '¥1,999');
+  assert.match(formatPrice({...disabled, currency: 'KWD', amountMinor: 1999}, 'en-US'), /1\.999/);
   assert.equal(formatPrice({...disabled, amountMinor: null, currency: ''}, 'en-US'), 'Price to be announced');
 });
 
@@ -132,22 +132,22 @@ test('closed commerce displays the approved price and disables purchase controls
   assert.deepEqual(f.navigation, []);
 });
 
-test('configured checkout updates real links and blocks malformed input until corrected', async () => {
+test('a hosted payment link alone cannot bypass the account purchase requirement', async () => {
   const f = fixture({...lemon, trialUrl: 'https://frame-store.lemonsqueezy.com/checkout/buy/trial-123'});
   await initCommerce(f.root, {fetcher: f.fetcher});
-  assert.equal(f.buy.getAttribute('aria-disabled'), 'false');
-  assert.equal(f.input.disabled, false);
+  assert.equal(f.buy.getAttribute('aria-disabled'), 'true');
+  assert.equal(f.input.disabled, true);
   assert.equal(f.input.maxLength, 64);
-  assert.match(f.status.textContent, /verified at checkout/);
+  assert.match(f.status.textContent, /not available yet/);
   f.input.value = 'A&B'; f.input.emit('input');
   assert.equal(f.buy.getAttribute('href'), null);
   assert.equal(f.trial.disabled, true);
   assert.ok(f.input.validationMessage);
   f.input.value = 'REAL_20'; f.input.emit('input');
   assert.equal(f.input.validationMessage, '');
-  assert.equal(new URL(f.buy.getAttribute('href')).searchParams.get('checkout[discount_code]'), 'REAL_20');
+  assert.equal(f.buy.getAttribute('href'), null);
   f.trial.emit('click');
-  assert.equal(new URL(f.navigation[0]).pathname, '/checkout/buy/trial-123');
+  assert.deepEqual(f.navigation, []);
 });
 
 test('failed, oversized or malicious config stays disabled and never renders attacker markup', async () => {

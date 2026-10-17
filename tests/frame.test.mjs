@@ -127,6 +127,27 @@ test('purchase return page has valid local resources, fragments and accessible c
   }
 });
 
+test('account page resolves local resources and accessible form labels', async () => {
+  const accountURL = new URL('/projects/frame/account/', origin);
+  const account = await readFile(new URL('../projects/frame/account/index.html', import.meta.url), 'utf8');
+  const identifiers = ids(account);
+  assert.equal(identifiers.size, tags(account).map(tag => attr(tag, 'id')).filter(Boolean).length);
+  for (const tag of tags(account)) {
+    for (const name of ['href', 'src']) {
+      const value = attr(tag, name);
+      if (value) await localReference(value, accountURL);
+    }
+    for (const name of ['aria-controls', 'aria-labelledby', 'aria-describedby', 'for']) {
+      for (const id of (attr(tag, name) || '').split(/\s+/).filter(Boolean)) assert.ok(identifiers.has(id), `Missing account control: ${id}`);
+    }
+  }
+  const expectedStyles = ['/assets/css/base.css', '/assets/css/navigation.css', '/assets/css/tools.css',
+    '/assets/css/motion.css', '/assets/css/quote.css', '/assets/css/doodle.css'];
+  const styles = tags(account).filter(tag => /^<link\b/.test(tag) && attr(tag, 'rel') === 'stylesheet')
+    .map(tag => new URL(attr(tag, 'href'), accountURL).pathname).filter(value => expectedStyles.includes(value));
+  assert.deepEqual(styles, expectedStyles);
+});
+
 test('Frame ships real font faces, their license, a vector logo and the declared launcher PNG', async () => {
   for (const name of ['Inter-Regular.ttf', 'Inter-Bold.ttf']) {
     const font = await readFile(new URL(`../assets/frame/fonts/${name}`, import.meta.url));

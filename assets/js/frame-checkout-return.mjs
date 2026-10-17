@@ -1,5 +1,5 @@
 import {validateCommerceConfig, resolveConfigUrl} from './frame-commerce.mjs';
-import {resolveCheckoutApi, claimCheckout} from './frame-checkout.mjs';
+import {AccountClient} from './frame-account-client.mjs';
 
 export async function initCheckoutReturn(root, {fetcher = globalThis.fetch, view = root.ownerDocument.defaultView} = {}) {
   const status = root.querySelector('[data-payment-status]');
@@ -21,9 +21,12 @@ export async function initCheckoutReturn(root, {fetcher = globalThis.fetch, view
       if (!config.enabled || !config.apiBaseUrl) throw new Error('Sales are not open yet.');
       const query = new URL(view.location.href).searchParams;
       if (query.getAll('session_id').length !== 1) throw new Error('This checkout session is invalid.');
-      license = await claimCheckout({api: resolveCheckoutApi(config.apiBaseUrl, view.location.href),
-        sessionId: query.get('session_id'), storage: view.sessionStorage, fetcher});
-      status.textContent = 'Payment confirmed. Your Frame license is ready.';
+      const account = new AccountClient({api: config.apiBaseUrl, baseUrl: view.location.href, fetcher});
+      const session = await account.session();
+      if (!session.authenticated) throw new Error('Sign in to your Frame account to recover this purchase.');
+      if (!session.account.verified) throw new Error('Verify your email before recovering this purchase.');
+      license = await account.license(query.get('session_id'));
+      status.textContent = 'Payment confirmed. Your license is ready and saved in your account.';
       download.disabled = false;
     } catch (error) {
       status.textContent = error instanceof Error ? error.message : 'Payment could not be checked.';

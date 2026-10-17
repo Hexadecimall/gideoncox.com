@@ -3,6 +3,7 @@
 // Stripe: https://docs.stripe.com/payment-links/promotions
 // Lemon Squeezy: https://docs.lemonsqueezy.com/guides/developer-guide/taking-payments
 import {resolveCheckoutApi, startCheckout} from './frame-checkout.mjs';
+import {AccountClient} from './frame-account-client.mjs';
 const fields = new Set(['enabled', 'provider', 'apiBaseUrl', 'checkoutUrl', 'trialUrl', 'amountMinor', 'currency', 'trialHours']);
 const providers = new Set(['stripe', 'lemonsqueezy']);
 const initialized = new WeakMap();
@@ -55,6 +56,8 @@ export function validateCommerceConfig(input) {
     if (config.provider !== 'stripe' || config.amountMinor !== 3000 || config.currency !== 'USD')
       throw new Error('Frame checkout requires the USD 30 one-time price.');
   }
+  if (config.enabled && config.provider === 'stripe' && !config.apiBaseUrl)
+    throw new Error('Frame purchases require the account checkout service.');
   if (config.checkoutUrl) config.checkoutUrl = validateCheckoutUrl(config.checkoutUrl, config.provider, config.enabled);
   if (config.trialUrl) config.trialUrl = validateCheckoutUrl(config.trialUrl, config.provider, config.enabled);
   if (config.enabled && (!providers.has(config.provider) || (!config.checkoutUrl && !config.apiBaseUrl) || config.amountMinor === null || !config.currency))
@@ -125,7 +128,7 @@ export async function initCommerce(root, {fetcher = globalThis.fetch, baseUrl = 
     const input = root.querySelector('[data-discount-code]');
     const statuses = [...root.querySelectorAll('[data-commerce-status]')];
     const status = text => statuses.forEach(element => { element.textContent = text; });
-    let config, busy = false;
+    let config, account, busy = false;
     const repaint = () => {
       let code = '';
       try { code = normalizeDiscountCode(input?.value ?? '', config?.provider); }
@@ -136,16 +139,22 @@ export async function initCommerce(root, {fetcher = globalThis.fetch, baseUrl = 
         return;
       }
       input?.setCustomValidity?.('');
-      buys.forEach(element => activate(element, config?.enabled && !busy ?
-        (config.apiBaseUrl ? '#purchase' : buildCheckoutUrl(config, code)) : ''));
-      trials.forEach(element => activate(element, config?.enabled && config.trialUrl ? buildCheckoutUrl(config, code, true) : ''));
-      status(config?.enabled ? 'Discounts are verified at checkout. The checkout page confirms the final price.' : 'Sales are not open yet.');
+      const available = config?.enabled && config.apiBaseUrl && account;
+      const verified = account?.current.account?.verified;
+      buys.forEach(element => activate(element, available && !busy ?
+        (verified ? '#purchase' : new URL('account/', baseUrl).href) : ''));
+      trials.forEach(element => activate(element, ''));
+      status(!config?.enabled ? 'Sales are not open yet.' : !available ? 'Purchases are not available yet.' :
+        !account.current.authenticated ? 'Sign in to purchase Frame. Purchases stay in your account.' :
+        !verified ? 'Verify your email before purchasing Frame.' :
+        'Discounts are verified at checkout. The checkout page confirms the final price.');
     };
     [...buys, ...trials].forEach(element => {
       activate(element, '');
       element.addEventListener('click', async event => {
         if (element.getAttribute('aria-disabled') !== 'false') { event.preventDefault(); return; }
         if (config?.apiBaseUrl && buys.includes(element)) {
+          if (!account?.current.account?.verified) return;
           event.preventDefault();
           if (busy) return;
           busy = true; repaint();
@@ -154,6 +163,7 @@ export async function initCommerce(root, {fetcher = globalThis.fetch, baseUrl = 
           try {
             const view = root.ownerDocument.defaultView;
             const destination = await startCheckout({api: resolveCheckoutApi(config.apiBaseUrl, baseUrl),
+              csrf: account.csrf,
               discount: normalizeDiscountCode(input?.value ?? '', config.provider),
               storage: view.sessionStorage, crypto: view.crypto, fetcher});
             view.location.assign(destination);
@@ -183,7 +193,11 @@ export async function initCommerce(root, {fetcher = globalThis.fetch, baseUrl = 
       if (body.length > 16384) throw new Error('Commerce configuration is too large.');
       config = validateCommerceConfig(JSON.parse(body));
       root.querySelectorAll('[data-commerce-price]').forEach(element => { element.textContent = formatPrice(config); });
-      if (input) input.disabled = !config.enabled;
+      if (config.enabled && config.apiBaseUrl) {
+        account = new AccountClient({api: config.apiBaseUrl, baseUrl, fetcher});
+        await account.session();
+      }
+      if (input) input.disabled = !config.enabled || !account?.current.account?.verified;
       repaint();
       return config;
     } catch {

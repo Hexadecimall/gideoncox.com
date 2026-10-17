@@ -21,16 +21,19 @@ export function resolveCheckoutApi(reference, baseUrl) {
   return url.href.replace(/\/$/, '');
 }
 
-async function request(api, path, body, fetcher) {
+async function request(api, path, body, fetcher, csrf) {
+  if (!/^[a-f0-9]{64}$/.test(csrf ?? '')) throw new CheckoutError('Sign in with a verified account before checkout.', 401);
   let response;
   try {
     response = await fetcher(api + path, {
-      method: 'POST', credentials: 'omit', redirect: 'error', cache: 'no-store',
-      headers: {'Content-Type': 'application/json'}, body: JSON.stringify(body),
+      method: 'POST', credentials: 'include', redirect: 'error', cache: 'no-store',
+      headers: {'Content-Type': 'application/json', 'X-Frame-CSRF': csrf}, body: JSON.stringify(body),
       signal: AbortSignal.timeout(30000)
     });
   } catch { throw new CheckoutError('Checkout could not be reached. Try again.'); }
   if (!response.ok) {
+    if (response.status === 401) throw new CheckoutError('Sign in to continue with checkout.', 401);
+    if (response.status === 403) throw new CheckoutError('Verify your email or sign in again before checkout.', 403);
     if ([402, 409].includes(response.status)) throw new CheckoutError('Payment is still processing. Check again shortly.', response.status);
     if (response.status === 429) throw new CheckoutError('Too many requests. Try again shortly.', 429);
     if (response.status === 400) throw new CheckoutError('Checkout details were not accepted. Check the discount code and try again.', 400);
@@ -62,8 +65,9 @@ function savePending(storage, pending) {
   catch { throw new CheckoutError('Checkout needs session storage in this tab.'); }
 }
 
-export async function startCheckout({api, discount = '', storage, crypto = globalThis.crypto,
+export async function startCheckout({api, csrf, discount = '', storage, crypto = globalThis.crypto,
   fetcher = globalThis.fetch, now = Date.now}) {
+  if (!/^[a-f0-9]{64}$/.test(csrf ?? '')) throw new CheckoutError('Sign in with a verified account before checkout.', 401);
   if (!/^[A-Za-z0-9]{0,64}$/.test(discount)) throw new CheckoutError('Use letters and numbers for the discount code.');
   let pending = readPending(storage);
   const time = now();
@@ -75,7 +79,7 @@ export async function startCheckout({api, discount = '', storage, crypto = globa
   }
   const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pending.proof));
   const claimHash = [...new Uint8Array(digest)].map(value => value.toString(16).padStart(2, '0')).join('');
-  const result = await request(api, '/v1/checkout', {claim_hash: claimHash, discount_code: discount || null}, fetcher);
+  const result = await request(api, '/v1/checkout', {claim_hash: claimHash, discount_code: discount || null}, fetcher, csrf);
   if (!sessionPattern.test(result.session_id) || typeof result.checkout_url !== 'string')
     throw new CheckoutError('Checkout returned an invalid session.');
   let destination;
@@ -90,13 +94,13 @@ export async function startCheckout({api, discount = '', storage, crypto = globa
   return destination.href;
 }
 
-export async function claimCheckout({api, sessionId, storage, fetcher = globalThis.fetch}) {
+export async function claimCheckout({api, csrf, sessionId, storage, fetcher = globalThis.fetch}) {
   if (!sessionPattern.test(sessionId) || !sessionId.startsWith('cs_live_'))
     throw new CheckoutError('This checkout session is invalid.');
   const pending = readPending(storage);
   if (!pending || pending.sessionId !== sessionId)
     throw new CheckoutError('Open checkout in the same tab used for this purchase.');
-  const result = await request(api, '/v1/checkout/claim', {session_id: sessionId, proof: pending.proof}, fetcher);
+  const result = await request(api, '/v1/checkout/claim', {session_id: sessionId, proof: pending.proof}, fetcher, csrf);
   if (!licensePattern.test(result.license_key)) throw new CheckoutError('Checkout returned an invalid license.');
   pending.claimed = true;
   savePending(storage, pending);
