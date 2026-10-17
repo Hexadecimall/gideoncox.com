@@ -70,12 +70,15 @@ test('the preview offers section navigation and configured checkout controls wit
     assert.ok(!/^<a\b/i.test(tag) || !/\sdownload(?:\s|=|>)/i.test(tag), 'Preview has an active download anchor');
   }
   assert.doesNotMatch(main, /<(?:form|button)\b[^>]*(?:checkout|purchase|buy)[^>]*>/i);
-  for (const tag of tags(main).filter(tag => /\bdata-(?:buy-now|trial)\b/.test(tag))) {
+  for (const tag of tags(main).filter(tag => /\bdata-(?:buy-now|trial)(?:\s|=|>)/.test(tag))) {
     assert.equal(attr(tag, 'aria-disabled'), 'true', 'Unconfigured checkout must not be active');
     assert.equal(attr(tag, 'href'), undefined, 'Unconfigured checkout must not have a destination');
   }
   assert.equal(tags(main).filter(tag => /\bdata-buy-now\b/.test(tag)).length, 1);
-  assert.equal(tags(main).filter(tag => /\bdata-trial\b/.test(tag)).length, 1);
+  const trialInfo = tags(main).filter(tag => /\bdata-trial-info\b/.test(tag));
+  assert.equal(trialInfo.length, 1);
+  assert.equal(attr(trialInfo[0], 'href'), '#trial');
+  assert.ok(ids(main).has('trial'));
   const config = JSON.parse(await readFile(new URL('../assets/frame/commerce.json', import.meta.url), 'utf8'));
   assert.equal(config.enabled, false);
   assert.equal(config.trialHours, 24);

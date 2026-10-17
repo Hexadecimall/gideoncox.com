@@ -140,8 +140,9 @@ request entitled update metadata and renew download access before applying an
 update. Account sessions, activation credentials, and download capabilities are
 separate.
 
-Sales and trial access remain closed in the public configuration. Trial access
-starts in a licensed launcher against a verified Minecraft account. Its original
+Sales remain closed in the public configuration. The 24-hour trial is implemented
+in the licensed launcher and requires a verified Minecraft account. Online trial
+activation awaits deployment of the private service. Its original
 24-hour deadline is enforced by the private service and signed native leases;
 expiration preserves settings and worlds. A checkout redirect is not purchase
 confirmation. Deploy and validate the service and licensed client before
