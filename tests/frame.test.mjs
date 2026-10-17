@@ -131,8 +131,8 @@ test('purchase return page has valid local resources, fragments and accessible c
 });
 
 test('account page resolves local resources and accessible form labels', async () => {
-  const accountURL = new URL('/projects/frame/account/', origin);
-  const account = await readFile(new URL('../projects/frame/account/index.html', import.meta.url), 'utf8');
+  const accountURL = new URL('/account/', origin);
+  const account = await readFile(new URL('../account/index.html', import.meta.url), 'utf8');
   const identifiers = ids(account);
   assert.equal(identifiers.size, tags(account).map(tag => attr(tag, 'id')).filter(Boolean).length);
   for (const tag of tags(account)) {
@@ -205,6 +205,11 @@ test('Frame is discoverable from every project menu, the home destinations and s
     const html = await readFile(file, 'utf8');
     if (path.relative(root, file).split(path.sep).join('/') === 'editor/app/index.html') {
       assert.doesNotMatch(html, /id="site-header"/, 'The standalone editor must remain fullscreen');
+      continue;
+    }
+    if (path.relative(root, file).split(path.sep).join('/') === 'projects/frame/account/index.html') {
+      assert.match(html, /account-redirect\.mjs/);
+      assert.match(html, /href="\/account\/"/);
       continue;
     }
     const panel = html.match(/<div\b[^>]*id="projects-panel"[^>]*>([\s\S]*?)<\/div>/i)?.[1];

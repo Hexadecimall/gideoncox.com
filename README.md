@@ -80,6 +80,7 @@ The Ark source retains its MIT license in `src/ark/core/LICENSE`. Browser-specif
 node --test tests/*.test.mjs
 cargo +1.98.1 test --offline --manifest-path src/terminal/Cargo.toml
 python3 tests/connector_test.py
+python3 tests/audit_public_test.py
 python3 scripts/audit-public.py
 ```
 
@@ -106,6 +107,21 @@ Local Inter fonts and their license are under `assets/frame/fonts/`. Frame's
 product styles are isolated in `assets/css/frame.css`; shared navigation and
 site preferences retain their existing behavior.
 
+### Accounts
+
+The site-wide account page is `/account/`. Account creation, sign-in, email
+verification and password recovery use `assets/account.json`, independently of
+product pricing or whether sales are open. Its public fields are `enabled` and
+`apiBaseUrl`; no credentials belong in this file. Enable it only after deploying
+the private account service. The previous Frame account URL redirects here and
+preserves verification fragments.
+
+Accounts can own product entitlements. Frame purchases and installer downloads
+appear within the account library; authentication does not require a purchase.
+Use the same API service URL in the account and Frame checkout configurations so
+both use the same secure cookie session. Keep hosting credentials, email sender
+addresses, signing keys and customer records outside this repository.
+
 ### Checkout
 
 `assets/frame/commerce.json` contains public checkout settings only. It must
@@ -117,15 +133,15 @@ the account API and a signed-in account with a verified email address. A hosted
 Payment Link alone cannot enable purchases. Stripe validates discount codes and
 the final price; the browser does not calculate an authoritative discount.
 
-Set `apiBaseUrl` to the deployed service's HTTPS URL. Host it on the same site as
-the website, preferably behind a same-origin reverse proxy, so browser cookie
+Set `apiBaseUrl` in deployment configuration to the service's HTTPS URL. Host it
+on the same site as the website, preferably behind a same-origin reverse proxy, so browser cookie
 restrictions do not prevent sign-in. Account requests include the secure session
 cookie; authenticated actions also send a CSRF token kept only in memory.
 Verification and password-reset links use fragments that are removed before
 requests. The public source contains no provider secrets, customer records,
 license keys, or discount definitions.
 
-`projects/frame/account/` provides account creation, sign-in, email verification,
+`account/` provides account creation, sign-in, email verification,
 password reset, purchases, license recovery, and installer downloads. Purchases
 belong to the server-side account. Clearing browser storage signs the visitor
 out but does not remove purchases; signing in again restores the library. The

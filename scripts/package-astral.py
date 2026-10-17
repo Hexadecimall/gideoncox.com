@@ -19,7 +19,7 @@ root = Path(__file__).resolve().parents[1]
 name = 'astral-2.3.0-macos-arm64'
 binary = args.prefix / 'bin/astral'
 strings = subprocess.check_output(['strings', str(binary)], text=True)
-if re.search(r'/(Users|Volumes)/|/private/tmp/|/home/Documents/|/tmp/site-', strings):
+if re.search(r'/(Users|Volumes)/|/private/tmp/|/home/' r'Documents/|/tmp/site-', strings):
     raise SystemExit('Binary still contains private build residue; fix the path mappings.')
 subprocess.run([str(binary), '--version'], check=True)
 metadata = json.loads(subprocess.check_output([

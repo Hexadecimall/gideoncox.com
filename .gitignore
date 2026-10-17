@@ -3,5 +3,19 @@ target/
 __pycache__/
 *.pyc
 .DS_Store
+.env
+.env.*
+!.env.example
+*.key
+*.pem
+*.p12
+*.pfx
+*.log
+/credentials/
+/secrets/
+/private/
+/accounts.json
+/sessions.json
+/commerce-store.json
 
 assets/vendor/zed/*.tmp

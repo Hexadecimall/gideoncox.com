@@ -1,5 +1,6 @@
-import {AccountClient, AccountError, consumeAccountFragment} from './frame-account-client.mjs';
-import {validateCommerceConfig, resolveConfigUrl} from './frame-commerce.mjs';
+import {AccountClient, AccountError, consumeAccountFragment} from './account-client.mjs';
+import {validateAccountConfig, resolveConfigUrl} from './service-config.mjs';
+import {FrameLibrary} from './frame-library-client.mjs';
 
 const initialized = new WeakMap();
 
@@ -16,7 +17,7 @@ export async function initAccount(root, {fetcher = globalThis.fetch, view = root
     const document = root.ownerDocument;
     const find = name => root.querySelector(`[data-${name}]`);
     const status = text => { find('account-status').textContent = text; };
-    let client, sessionReady = false, busy = true, mode = 'login', fragment;
+    let client, library, sessionReady = false, busy = true, mode = 'login', fragment;
     const enable = () => {
       root.querySelectorAll('button, input').forEach(control => { control.disabled = !client || busy; });
       if (client?.current.account?.verified) find('resend-verification').disabled = true;
@@ -39,7 +40,7 @@ export async function initAccount(root, {fetcher = globalThis.fetch, view = root
       const account = client?.current.account;
       if (!account) { find('account-purchases').replaceChildren(); find('account-downloads').replaceChildren(); return; }
       find('account-email').textContent = account.email;
-      find('account-verified').textContent = account.verified ? 'Email verified' : 'Verify your email to purchase and download Frame.';
+      find('account-verified').textContent = account.verified ? 'Email verified' : 'Verify your email to use all account features.';
       find('resend-verification').hidden = account.verified;
       find('account-library').hidden = !account.verified;
     };
@@ -55,23 +56,23 @@ export async function initAccount(root, {fetcher = globalThis.fetch, view = root
       } finally { busy = false; enable(); }
     };
     const loadLibrary = async () => {
-      const purchases = await client.library();
+      const purchases = await library.library();
       const list = find('account-purchases'); list.replaceChildren();
       if (!purchases.length) {
         const empty = document.createElement('p'); empty.textContent = 'No purchases yet.'; list.append(empty);
       }
       for (const purchase of purchases) {
-        const card = document.createElement('article'); card.className = 'frame-library-item';
+        const card = document.createElement('article'); card.className = 'account-library-item';
         const heading = document.createElement('h3'); heading.textContent = 'Frame';
         const detail = document.createElement('p');
         const state = {active: 'One-time purchase', revoked: 'Access revoked', pending: 'Payment pending'}[purchase.status];
         detail.textContent = `${new Intl.NumberFormat(undefined, {style: 'currency', currency: purchase.currency}).format(purchase.amountMinor / 100)} · ${state}`;
         card.append(heading, detail);
         if (purchase.status !== 'revoked') {
-          const button = document.createElement('button'); button.type = 'button'; button.className = 'frame-button';
+          const button = document.createElement('button'); button.type = 'button'; button.className = 'account-button';
           button.textContent = purchase.status === 'pending' ? 'Check payment' : 'Download license';
           button.addEventListener('click', () => action(async () => {
-            saveLicenseFile(document, view, await client.license(purchase.session_id));
+            saveLicenseFile(document, view, await library.license(purchase.session_id));
           }, 'License downloaded. Keep this file private.', true));
           card.append(button);
         }
@@ -80,7 +81,7 @@ export async function initAccount(root, {fetcher = globalThis.fetch, view = root
       const installers = find('account-downloads'); installers.replaceChildren();
       let downloads = [];
       if (purchases.some(value => value.status === 'active')) {
-        try { downloads = await client.downloads(); }
+        try { downloads = await library.downloads(); }
         catch (error) {
           if (error instanceof AccountError && error.status === 401) throw error;
           const unavailable = document.createElement('p');
@@ -92,15 +93,15 @@ export async function initAccount(root, {fetcher = globalThis.fetch, view = root
         const empty = document.createElement('p'); empty.textContent = 'No installer downloads are available.'; installers.append(empty);
       }
       for (const download of downloads) {
-        const row = document.createElement('article'); row.className = 'frame-library-item';
+        const row = document.createElement('article'); row.className = 'account-library-item';
         const title = document.createElement('h3'); title.textContent = `${download.target} · ${download.variant}`;
         const detail = document.createElement('p'); detail.textContent = `${download.version} · ${(download.size / 1024 ** 2).toFixed(1)} MB`;
-        const filename = document.createElement('p'); filename.className = 'frame-installer-filename'; filename.textContent = download.filename;
-        const link = document.createElement('button'); link.type = 'button'; link.className = 'frame-button';
+        const filename = document.createElement('p'); filename.className = 'account-installer-filename'; filename.textContent = download.filename;
+        const link = document.createElement('button'); link.type = 'button'; link.className = 'account-button';
         const format = download.filename.endsWith('.tar.gz') ? 'TAR.GZ' : download.filename.split('.').at(-1).toUpperCase();
         link.textContent = `Download ${format}`;
         link.addEventListener('click', () => action(async () => {
-          const fresh = (await client.downloads()).find(item => item.filename === download.filename &&
+          const fresh = (await library.downloads()).find(item => item.filename === download.filename &&
             item.target === download.target && item.variant === download.variant && item.version === download.version &&
             item.sha256 === download.sha256 && item.size === download.size);
           if (!fresh) throw new AccountError('This installer changed. Refresh your library.');
@@ -143,14 +144,15 @@ export async function initAccount(root, {fetcher = globalThis.fetch, view = root
     find('resend-verification').addEventListener('click', () => action(() => client.resend(), 'Check your email for a verification link.'));
     find('refresh-library').addEventListener('click', () => action(async () => { await client.session(); }, 'Library refreshed.', true));
     try {
-      const response = await fetcher(resolveConfigUrl(root.getAttribute('data-frame-account'), view.location.href),
+      const response = await fetcher(resolveConfigUrl(root.getAttribute('data-account'), view.location.href),
         {credentials: 'omit', redirect: 'error', cache: 'no-cache'});
       if (!response.ok) throw new AccountError('Accounts are not available yet.');
       const text = await response.text();
       if (text.length > 16384) throw new AccountError('Accounts are not available yet.');
-      const config = validateCommerceConfig(JSON.parse(text));
-      if (!config.apiBaseUrl) throw new AccountError('Accounts are not available yet.');
+      const config = validateAccountConfig(JSON.parse(text));
+      if (!config.enabled || !config.apiBaseUrl) throw new AccountError('Accounts are not available yet.');
       client = new AccountClient({api: config.apiBaseUrl, baseUrl: view.location.href, fetcher});
+      library = new FrameLibrary(client);
       await client.session();
       sessionReady = true;
       if (fragment?.action === 'verify') {
@@ -172,7 +174,7 @@ export async function initAccount(root, {fetcher = globalThis.fetch, view = root
 }
 
 if (typeof document !== 'undefined') {
-  const start = () => document.querySelectorAll('[data-frame-account]').forEach(root => { void initAccount(root); });
+  const start = () => document.querySelectorAll('[data-account]').forEach(root => { void initAccount(root); });
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', start, {once: true});
   else start();
 }

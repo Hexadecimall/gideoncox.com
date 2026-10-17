@@ -37,7 +37,7 @@ test('checkout saves a random claim proof before contacting the service and retr
   const fetcher = async (url, options) => {
     calls++;
     assert.equal(url, api + '/v1/checkout');
-    assert.equal(options.method, 'POST'); assert.equal(options.credentials, 'include'); assert.equal(options.headers['X-Frame-CSRF'], csrf); assert.equal(options.redirect, 'error');
+    assert.equal(options.method, 'POST'); assert.equal(options.credentials, 'include'); assert.equal(options.headers['X-Site-CSRF'], csrf); assert.equal(options.redirect, 'error');
     const body = JSON.parse(options.body), pending = saved.saved();
     assert.match(pending.proof, /^[a-f0-9]{64}$/);
     const hash = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(pending.proof));

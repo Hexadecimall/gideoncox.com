@@ -1,8 +1,11 @@
+import {FrameLibrary, validatePurchase, validateDownload} from '../assets/js/frame-library-client.mjs';
+import {validateAccountConfig} from '../assets/js/service-config.mjs';
+import {redirectAccount} from '../assets/js/account-redirect.mjs';
 import assert from 'node:assert/strict';
 import {readFile} from 'node:fs/promises';
 import test from 'node:test';
-import {AccountClient, consumeAccountFragment, validateSession, validatePassword, validatePurchase, validateDownload} from '../assets/js/frame-account-client.mjs';
-import {initAccount} from '../assets/js/frame-account.mjs';
+import {AccountClient, consumeAccountFragment, validateSession, validatePassword} from '../assets/js/account-client.mjs';
+import {initAccount} from '../assets/js/account.mjs';
 import {initCommerce} from '../assets/js/frame-commerce.mjs';
 import {startCheckout} from '../assets/js/frame-checkout.mjs';
 
@@ -22,11 +25,11 @@ test('cookie sessions bootstrap without CSRF and authenticated requests use an i
   const client = new AccountClient({api, fetcher: async (url, options) => {
     calls.push({url, options});
     assert.equal(options.credentials, 'include'); assert.equal(options.redirect, 'error'); assert.equal(options.cache, 'no-store');
-    if (url.endsWith('/session')) { assert.ok(!options.headers['X-Frame-CSRF']); return reply(signed(true)); }
-    assert.equal(options.headers['X-Frame-CSRF'], csrf); return reply({purchases: [purchase]});
+    if (url.endsWith('/session')) { assert.ok(!options.headers['X-Site-CSRF']); return reply(signed(true)); }
+    assert.equal(options.headers['X-Site-CSRF'], csrf); return reply({purchases: [purchase]});
   }});
   assert.equal((await client.session()).account.verified, true);
-  assert.deepEqual(await client.library(), [purchase]);
+  assert.deepEqual(await new FrameLibrary(client).library(), [purchase]);
   assert.equal(client.csrf, csrf); assert.equal(calls.length, 2);
   assert.deepEqual(Object.keys(client).sort(), ['api', 'fetcher', 'now']);
 });
@@ -46,14 +49,14 @@ test('account validation keeps exact Unicode passwords and rejects malformed ses
 test('verification and reset fragments are removed before any token is processed', () => {
   for (const action of ['verify', 'reset']) {
     let stripped = '';
-    const view = {location: {hash: `#action=${action}&token=${token}`, pathname: '/projects/frame/account/', search: ''},
+    const view = {location: {hash: `#action=${action}&token=${token}`, pathname: '/account/', search: ''},
       history: {replaceState: (_state, _title, path) => { stripped = path; }}};
     assert.deepEqual(consumeAccountFragment(view), {action, token});
-    assert.equal(stripped, '/projects/frame/account/');
+    assert.equal(stripped, '/account/');
   }
   for (const hash of [`#action=verify&token=${token}&token=${token}`, '#action=other&token=bad', `#action=reset&token=${token}&next=elsewhere`, '#token=bad']) {
     let stripped = false;
-    assert.throws(() => consumeAccountFragment({location: {hash, pathname: '/projects/frame/account/', search: ''},
+    assert.throws(() => consumeAccountFragment({location: {hash, pathname: '/account/', search: ''},
       history: {replaceState: () => { stripped = true; }}}));
     assert.equal(stripped, true);
   }
@@ -68,11 +71,11 @@ test('account actions use the contract and reset/logout discard the current CSRF
   await client.register('buyer@example.invalid', 'a long password here'); await client.resend();
   await client.verify(token); await client.forgot('buyer@example.invalid'); await client.reset(token, 'another long password');
   assert.equal(client.current.authenticated, false); assert.equal(client.csrf, '');
-  await assert.rejects(client.library(), /Sign in/);
+  await assert.rejects(new FrameLibrary(client).library(), /Sign in/);
   await client.login('buyer@example.invalid', 'another long password'); await client.logout();
   assert.equal(client.current.authenticated, false); assert.equal(client.csrf, '');
   assert.deepEqual(calls.find(value => value.path.endsWith('/reset-password')).body, {token, password: 'another long password'});
-  assert.ok(!calls.find(value => value.path.endsWith('/reset-password')).options.headers['X-Frame-CSRF']);
+  assert.ok(!calls.find(value => value.path.endsWith('/reset-password')).options.headers['X-Site-CSRF']);
 });
 
 test('purchase recovery is server-owned and does not need browser storage or a checkout proof', async () => {
@@ -86,8 +89,8 @@ test('purchase recovery is server-owned and does not need browser storage or a c
   };
   for (let browserRestart = 0; browserRestart < 2; browserRestart++) {
     const client = new AccountClient({api, fetcher}); await client.session();
-    assert.deepEqual(await client.library(), [purchase]);
-    assert.equal(JSON.parse(await client.license(sessionId)).license_key, 'fr_' + hex('e'));
+    assert.deepEqual(await new FrameLibrary(client).library(), [purchase]);
+    assert.equal(JSON.parse(await new FrameLibrary(client).license(sessionId)).license_key, 'fr_' + hex('e'));
   }
   assert.equal(calls.filter(value => value.endsWith('/library')).length, 2);
 });
@@ -136,19 +139,19 @@ function fixture({session = {authenticated: false}, hash = '', overrides = {}, c
   }
   const modes = ['login', 'register', 'forgot', 'login'].map(mode => { const element = new Element(); element.setAttribute('data-account-mode', mode); return element; });
   const calls = [], navigation = [], stripped = [];
-  const view = {location: {href: 'https://example.invalid/projects/frame/account/' + hash,
-    pathname: '/projects/frame/account/', search: '', hash, assign: url => navigation.push(url)},
+  const view = {location: {href: 'https://example.invalid/account/' + hash,
+    pathname: '/account/', search: '', hash, assign: url => navigation.push(url)},
     history: {replaceState: (_state, _title, path) => { stripped.push(path); view.location.hash = ''; view.location.href = 'https://example.invalid' + path; }},
     URL: {createObjectURL: () => 'blob:license', revokeObjectURL() {}}, setTimeout() {}};
   const document = {defaultView: view, createElement: name => new Element(name)};
-  const root = {ownerDocument: document, getAttribute: () => '../../../assets/frame/commerce.json',
+  const root = {ownerDocument: document, getAttribute: () => '../assets/account.json',
     querySelector: selector => fields.get(selector.slice(6, -1)),
     querySelectorAll: selector => selector === '[data-account-mode]' ? modes :
       [...fields.values(), ...modes].flatMap(walk).filter(value => ['BUTTON', 'INPUT'].includes(value.tagName))};
   const fetcher = async (url, options) => {
     assert.equal(view.location.hash, '', 'Account fragment must be stripped before fetching');
     calls.push({url, options});
-    if (options.method !== 'POST') return reply({...config, apiBaseUrl: configured ? api : ''});
+    if (options.method !== 'POST') return reply({enabled: configured, apiBaseUrl: configured ? api : ''});
     const operation = url.split('/').at(-1);
     if (overrides[operation]) return overrides[operation](url, options);
     if (['session', 'login'].includes(operation)) return reply(session);
@@ -269,7 +272,7 @@ test('purchase controls require a verified cookie session and send anonymous use
       assert.equal(url, api + '/v1/account/session'); assert.equal(options.credentials, 'include'); return reply(session);
     };
     await initCommerce(root, {fetcher});
-    assert.equal(buy.getAttribute('href'), session.account?.verified ? '#purchase' : 'https://example.invalid/projects/frame/account/');
+    assert.equal(buy.getAttribute('href'), session.account?.verified ? '#purchase' : 'https://example.invalid/account/');
     assert.equal(input.disabled, !session.account?.verified);
     assert.equal(trial.getAttribute('href'), null);
   }
@@ -283,13 +286,34 @@ test('failed verification keeps sign-in and resend available instead of disablin
 });
 
 test('account page keeps the exact shared header, private forms and no public installer or token state', async () => {
-  const [html, product, source, client] = await Promise.all(['projects/frame/account/index.html', 'projects/frame/index.html',
-    'assets/js/frame-account.mjs', 'assets/js/frame-account-client.mjs'].map(path => readFile(new URL('../' + path, import.meta.url), 'utf8')));
-  const header = text => text.match(/<header\b[\s\S]*?<\/header>/)[0].replaceAll('../../../', '../../');
+  const [html, product, source, client] = await Promise.all(['account/index.html', 'projects/frame/index.html',
+    'assets/js/account.mjs', 'assets/js/account-client.mjs'].map(path => readFile(new URL('../' + path, import.meta.url), 'utf8')));
+  const header = text => text.match(/<header\b[\s\S]*?<\/header>/)[0].replace(/(?:\.\.\/)+/g, '/');
   assert.equal(header(html), header(product));
   assert.match(html, /name="referrer" content="no-referrer"/); assert.match(html, /name="robots" content="noindex, nofollow"/);
-  assert.match(product, /href="account\/">Account<\/a>/);
-  assert.equal((html.match(/frame-account\.mjs/g) || []).length, 1);
+  assert.match(product, /href="\/account\/">Account<\/a>/);
+  assert.equal((html.match(/account\.mjs/g) || []).length, 1);
   assert.doesNotMatch(source + client, /localStorage|sessionStorage|innerHTML|document\.cookie/);
   assert.doesNotMatch(html, /href="[^"\s]*\.(?:exe|msi|zip|dmg|pkg|deb)"/);
+});
+
+test('site accounts initialize independently of Frame sales, prices and provider settings', async () => {
+  assert.deepEqual(validateAccountConfig({enabled: true, apiBaseUrl: api}), {enabled: true, apiBaseUrl: api});
+  for (const invalid of [{enabled: true, apiBaseUrl: ''}, {enabled: true, apiBaseUrl: 'http://api.example.invalid'},
+      {enabled: true, apiBaseUrl: api, secret: 'not-public'}, {enabled: 'true', apiBaseUrl: api}])
+    assert.throws(() => validateAccountConfig(invalid));
+  const f = fixture({session: signed(true)});
+  const account = await initAccount(f.root, {fetcher: f.fetcher});
+  assert.equal(account.current.authenticated, true);
+  assert.equal(f.calls[0].url, 'https://example.invalid/assets/account.json');
+  assert.ok(f.calls.every(call => !call.url.includes('/frame/commerce.json')));
+});
+
+test('old account links keep verification fragments and cannot redirect off-site', () => {
+  for (const hash of ['#action=verify&token=' + token, '#action=reset&token=' + token, '']) {
+    let redirected;
+    redirectAccount({location: {href: 'https://example.invalid/projects/frame/account/?next=https://other.example.invalid',
+      hash, replace: value => { redirected = value; }}});
+    assert.equal(redirected, 'https://example.invalid/account/' + hash);
+  }
 });

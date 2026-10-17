@@ -1,5 +1,6 @@
+import {FrameLibrary} from './frame-library-client.mjs';
 import {validateCommerceConfig, resolveConfigUrl} from './frame-commerce.mjs';
-import {AccountClient} from './frame-account-client.mjs';
+import {AccountClient} from './account-client.mjs';
 
 export async function initCheckoutReturn(root, {fetcher = globalThis.fetch, view = root.ownerDocument.defaultView} = {}) {
   const status = root.querySelector('[data-payment-status]');
@@ -23,9 +24,9 @@ export async function initCheckoutReturn(root, {fetcher = globalThis.fetch, view
       if (query.getAll('session_id').length !== 1) throw new Error('This checkout session is invalid.');
       const account = new AccountClient({api: config.apiBaseUrl, baseUrl: view.location.href, fetcher});
       const session = await account.session();
-      if (!session.authenticated) throw new Error('Sign in to your Frame account to recover this purchase.');
+      if (!session.authenticated) throw new Error('Sign in to your account to recover this purchase.');
       if (!session.account.verified) throw new Error('Verify your email before recovering this purchase.');
-      license = await account.license(query.get('session_id'));
+      license = await new FrameLibrary(account).license(query.get('session_id'));
       status.textContent = 'Payment confirmed. Your license is ready and saved in your account.';
       download.disabled = false;
     } catch (error) {

@@ -1,9 +1,11 @@
+import {resolveConfigUrl} from './service-config.mjs';
+export {resolveConfigUrl} from './service-config.mjs';
 // Hosted checkout only. Pricing, discounts and trial entitlements belong to the
 // merchant/provider; this public configuration must never contain API secrets.
 // Stripe: https://docs.stripe.com/payment-links/promotions
 // Lemon Squeezy: https://docs.lemonsqueezy.com/guides/developer-guide/taking-payments
 import {resolveCheckoutApi, startCheckout} from './frame-checkout.mjs';
-import {AccountClient} from './frame-account-client.mjs';
+import {AccountClient} from './account-client.mjs';
 const fields = new Set(['enabled', 'provider', 'apiBaseUrl', 'checkoutUrl', 'trialUrl', 'amountMinor', 'currency', 'trialHours']);
 const providers = new Set(['stripe', 'lemonsqueezy']);
 const initialized = new WeakMap();
@@ -96,16 +98,6 @@ export function formatPrice(input, locale = undefined) {
   return formatter.format(config.amountMinor / (10 ** digits));
 }
 
-export function resolveConfigUrl(reference, base) {
-  if (typeof reference !== 'string' || !reference || reference.length > 1024 ||
-      /^[a-z][a-z0-9+.-]*:/i.test(reference) || reference.startsWith('//') || /[\\\s\u0000-\u001f]/.test(reference))
-    throw new Error('Commerce configuration must use a local URL.');
-  const origin = new URL(base);
-  const url = new URL(reference, origin);
-  if (url.origin !== origin.origin || !/^https?:$/.test(url.protocol) || url.hash || url.search || !url.pathname.endsWith('.json'))
-    throw new Error('Commerce configuration must use a local JSON file.');
-  return url.href;
-}
 
 function activate(element, address) {
   element.setAttribute('aria-disabled', address ? 'false' : 'true');
@@ -142,7 +134,7 @@ export async function initCommerce(root, {fetcher = globalThis.fetch, baseUrl = 
       const available = config?.enabled && config.apiBaseUrl && account;
       const verified = account?.current.account?.verified;
       buys.forEach(element => activate(element, available && !busy ?
-        (verified ? '#purchase' : new URL('account/', baseUrl).href) : ''));
+        (verified ? '#purchase' : new URL('/account/', baseUrl).href) : ''));
       trials.forEach(element => activate(element, ''));
       status(!config?.enabled ? 'Sales are not open yet.' : !available ? 'Purchases are not available yet.' :
         !account.current.authenticated ? 'Sign in to purchase Frame. Purchases stay in your account.' :

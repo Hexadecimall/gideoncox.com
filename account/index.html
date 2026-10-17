@@ -1,0 +1,285 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="referrer" content="no-referrer">
+  <title>Account · g.</title>
+  <link rel="icon" type="image/svg+xml" href="../assets/icons/favicon.svg">
+  <link rel="stylesheet" href="../assets/css/base.css?v=20261014-4">
+  <link rel="stylesheet" href="../assets/css/navigation.css?v=20261014-4">
+  <link rel="stylesheet" href="../assets/css/tools.css?v=20261014-4">
+  <link rel="stylesheet" href="../assets/css/motion.css?v=20261014-4">
+  <link rel="stylesheet" href="../assets/css/quote.css?v=20261014-4">
+  <link rel="stylesheet" href="../assets/css/doodle.css?v=20261014-4">
+  <link rel="stylesheet" href="../assets/css/account.css?v=1">
+  <script src="../assets/js/preferences.js"></script>
+</head>
+<body>
+  <a class="account-skip" href="#main">Skip to content</a>
+<header id="site-header">
+   <div class="shell nav">
+    <button aria-controls="site-menu" aria-expanded="false" aria-label="Open menu" class="brand menu-toggle" id="menu-toggle">
+     <span class="brand-mark">
+      g.
+     </span>
+    </button>
+    <div class="header-actions">
+     <aside class="doodle-section" aria-label="Doodle pad">
+      <button class="quote-toggle" id="doodle-toggle" aria-label="Doodle pad" aria-controls="doodle-panel" aria-expanded="false"><span class="label-full">Doodle pad</span><span class="label-short" aria-hidden="true">Doodle</span></button>
+      <div class="small-tool" id="doodle-panel" hidden>
+      <div class="tool-heading">
+       <h3>
+        Doodle pad
+       </h3>
+       <span>
+        
+       </span>
+      </div>
+      <div class="doodle-surface">
+       <canvas aria-label="Drawing pad. Drag to draw. Arrow keys move the brush, Shift plus arrows draw, and Space adds a dot." height="96" id="drawing" role="img" tabindex="0" width="160">
+       </canvas>
+      </div>
+      <div class="tool-body">
+       <div class="drawing-toolbar">
+        <div aria-label="Ink color" class="drawing-inks" role="group">
+         <button aria-label="Lime ink" aria-pressed="true" class="ink-button" data-ink="c6f277" disabled="" style="--swatch:#c6f277">
+         </button>
+         <button aria-label="Blue ink" aria-pressed="false" class="ink-button" data-ink="88c9dc" disabled="" style="--swatch:#88c9dc">
+         </button>
+         <button aria-label="Purple ink" aria-pressed="false" class="ink-button" data-ink="c0adf7" disabled="" style="--swatch:#c0adf7">
+         </button>
+        </div>
+        <div class="drawing-actions">
+         <button class="tool-button" disabled="" id="undo-drawing">
+          Undo
+         </button>
+         <button class="tool-button" disabled="" id="clear-drawing">
+          Clear
+         </button>
+        </div>
+       </div>
+       <p class="sr-only" id="drawing-status" role="status">
+        Loading…
+       </p>
+      </div>
+      </div>     </aside>
+
+     <aside aria-label="Quote of the day" class="quote-section">
+      <button aria-controls="quote-panel" aria-expanded="false" class="quote-toggle" id="quote-toggle" aria-label="Quote of the day">
+       <span class="label-full">Quote of the day</span><span class="label-short" aria-hidden="true">Quote</span>
+      </button>
+      <div class="small-tool" hidden="" id="quote-panel">
+       <div class="quote-body">
+        <div class="quote-heading">
+         <span>
+          Quote of the day
+         </span>
+         <time id="quote-date">
+         </time>
+        </div>
+        <p id="quote-status" role="status">
+         Loading…
+        </p>
+        <figure hidden="" id="quote-content">
+         <blockquote id="quote-text">
+         </blockquote>
+         <figcaption id="quote-author">
+         </figcaption>
+        </figure>
+        <div class="quote-footer">
+         <a href="https://dumbapis.com/docs/daily-quote/" rel="noopener noreferrer" target="_blank">
+          Source ↗
+         </a>
+         <button class="tool-button" hidden="" id="quote-retry">
+          Retry
+         </button>
+        </div>
+       </div>
+      </div>
+     </aside>
+     <aside aria-label="CPS tester" class="cps-section" id="cps-tester">
+      <button aria-controls="cps-panel" aria-expanded="false" class="cps-toggle" id="cps-toggle" aria-label="CPS tester">
+       <span class="label-full">CPS tester</span><span class="label-short" aria-hidden="true">CPS</span>
+      </button>
+      <div class="small-tool cps-card" hidden="" id="cps-panel">
+       <div class="tool-body">
+        <div class="cps-heading">
+         <span>
+          5-second test
+         </span>
+         <button class="tool-button" hidden="" id="cps-reset">
+          Try again
+         </button>
+        </div>
+        <div class="cps-stats">
+         <div>
+          <output id="cps-score">
+           0.0
+          </output>
+          <span>
+           clicks / second
+          </span>
+         </div>
+         <div>
+          <output id="cps-clicks">
+           0
+          </output>
+          <span>
+           clicks
+          </span>
+         </div>
+         <div>
+          <output id="cps-time">
+           5.0
+          </output>
+          <span>
+           seconds left
+          </span>
+         </div>
+        </div>
+        <button class="cps-target" id="cps-target">
+         <strong>
+          Click to start
+         </strong>
+        </button>
+        <div aria-hidden="true" class="cps-track">
+         <div id="cps-progress">
+         </div>
+        </div>
+        <p class="sr-only" id="cps-status" role="status">
+         Your first click starts the timer.
+        </p>
+       </div>
+      </div>
+     </aside>
+    </div>
+   </div>
+   <div class="site-menu" hidden="" id="site-menu">
+    <div class="shell">
+     <nav aria-label="Site navigation" class="menu-bar">
+      <div class="menu-group">
+       <button aria-controls="projects-panel" aria-expanded="false" data-menu-panel="projects">
+        <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+         <path d="M3 7V5h6l2 2h10v12H3Z">
+         </path>
+        </svg>
+        projects
+        <span aria-hidden="true" class="menu-arrow">
+         ›
+        </span>
+       </button>
+       <div aria-label="projects" class="menu-panel" hidden="" id="projects-panel" role="region">
+        <div class="menu-children">
+         <a href="/projects/frame/">
+          Frame
+         </a>
+         <a href="/projects/astral/">Astral</a>
+         <a href="/projects/ark/">Ark</a>
+         <a href="/projects/">All projects</a>
+        </div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="tools-panel" aria-expanded="false" data-menu-panel="tools">
+        <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+         <path d="M14 4a6 6 0 0 0-5 8l-6 6 3 3 6-6a6 6 0 0 0 8-7l-4 4-4-4 4-4Z">
+         </path>
+        </svg>
+        tools
+        <span aria-hidden="true" class="menu-arrow">
+         ›
+        </span>
+       </button>
+       <div aria-label="tools" class="menu-panel" hidden="" id="tools-panel" role="region">
+        <div class="menu-children">
+         <a href="/terminal/">
+          Terminal
+         </a>
+         <a href="/editor/">
+          Zed
+         </a>
+        </div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="games-panel" aria-expanded="false" data-menu-panel="games">
+        <svg aria-hidden="true" class="menu-icon" viewBox="0 0 24 24"><path d="M7 7h10l4 11-3 2-4-4h-4l-4 4-3-2Z M7 10v4 M5 12h4 M16 11h.01 M18 13h.01"/></svg>
+        games <span aria-hidden="true" class="menu-arrow">›</span>
+       </button>
+       <div aria-label="games" class="menu-panel" hidden id="games-panel" role="region">
+        <div class="menu-children"><a href="/games/hop/">Hop</a></div>
+       </div>
+      </div>
+      <div class="menu-group">
+       <button aria-controls="uncategorized-panel" aria-expanded="false" data-menu-panel="uncategorized">
+        <svg aria-hidden="true" class="menu-icon" viewBox="0 0 24 24"><path d="M3 7V5h6l2 2h10v12H3Z"/></svg>
+        uncategorized <span aria-hidden="true" class="menu-arrow">›</span>
+       </button>
+       <div aria-label="uncategorized" class="menu-panel" hidden id="uncategorized-panel" role="region">
+        <div class="menu-children"><a href="/uncategorized/typing/">Typing tester</a></div>
+       </div>
+      </div>
+      <a href="https://github.com/Hexadecimall" rel="noopener noreferrer" target="_blank">
+       <svg aria-hidden="true" class="menu-icon" viewbox="0 0 24 24">
+        <circle cx="6" cy="5" r="2">
+        </circle>
+        <circle cx="6" cy="19" r="2">
+        </circle>
+        <circle cx="18" cy="6" r="2">
+        </circle>
+        <path d="M6 7v10M18 8v2c0 4-12 2-12 7">
+        </path>
+       </svg>
+       github
+       <span aria-hidden="true" class="menu-arrow">
+        ↗
+       </span>
+      </a>
+      <a class="menu-account" href="/account/">Account</a>
+      <a href="../settings/">
+       settings
+      </a>
+     </nav>
+    </div>
+   </div>
+  </header>
+  <main class="shell account-page" id="main" data-account="../assets/account.json">
+    <nav class="account-breadcrumb" aria-label="Breadcrumb"><a href="../">Home</a><span aria-hidden="true">/</span><span aria-current="page">Account</span></nav>
+    <div class="account-heading"><div><h1>Your account</h1><p>One account across the site.</p></div><a class="account-text-link" href="../projects/">Browse projects</a></div>
+    <p class="account-status" data-account-status role="status" aria-live="polite">Accounts are not available yet.</p>
+    <form class="account-card" data-account-auth>
+      <div class="account-tabs" role="group" aria-label="Account action"><button type="button" data-account-mode="login" aria-pressed="true" disabled>Sign in</button><button type="button" data-account-mode="register" aria-pressed="false" disabled>Create account</button></div>
+      <h2 data-auth-title>Sign in</h2>
+      <label for="auth-email">Email</label><input id="auth-email" data-auth-email type="email" autocomplete="email" maxlength="254" required disabled>
+      <label for="auth-password">Password</label><input id="auth-password" data-auth-password type="password" autocomplete="current-password" maxlength="256" aria-describedby="password-policy" required disabled>
+      <p id="password-policy" class="account-note">At least 15 characters.</p>
+      <div class="account-actions"><button class="account-button account-button-primary" data-auth-submit type="submit" disabled>Sign in</button><button class="account-link" data-account-mode="forgot" type="button" disabled>Forgot password?</button></div>
+    </form>
+    <form class="account-card" data-account-forgot hidden>
+      <h2>Reset your password</h2><label for="forgot-email">Email</label><input id="forgot-email" data-forgot-email type="email" autocomplete="email" maxlength="254" required disabled>
+      <div class="account-actions"><button class="account-button account-button-primary" type="submit" disabled>Send reset link</button><button class="account-link" type="button" data-account-mode="login" disabled>Back to sign in</button></div>
+    </form>
+    <form class="account-card" data-account-reset hidden>
+      <h2>Choose a new password</h2><label for="reset-password">New password</label><input id="reset-password" data-reset-password type="password" autocomplete="new-password" maxlength="256" aria-describedby="reset-policy" required disabled>
+      <p id="reset-policy" class="account-note">At least 15 characters.</p><div class="account-actions"><button class="account-button account-button-primary" type="submit" disabled>Change password</button><button class="account-link" type="button" data-account-mode="forgot" disabled>Request another link</button></div>
+    </form>
+    <section data-account-signed-in hidden aria-label="Your account">
+      <div class="account-card"><p class="account-email" data-account-email></p><p class="account-verified" data-account-verified></p><div class="account-actions"><button class="account-button" type="button" data-resend-verification disabled>Resend verification</button><button class="account-link" type="button" data-account-logout disabled>Sign out</button></div></div>
+      <section class="account-library" data-account-library hidden aria-labelledby="library-title">
+        <div class="account-library-heading"><h2 id="library-title">Your purchases</h2><button class="account-button" type="button" data-refresh-library disabled>Refresh library</button></div>
+        <div class="account-library-grid" data-account-purchases></div><h2>Frame downloads</h2><div class="account-library-grid" data-account-downloads></div>
+      </section>
+    </section>
+  </main>
+  <footer class="shell footer"><span>g. / 2026</span><div class="footer-links"><a href="../projects/">Projects</a><a href="../settings/">Site settings</a></div></footer>
+  <script src="../assets/js/account.mjs" type="module"></script>
+  <script src="../assets/js/navigation.js" type="module"></script>
+  <script src="../assets/js/tools.js" type="module"></script>
+  <script src="../assets/js/cps.js" type="module"></script>
+  <script src="../assets/js/quote.js" type="module"></script>
+  <script src="../assets/js/doodle.js" type="module"></script>
+
+</body>
+</html>

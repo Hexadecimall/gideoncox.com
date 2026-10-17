@@ -1,3 +1,4 @@
+import {resolveApiUrl} from './service-config.mjs';
 const storageKey = 'frame.checkout.v1';
 const proofPattern = /^[a-f0-9]{64}$/;
 const sessionPattern = /^cs_(?:live|test)_[A-Za-z0-9]{8,240}$/;
@@ -8,17 +9,8 @@ export class CheckoutError extends Error {
 }
 
 export function resolveCheckoutApi(reference, baseUrl) {
-  if (typeof reference !== 'string' || !reference || reference.length > 2048 || /[\\\s\u0000-\u001f\u007f]/.test(reference))
-    throw new CheckoutError('Checkout is not configured.');
-  if (!reference.startsWith('https://') && !/^\/(?!\/)/.test(reference))
-    throw new CheckoutError('Checkout requires HTTPS.');
-  const base = new URL(baseUrl);
-  const url = new URL(reference, base);
-  if (url.username || url.password || url.search || url.hash || /%|\.\./.test(url.pathname) ||
-      (url.protocol !== 'https:' && !(url.origin === base.origin && base.protocol === 'http:' &&
-        ['127.0.0.1', 'localhost', '[::1]'].includes(base.hostname))))
-    throw new CheckoutError('Checkout requires a valid HTTPS endpoint.');
-  return url.href.replace(/\/$/, '');
+  try { return resolveApiUrl(reference, baseUrl); }
+  catch (error) { throw new CheckoutError(error.message); }
 }
 
 async function request(api, path, body, fetcher, csrf) {
@@ -27,7 +19,7 @@ async function request(api, path, body, fetcher, csrf) {
   try {
     response = await fetcher(api + path, {
       method: 'POST', credentials: 'include', redirect: 'error', cache: 'no-store',
-      headers: {'Content-Type': 'application/json', 'X-Frame-CSRF': csrf}, body: JSON.stringify(body),
+      headers: {'Content-Type': 'application/json', 'X-Site-CSRF': csrf}, body: JSON.stringify(body),
       signal: AbortSignal.timeout(30000)
     });
   } catch { throw new CheckoutError('Checkout could not be reached. Try again.'); }
