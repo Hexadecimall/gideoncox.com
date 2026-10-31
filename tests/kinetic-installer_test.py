@@ -24,12 +24,19 @@ class InstallerTests(unittest.TestCase):
 
     @unittest.skipUnless(os.uname().sysname == "Darwin", "macOS installer")
     def testExistingHomebrewStyleLinkNeedsConsent(self):
+        self.assertExistingIdentifierNeedsConsent("top.frameworksdev.kinetic")
+
+    @unittest.skipUnless(os.uname().sysname == "Darwin", "macOS installer")
+    def testCurrentIdentifierNeedsConsent(self):
+        self.assertExistingIdentifierNeedsConsent("org.kinetic.app")
+
+    def assertExistingIdentifierNeedsConsent(self, identifier):
         with tempfile.TemporaryDirectory() as directory:
             root = Path(directory)
             app = root / "Cellar/kinetic/0.1.0/Kinetic.app"
             (app / "Contents").mkdir(parents=True)
             (app / "Contents/Info.plist").write_bytes(plistlib.dumps({
-                "CFBundleIdentifier": "top.frameworksdev.kinetic",
+                "CFBundleIdentifier": identifier,
             }))
             target = root / "Applications"
             target.mkdir()
