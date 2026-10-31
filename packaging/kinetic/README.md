@@ -1,6 +1,6 @@
 # Kinetic source installer
 
-`downloads/kinetic-install.sh` builds the pinned public 0.35.4 source release on
+`downloads/kinetic-install.sh` builds the pinned public 0.36.0 source release on
 Apple Silicon macOS 15+. CMake 3.28+, Apple Command Line Tools, Cargo, and Python 3
 must already be installed. Vendored Cargo dependencies are built offline. LLVM
 and language servers are not downloaded.

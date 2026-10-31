@@ -3,9 +3,9 @@
 set -eu
 
 main() {
-    revision=0a2e4d9b13c10ca02aa9130d48c663d4399b511b
-    checksum=c06eafa6d79440298a512ab4effc22b2626fb3c046fd867a09a44e9991270b94
-    version=0.35.4
+    revision=06416ba9c9df026892ae75898d3613fe09899626
+    checksum=29cb6ec5b225267ed0c31293b77323c43647130c08d2a620ba17ca207dd885fe
+    version=0.36.0
     appDir="$HOME/Applications"
     binDir="$HOME/.local/bin"
     workDir=${TMPDIR:-/tmp}
