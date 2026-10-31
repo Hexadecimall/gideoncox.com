@@ -3,9 +3,9 @@
 set -eu
 
 main() {
-    revision=06416ba9c9df026892ae75898d3613fe09899626
-    checksum=29cb6ec5b225267ed0c31293b77323c43647130c08d2a620ba17ca207dd885fe
-    version=0.36.0
+    revision=5d73982cd94d3b1096f156da3caad961a1bab0fa
+    checksum=7929f69b21bddca5e312630b28c20a1f3bb4efcc69bdb3afc0d31d23b8abd5c4
+    version=0.36.1
     appDir="$HOME/Applications"
     binDir="$HOME/.local/bin"
     workDir=${TMPDIR:-/tmp}
@@ -61,7 +61,10 @@ main() {
     cliIdentity=$(stat -f '%d:%i' "$targetCli" 2>/dev/null || true)
     if [ -e "$targetApp" ] || [ -L "$targetApp" ]; then
         bundleId=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$targetApp/Contents/Info.plist") || fail 'existing app cannot be identified'
-        [ "$bundleId" = top.frameworksdev.kinetic ] || fail 'existing target is not Kinetic'
+        case "$bundleId" in
+            org.kinetic.app | top.frameworksdev.kinetic) ;;
+            *) fail 'existing target is not Kinetic' ;;
+        esac
         if [ -L "$targetApp" ]; then
             printf 'Existing app link: %s -> %s\n' "$targetApp" "$(readlink "$targetApp")"
             printf 'Only this link will be replaced. Its package-manager installation will remain.\n'
