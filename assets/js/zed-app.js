@@ -5,10 +5,11 @@ import { BrowserPython } from './zed/browser-python.js?v=cf8d2baff46f';
 
 import { BrowserClangd } from './zed/browser-clangd.js?v=rust-lsp-1';
 import { BrowserRust } from './zed/browser-rust.js?v=rust-lsp-1';
+import { installLocalAssistant } from './zed/local-assistant.js?v=1';
 import { prepareEditorIsolation } from './zed/isolation.js';
 
 const loading = document.querySelector('#loading');
-const build = '8cceee5a8051';
+const build = '9a3ccfca4c10';
 
 async function downloadWasm() {
   const response = await fetch(`/assets/vendor/zed/pkg/zed_browser_probe_bg.wasm?v=${build}`);
@@ -39,6 +40,7 @@ async function start() {
   ]);
   const host = installNativeHost(installNativeTerminal(), new BrowserPython(zed), new BrowserClangd(zed), new BrowserRust(zed));
   installFileDialogs(zed, host);
+  installLocalAssistant(zed);
   await zed.default({ module_or_path: wasm });
   const deadline = performance.now() + 30000;
   while (!zed.workspace_ready()) {
