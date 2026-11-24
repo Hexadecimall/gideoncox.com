@@ -1,0 +1,235 @@
+import { BROWSER_ROOT } from './paths.js';
+import { joinBytes, LspFrames, lspFrame } from './lsp-stream.js';
+
+const VENDOR = new URL('../../vendor/pyright/', import.meta.url);
+const VERSION = '1.1.299';
+const COMMAND = 'zed-browser-pyright';
+const MAX_FILE = 2 * 1024 * 1024;
+const MAX_PROJECT = 16 * 1024 * 1024;
+const MAX_OUTPUT = 24 * 1024 * 1024;
+const MAX_SESSIONS = 4;
+const textDecoder = new TextDecoder();
+
+let stdlib;
+function loadTypeshed() {
+  if (!stdlib) {
+    stdlib = fetch(new URL(`typeshed-stdlib.json?v=${VERSION}`, VENDOR)).then(response => {
+      if (!response.ok) throw new Error('Could not load the Python standard library stubs.');
+      return response.json();
+    }).catch(error => { stdlib = undefined; throw error; });
+  }
+  return stdlib;
+}
+
+export function isBrowserProject(path) {
+  return typeof path === 'string' && (path === BROWSER_ROOT || path.startsWith(BROWSER_ROOT + '/'))
+    && !path.split('/').some(part => part === '..' || part === '.');
+}
+
+function isPythonInput(path) {
+  return isBrowserProject(path) && /(?:\.py[wi]?|\/pyrightconfig\.json|\/pyproject\.toml)$/.test(path)
+    && !path.split('/').some(part => part === '.git' || part === '.venv' || part === '__pycache__');
+}
+
+function filePath(uri) {
+  try {
+    const url = new URL(uri);
+    if (url.protocol === 'file:' && !url.host) {
+      const path = decodeURIComponent(url.pathname);
+      return isPythonInput(path) ? path : null;
+    }
+  } catch { /* Ignore non-project URIs. */ }
+  return null;
+}
+
+async function projectFiles(zed) {
+  const entries = JSON.parse(await zed.list_browser_paths());
+  const files = Object.create(null);
+  let total = 0;
+  for (const { path, isDirectory } of entries) {
+    if (isDirectory || !isPythonInput(path)) continue;
+    let bytes;
+    try { bytes = await zed.read_browser_file(path); }
+    catch { continue; } // A file may have been removed after listing the root.
+    if (bytes.byteLength > MAX_FILE || total + bytes.byteLength > MAX_PROJECT) continue;
+    files[path] = textDecoder.decode(bytes);
+    total += bytes.byteLength;
+  }
+  return files;
+}
+
+class PyrightProcess {
+  constructor(zed, worker, typeshed) {
+    this.zed = zed;
+    this.worker = worker;
+    this.typeshed = typeshed;
+    this.input = new LspFrames();
+    this.output = [];
+    this.outputLength = 0;
+    this.error = new Uint8Array();
+    this.exitCode = null;
+    this.reader = null;
+    worker.addEventListener('message', ({ data }) => {
+      if (this.exitCode !== null || data?.jsonrpc !== '2.0') return;
+      try {
+        if (data.method === 'workspace/configuration') {
+          // Pyright sends an empty scope URI for the default workspace.
+          // Zed requires an absolute URI on configuration requests.
+          for (const item of data.params.items) {
+            try { new URL(item.scopeUri); }
+            catch { item.scopeUri = this.rootUri; }
+          }
+        }
+        const frame = lspFrame(data);
+        if (frame.byteLength + this.outputLength > MAX_OUTPUT) {
+          throw new Error('Python language server output exceeded its buffer limit.');
+        }
+        this.output.push(frame);
+        this.outputLength += frame.byteLength;
+        this.reader?.();
+      } catch (error) { this.close(1, error.message); }
+    });
+    worker.addEventListener('error', event => {
+      event.preventDefault();
+      this.close(1, event.message || 'Python language server failed to start.');
+    });
+    worker.addEventListener('messageerror', () => this.close(1, 'Python worker sent an invalid message.'));
+    worker.postMessage({ type: 'browser/boot', mode: 'foreground' });
+  }
+
+  read() {
+    if (!this.outputLength && this.exitCode === null) {
+      return new Promise(resolve => {
+        this.reader = () => { this.reader = null; resolve(this.takeOutput()); };
+      });
+    }
+    return Promise.resolve(this.takeOutput());
+  }
+
+  takeOutput() {
+    const stdout = joinBytes(this.output);
+    const stderr = this.error;
+    this.output = [];
+    this.outputLength = 0;
+    this.error = new Uint8Array();
+    return { stdout, stderr, ended: this.exitCode !== null, exitCode: this.exitCode, signal: null };
+  }
+
+  send(message) {
+    if (this.exitCode === null) this.worker.postMessage(message);
+  }
+
+  updateFile(uri, text) {
+    this.send({ jsonrpc: '2.0', method: 'pyright/createFile', params: { uri, text } });
+  }
+
+  async updateSavedFile(uri, text) {
+    const path = filePath(uri);
+    if (!path) return;
+    if (typeof text !== 'string') {
+      try {
+        const bytes = await this.zed.read_browser_file(path);
+        if (bytes.byteLength > MAX_FILE) return;
+        text = textDecoder.decode(bytes);
+      } catch { return; }
+    }
+    this.updateFile(uri, text);
+  }
+
+  async write(bytes) {
+    if (this.exitCode !== null) throw new Error('Python language server stopped.');
+    for (const message of this.input.push(bytes)) {
+      const { method, params } = message;
+      if (method === 'initialize') {
+        const [stubs, files] = await Promise.all([this.typeshed(), projectFiles(this.zed)]);
+        this.rootUri = params.rootUri;
+        // Each worker owns one virtual project. The pinned worker waits
+        // indefinitely for named workspace folders to finish initialization.
+        message.params = {
+          ...params,
+          workspaceFolders: null,
+          capabilities: {
+            ...params?.capabilities,
+            workspace: { ...params?.capabilities?.workspace, workspaceFolders: false },
+          },
+          initializationOptions: { ...params?.initializationOptions, files: { ...stubs, ...files } },
+        };
+      } else if (method === 'workspace/didChangeWorkspaceFolders') {
+        continue;
+      } else if (method === 'textDocument/didOpen' && filePath(params?.textDocument?.uri)) {
+        this.updateFile(params.textDocument.uri, params.textDocument.text);
+      } else if (method === 'textDocument/didSave') {
+        await this.updateSavedFile(params?.textDocument?.uri, params?.text);
+      } else if (method === 'workspace/didChangeWatchedFiles') {
+        for (const { uri, type } of params?.changes ?? []) {
+          if (!filePath(uri)) continue;
+          if (type === 3) this.send({ jsonrpc: '2.0', method: 'pyright/deleteFile', params: { uri } });
+          else await this.updateSavedFile(uri);
+        }
+      } else if (method === 'exit') {
+        this.close();
+        return;
+      }
+      this.send(message);
+    }
+  }
+
+  close(code = 0, message = '') {
+    if (this.exitCode !== null) return;
+    this.exitCode = code;
+    this.error = new TextEncoder().encode(message);
+    this.worker.terminate();
+    this.reader?.();
+  }
+}
+
+export class BrowserPython {
+  constructor(zed, makeWorker = () => new Worker(new URL(`pyright.worker.js?v=${VERSION}`, VENDOR)), typeshed = loadTypeshed) {
+    this.zed = zed;
+    this.makeWorker = makeWorker;
+    this.typeshed = typeshed;
+    this.running = new Map();
+  }
+
+  owns(id) { return typeof id === 'string' && id.startsWith('browser-python:'); }
+  accepts(options) { return options.command === COMMAND && isBrowserProject(options.cwd); }
+
+  async processOpen(options) {
+    if (!this.accepts(options)) throw new Error('The Python worker opens browser files only.');
+    if (this.running.size >= MAX_SESSIONS) throw new Error('Too many Python projects are open.');
+    const id = 'browser-python:' + crypto.randomUUID();
+    this.running.set(id, new PyrightProcess(this.zed, this.makeWorker(), this.typeshed));
+    return { id, pid: 0 };
+  }
+
+  async processRead(id) {
+    const process = this.get(id);
+    const result = await process.read();
+    if (result.ended) this.running.delete(id);
+    return result;
+  }
+
+  get(id) {
+    const process = this.running.get(id);
+    if (!process) throw new Error('Python language server stopped.');
+    return process;
+  }
+
+  async processWrite(id, bytes) {
+    const process = this.get(id);
+    try { await process.write(bytes); }
+    catch (error) { process.close(1, error.message); throw error; }
+  }
+
+  async processEndInput(id) { this.running.get(id)?.close(); }
+  async processKill(id) { this.running.get(id)?.close(1); }
+  async processClose(id) {
+    this.running.get(id)?.close();
+    this.running.delete(id);
+  }
+
+  close() {
+    for (const process of this.running.values()) process.close();
+    this.running.clear();
+  }
+}

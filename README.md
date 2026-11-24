@@ -194,6 +194,12 @@ The browser build runs Zed's upstream Rust workspace and editor through GPUI Web
 
 Zed's terminal opens a real Ark PTY through the optional local connector. To edit a local project, start the connector from the project folder and use **Open → Connect local folder…** in Zed. Add `--allow-processes` to run installed C/C++ and Rust language servers and project tasks.
 
+Python completion, hover, signature help, navigation, and diagnostics run in a
+local Pyright browser worker. Import a folder or save a `.py` file in the browser
+workspace. The worker uses the browser's project files and bundled standard
+library stubs. It requires neither a host connector nor a local Python install.
+Third-party libraries need source files or stubs in the browser project.
+
 ```sh
 python3 path/to/ark_connector.py --project .
 python3 path/to/ark_connector.py --project . --allow-processes

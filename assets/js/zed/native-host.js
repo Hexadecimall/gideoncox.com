@@ -1,3 +1,5 @@
+import { isBrowserProject } from './browser-python.js?v=cf8d2baff46f';
+
 function encode(bytes) {
   let text = '';
   for (let offset = 0; offset < bytes.length; offset += 32768) {
@@ -154,22 +156,32 @@ export class NativeHostBridge {
   }
 }
 
-export function installNativeHost(transport) {
+export function installNativeHost(transport, python) {
   const host = new NativeHostBridge(transport);
+  const processOwner = id => python?.owns(id) ? python : host;
   globalThis.zedHost = {
-    connected: () => host.active,
+    // WASM uses this to check that a process service is available. Native
+    // filesystem access still requires a paired, explicitly mounted root.
+    connected: () => host.active || Boolean(python),
     root: () => host.projectRoot,
     nativeInfo: () => host.active ? host.nativeInfo : null,
     connect: () => host.connect(),
     disconnect: () => host.disconnect(),
     fs: (operation, args) => host.fs(operation, args),
-    processOpen: options => host.processOpen(options),
-    processRead: id => host.processRead(id),
-    processWrite: (id, bytes) => host.processWrite(id, bytes),
-    processEndInput: id => host.processEndInput(id),
-    processKill: id => host.processKill(id),
-    processClose: id => host.processClose(id),
+    processOpen: options => {
+      if (python?.accepts(options)) return python.processOpen(options);
+      if (isBrowserProject(options.cwd)) throw new Error('This command is not available in browser projects.');
+      return host.processOpen(options);
+    },
+    processRead: id => processOwner(id).processRead(id),
+    processWrite: (id, bytes) => processOwner(id).processWrite(id, bytes),
+    processEndInput: id => processOwner(id).processEndInput(id),
+    processKill: id => processOwner(id).processKill(id),
+    processClose: id => processOwner(id).processClose(id),
   };
-  window.addEventListener('pagehide', () => host.disconnect(true));
+  window.addEventListener('pagehide', () => {
+    python?.close();
+    host.disconnect(true);
+  });
   return host;
 }

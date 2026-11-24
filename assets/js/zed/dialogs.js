@@ -1,5 +1,5 @@
 import { BROWSER_ROOT, browserPath, importPaths } from './paths.js';
-import { localFileDialog } from './host-dialogs.js?v=f7007990361a';
+import { localFileDialog } from './host-dialogs.js?v=cf8d2baff46f';
 
 function element(tag, text, className) {
   const node = document.createElement(tag);

@@ -33,6 +33,10 @@ local connector is connector/ark_connector.py in the website repository.
 Terminal sessions require user pairing and are not restored automatically.
 An opt-in zedHost bridge mounts a selected local project, supplies binary process
 pipes, and runs installed clangd/rust-analyzer through Zed's upstream LSP client.
+The site provides an in-browser Pyright process for Python worktrees stored in
+the browser. It uses a bundled worker and standard library stubs and does not
+depend on a native connector or Python runtime. See assets/vendor/pyright for
+the worker provenance and licenses.
 The upstream tasks UI uses native task PTYs. The connector must explicitly enable
 process access; it never downloads tools. Browser-only documents still persist
 through the browser Fs. SQLite workspace metadata lives only for the session.

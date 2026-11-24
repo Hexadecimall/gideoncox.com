@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { NativeTerminalBridge } from '../assets/js/zed/native-terminal.js';
-import { NativeHostBridge } from '../assets/js/zed/native-host.js';
+import { installNativeHost, NativeHostBridge } from '../assets/js/zed/native-host.js';
 
 function fixture() {
   const calls = [];
@@ -17,6 +17,30 @@ function fixture() {
   });
   return { host: new NativeHostBridge(transport), transport, calls };
 }
+
+test('browser projects can start Python without routing their commands to a paired computer', async context => {
+  const { transport, calls } = fixture();
+  const python = {
+    accepts: options => options.command === 'zed-browser-pyright' && options.cwd === '/home/web',
+    owns: id => id === 'browser-python:test',
+    processOpen: async () => ({ id: 'browser-python:test', pid: 0 }),
+    processRead: async () => 'worker output',
+  };
+  globalThis.window = { addEventListener() {} };
+  context.after(() => { delete globalThis.window; delete globalThis.zedHost; });
+  const host = installNativeHost(transport, python);
+  const service = globalThis.zedHost;
+  const { id } = await service.processOpen({ command: 'zed-browser-pyright', cwd: '/home/web' });
+  assert.equal(await service.processRead(id), 'worker output');
+  assert.deepEqual(calls, []);
+
+  await host.connect();
+  const requests = calls.length;
+  assert.throws(() => service.processOpen({ command: 'sh', cwd: '/home/web' }), /not available/);
+  assert.equal(calls.length, requests);
+  const native = await service.processOpen({ command: 'clangd', cwd: '/project' });
+  assert.equal(native.id, 'process-a');
+});
 
 test('local project requires pairing and retains mount identity after disconnect', async () => {
   const { host, transport, calls } = fixture();

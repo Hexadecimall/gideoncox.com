@@ -1,36 +1,38 @@
-import { installFileDialogs } from './zed/dialogs.js?v=f7007990361a';
-import { installNativeTerminal } from './zed/native-terminal.js?v=f7007990361a';
-import { installNativeHost } from './zed/native-host.js?v=f7007990361a';
+import { installFileDialogs } from './zed/dialogs.js?v=cf8d2baff46f';
+import { installNativeTerminal } from './zed/native-terminal.js?v=cf8d2baff46f';
+import { installNativeHost } from './zed/native-host.js?v=cf8d2baff46f';
+import { BrowserPython } from './zed/browser-python.js?v=cf8d2baff46f';
 
 const loading = document.querySelector('#loading');
-const build = 'f7007990361a';
+const build = 'cf8d2baff46f';
 
 async function downloadWasm() {
   const response = await fetch(`/assets/vendor/zed/pkg/zed_browser_probe_bg.wasm?v=${build}`);
   if (!response.ok) throw new Error(`Download failed (${response.status})`);
-  if (!response.body) return response.arrayBuffer();
-  const reader = response.body.getReader();
-  const chunks = [];
-  let length = 0;
-  for (;;) {
-    const { done, value } = await reader.read();
-    if (done) break;
-    chunks.push(value);
-    length += value.byteLength;
-    loading.textContent = `Loading Zed · ${(length / 1048576).toFixed(1)} MB`;
+  if (!response.body || typeof TransformStream !== 'function' || !WebAssembly.compileStreaming) {
+    return response.arrayBuffer();
   }
-  const bytes = new Uint8Array(length);
-  let offset = 0;
-  for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength; }
+  // Compile while bytes arrive and avoid a second copy of the full editor.
+  let length = 0;
+  const stream = response.body.pipeThrough(new TransformStream({
+    transform(chunk, controller) {
+      length += chunk.byteLength;
+      loading.textContent = `Loading Zed · ${(length / 1048576).toFixed(1)} MB`;
+      controller.enqueue(chunk);
+    },
+  }));
+  const module = await WebAssembly.compileStreaming(
+    new Response(stream, { headers: { 'Content-Type': 'application/wasm' } }),
+  );
   loading.textContent = 'Starting Zed…';
-  return bytes;
+  return module;
 }
 async function start() {
   const [zed, wasm] = await Promise.all([
     import(`/assets/vendor/zed/pkg/zed_browser_probe.js?v=${build}`),
     downloadWasm(),
   ]);
-  const host = installNativeHost(installNativeTerminal());
+  const host = installNativeHost(installNativeTerminal(), new BrowserPython(zed));
   installFileDialogs(zed, host);
   await zed.default({ module_or_path: wasm });
   const deadline = performance.now() + 30000;
