@@ -203,11 +203,13 @@ test('Frame is discoverable from every project menu, the home destinations and s
   assert.ok(pages.length >= 7, 'Expected the existing shared site pages');
   for (const file of pages) {
     const html = await readFile(file, 'utf8');
-    if (path.relative(root, file).split(path.sep).join('/') === 'editor/app/index.html') {
+    const page = path.relative(root, file).split(path.sep).join('/');
+    if (page === 'editor/index.html' || page === 'editor/app/index.html') {
       assert.doesNotMatch(html, /id="site-header"/, 'The standalone editor must remain fullscreen');
+      if (page === 'editor/index.html') assert.match(html, /<iframe\b[^>]*src="\/editor\/app\//);
       continue;
     }
-    if (path.relative(root, file).split(path.sep).join('/') === 'projects/frame/account/index.html') {
+    if (page === 'projects/frame/account/index.html') {
       assert.match(html, /account-redirect\.mjs/);
       assert.match(html, /href="\/account\/"/);
       continue;

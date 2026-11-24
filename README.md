@@ -190,7 +190,16 @@ Bubble wrap supports clicking, dragging, touch, and keyboard activation. Sound i
 
 ## Zed browser port
 
-The editor uses the real `editor::Editor` and GPUI Web from `zed-industries/zed`, based on revision `1a28cff4b409169bac058bca40dfbfeb7621d19b`. Browser adapters replace native filesystem access, scheduling, parser cleanup, and dependency selection. The page provides browser-local files, import/export, keyboard editing, and font-size adjustment. Native terminal processes, language-server processes, Git, and collaboration are unavailable. SQLite runs genuine in-memory databases for session metadata; documents are persisted separately by the browser filesystem. Clearing site data removes saved documents.
+The browser build runs Zed's upstream Rust workspace and editor through GPUI Web. It includes panes, tabs, project and outline panels, the command palette, Vim mode, and all 22 bundled syntax configurations. Files saved in the browser persist separately from session metadata. Clearing site data removes browser files.
+
+Zed's terminal opens a real Ark PTY through the optional local connector. To edit a local project, start the connector from the project folder and use **Open → Connect local folder…** in Zed. Add `--allow-processes` to run installed C/C++ and Rust language servers and project tasks.
+
+```sh
+python3 path/to/ark_connector.py --project .
+python3 path/to/ark_connector.py --project . --allow-processes
+```
+
+Pairing lasts for the current page session. Native programs run as the connector user. The [browser port status](packaging/zed/PARITY.md) tracks verified features and gaps, including Git, debugging, extensions, and collaboration.
 
 `assets/vendor/zed/source.tar.gz` contains the corresponding modified sources, dependency license files, and build instructions. Building requires Rust 1.98.1, Zig 0.17.0, and wasm-bindgen CLI 0.2.120. The target archive tool must be `zig ar`; the build script configures it explicitly. The browser runs on a single-threaded event loop and does not require cross-origin isolation headers.
 

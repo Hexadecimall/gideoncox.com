@@ -12,8 +12,8 @@ parser.add_argument('workspace', type=Path)
 parser.add_argument('output', type=Path)
 args = parser.parse_args()
 root = args.workspace.resolve()
-files = [root / name for name in ['Cargo.toml', 'Cargo.lock', 'build.sh', 'check.sh', 'sqlite-cc.py', 'wasm-ar.sh', 'index.html', '.cargo/config.toml']]
-for name in ['src', 'source', 'vendor', 'tests']:
+files = [root / name for name in ['Cargo.toml', 'Cargo.lock', 'build.sh', 'check.sh', 'sqlite-cc.py', 'wasm-ar.sh', 'workspace.html', '.cargo/config.toml']]
+for name in ['src', 'source', 'vendor', 'tests', 'wasm-include']:
     files.extend(path for path in (root / name).rglob('*') if path.is_file() and not path.is_symlink())
 files = sorted(set(files))
 readme = '''# Zed browser port source
@@ -21,11 +21,27 @@ readme = '''# Zed browser port source
 Based on zed-industries/zed commit 1a28cff4b409169bac058bca40dfbfeb7621d19b.
 https://github.com/zed-industries/zed/tree/1a28cff4b409169bac058bca40dfbfeb7621d19b
 
-The entry point constructs Zed's actual Editor with GPUI Web. The browser port
-adapts filesystem IO, scheduling, settings, parsing, and dependency selection.
-Native terminal processes, language-server processes, Git, and collaboration
-transport are not available in this browser build. Documents persist through the
-browser Fs; SQLite workspace metadata currently lives only for the session.
+The entry point constructs Zed's actual Workspace and MultiWorkspace with GPUI
+Web, including the upstream title bar, project panel, panes, tabs and editor.
+The browser port adapts filesystem IO, scheduling, settings, parsing, dialogs
+and dependency selection. The embedding page provides zedBrowserDialogs; its
+implementation is in assets/js/zed/ in the website repository.
+Zed's actual TerminalPanel and terminal_view use Alacritty's parser/grid with
+an optional authenticated local PTY bridge, zedNativeTerminal. Its JavaScript
+transport and pairing dialog are in assets/js/zed/native-terminal.js, and the
+local connector is connector/ark_connector.py in the website repository.
+Terminal sessions require user pairing and are not restored automatically.
+An opt-in zedHost bridge mounts a selected local project, supplies binary process
+pipes, and runs installed clangd/rust-analyzer through Zed's upstream LSP client.
+The upstream tasks UI uses native task PTYs. The connector must explicitly enable
+process access; it never downloads tools. Browser-only documents still persist
+through the browser Fs. SQLite workspace metadata lives only for the session.
+Git UI, debugger integration, extension hosting, collaboration and account
+services remain unavailable. See the website's packaging/zed/PARITY.md for scope.
+The browser build also includes upstream Vim mode, keybindings and mode status,
+plus all 22 built-in syntax configurations and their Tree-sitter queries.
+Vim is off by default and follows Zed's vim_mode setting. Bundled syntax does
+not imply that each language has an available language server.
 
 Requirements: Rust 1.98.1 with wasm32-unknown-unknown, Zig, Python 3, and a C/C++
 host toolchain for build dependencies. From this directory:
@@ -34,7 +50,9 @@ host toolchain for build dependencies. From this directory:
     cargo +1.98.1 install wasm-bindgen-cli --version 0.2.120 --locked --root tools
     sh build.sh
 
-Output is written to pkg/. Browser builds use a single-threaded event loop.
+Output is written to pkg/. The project-local Cargo configuration pins release
+optimization to level 3, fat LTO and one codegen unit. Browser builds use a
+single-threaded event loop.
 See source/LICENSE-GPL and source/LICENSE-APACHE. Each dependency retains its
 original license. Modified browser adapter code is distributed under the same
 license as its containing crate. No upstream sponsorship is implied.
