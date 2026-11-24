@@ -211,11 +211,6 @@ sources for WASI and understands standalone files, local Cargo packages and
 path dependencies, and explicit `rust-project.json` graphs. See the
 [Rust runner and project limits](editor/runtime/rust/README.md).
 
-The **Local Assistant** dock runs WebLLM on the device. It requires WebGPU,
-downloads a 208 MB model when first used, and can attach selected editor text
-to a question.
-[WebLLM runtime and model sources](editor/runtime/webllm/README.md).
-
 ```sh
 python3 path/to/ark_connector.py --project .
 python3 path/to/ark_connector.py --project . --allow-processes
