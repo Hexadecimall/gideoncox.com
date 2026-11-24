@@ -1,10 +1,13 @@
 import { installFileDialogs } from './zed/dialogs.js?v=cf8d2baff46f';
 import { installNativeTerminal } from './zed/native-terminal.js?v=cf8d2baff46f';
-import { installNativeHost } from './zed/native-host.js?v=cf8d2baff46f';
+import { installNativeHost } from './zed/native-host.js?v=8cceee5a8051';
 import { BrowserPython } from './zed/browser-python.js?v=cf8d2baff46f';
 
+import { BrowserClangd } from './zed/browser-clangd.js?v=8cceee5a8051';
+import { prepareEditorIsolation } from './zed/isolation.js';
+
 const loading = document.querySelector('#loading');
-const build = 'cf8d2baff46f';
+const build = '8cceee5a8051';
 
 async function downloadWasm() {
   const response = await fetch(`/assets/vendor/zed/pkg/zed_browser_probe_bg.wasm?v=${build}`);
@@ -28,11 +31,12 @@ async function downloadWasm() {
   return module;
 }
 async function start() {
+  if (await prepareEditorIsolation().catch(() => false)) return;
   const [zed, wasm] = await Promise.all([
     import(`/assets/vendor/zed/pkg/zed_browser_probe.js?v=${build}`),
     downloadWasm(),
   ]);
-  const host = installNativeHost(installNativeTerminal(), new BrowserPython(zed));
+  const host = installNativeHost(installNativeTerminal(), new BrowserPython(zed), new BrowserClangd(zed));
   installFileDialogs(zed, host);
   await zed.default({ module_or_path: wasm });
   const deadline = performance.now() + 30000;

@@ -200,6 +200,12 @@ workspace. The worker uses the browser's project files and bundled standard
 library stubs. It requires neither a host connector nor a local Python install.
 Third-party libraries need source files or stubs in the browser project.
 
+C/C++ browser projects use clangd WebAssembly. Opening a C or C++ file loads
+the server on demand and uses bundled WASI headers when no compile database is
+present. The editor route supplies cross-origin isolation for the threaded
+servers through a scoped service worker on static hosting. See the
+[clangd build and limits](editor/runtime/clangd/README.md).
+
 ```sh
 python3 path/to/ark_connector.py --project .
 python3 path/to/ark_connector.py --project . --allow-processes
@@ -207,7 +213,7 @@ python3 path/to/ark_connector.py --project . --allow-processes
 
 Pairing lasts for the current page session. Native programs run as the connector user. The [browser port status](packaging/zed/PARITY.md) tracks verified features and gaps, including Git, debugging, extensions, and collaboration.
 
-`assets/vendor/zed/source.tar.gz` contains the corresponding modified sources, dependency license files, and build instructions. Building requires Rust 1.98.1, Zig 0.17.0, and wasm-bindgen CLI 0.2.120. The target archive tool must be `zig ar`; the build script configures it explicitly. The browser runs on a single-threaded event loop and does not require cross-origin isolation headers.
+`assets/vendor/zed/source.tar.gz` contains the corresponding modified sources, dependency license files, and build instructions. Building requires Rust 1.98.1, Zig 0.17.0, and wasm-bindgen CLI 0.2.120. The target archive tool must be `zig ar`; the build script configures it explicitly. The core editor runs on a single-threaded event loop.
 
 Package a rebuilt source tree and check the vendored distribution with:
 

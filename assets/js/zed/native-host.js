@@ -156,20 +156,21 @@ export class NativeHostBridge {
   }
 }
 
-export function installNativeHost(transport, python) {
+export function installNativeHost(transport, ...browserServices) {
   const host = new NativeHostBridge(transport);
-  const processOwner = id => python?.owns(id) ? python : host;
+  const processOwner = id => browserServices.find(service => service.owns(id)) ?? host;
   globalThis.zedHost = {
     // WASM uses this to check that a process service is available. Native
     // filesystem access still requires a paired, explicitly mounted root.
-    connected: () => host.active || Boolean(python),
+    connected: () => host.active || browserServices.length > 0,
     root: () => host.projectRoot,
     nativeInfo: () => host.active ? host.nativeInfo : null,
     connect: () => host.connect(),
     disconnect: () => host.disconnect(),
     fs: (operation, args) => host.fs(operation, args),
     processOpen: options => {
-      if (python?.accepts(options)) return python.processOpen(options);
+      const service = browserServices.find(service => service.accepts(options));
+      if (service) return service.processOpen(options);
       if (isBrowserProject(options.cwd)) throw new Error('This command is not available in browser projects.');
       return host.processOpen(options);
     },
@@ -180,7 +181,7 @@ export function installNativeHost(transport, python) {
     processClose: id => processOwner(id).processClose(id),
   };
   window.addEventListener('pagehide', () => {
-    python?.close();
+    for (const service of browserServices) service.close();
     host.disconnect(true);
   });
   return host;
