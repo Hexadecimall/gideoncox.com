@@ -16,6 +16,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Language servers | Installed clangd and rust-analyzer through upstream LSP; binary pipes, stdin EOF and exit status | Real clangd diagnostics through connector; integrated browser check pending |
 | Python | Pyright in a browser worker with project source snapshots and standard library stubs | Browser completion, hover, go-to-definition and diagnostics that clear after an edit. Worker tests include cross-file definitions, signature help and rename. |
 | C/C++ | clangd 21 in a WebAssembly worker, with browser project files and bundled WASI headers | Chromium language-server and browser workspace checks |
+| Rust | rust-analyzer in a WASI worker with a bundled standard library, Rust project graphs, and local Cargo path dependencies | Chromium language-server and browser workspace checks |
 | Tasks | Upstream task picker and task terminal; native command, arguments, environment, working directory and completion status | Real task PTY exit/output tests; integrated browser check pending |
 
 ## Remaining work
@@ -23,7 +24,8 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 - Git repository integration and Git UI. Compiling the Git service crate does not enable repository operations.
 - Native debugger sessions and debugger UI.
 - Extension installation, execution, grammars, themes and extension-provided language servers.
-- Browser LSP runners for Rust and other languages beyond C/C++ and Python.
+- Browser LSP runners for languages beyond C/C++, Python and Rust.
+- Rust Cargo execution, registry packages, build scripts, procedural macros, and rustfmt in the browser.
 - Collaboration, authentication, hosted services and AI integrations.
 - Durable workspace/session metadata; SQLite databases currently live in memory.
 - Desktop platform integrations, multiple OS windows and native file dialogs.
@@ -50,7 +52,7 @@ start a terminal. A connection is not restored automatically after a page reload
 
 ```sh
 node --test tests/zed-native-host.test.mjs tests/zed-native-terminal.test.mjs
-node --test tests/zed-browser-python.test.mjs
+node --test tests/zed-browser-python.test.mjs tests/zed-browser-clangd.test.mjs tests/zed-browser-rust.test.mjs
 python3 tests/zed-host-connector_test.py
 python3 tests/connector_test.py
 python3 packaging/zed/audit.py assets/vendor/zed

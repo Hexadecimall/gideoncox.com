@@ -206,6 +206,11 @@ present. The editor route supplies cross-origin isolation for the threaded
 servers through a scoped service worker on static hosting. See the
 [clangd build and limits](editor/runtime/clangd/README.md).
 
+Browser Rust files use rust-analyzer. The worker includes Rust standard library
+sources for WASI and understands standalone files, local Cargo packages and
+path dependencies, and explicit `rust-project.json` graphs. See the
+[Rust runner and project limits](editor/runtime/rust/README.md).
+
 ```sh
 python3 path/to/ark_connector.py --project .
 python3 path/to/ark_connector.py --project . --allow-processes

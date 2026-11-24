@@ -3,7 +3,8 @@ import { installNativeTerminal } from './zed/native-terminal.js?v=cf8d2baff46f';
 import { installNativeHost } from './zed/native-host.js?v=8cceee5a8051';
 import { BrowserPython } from './zed/browser-python.js?v=cf8d2baff46f';
 
-import { BrowserClangd } from './zed/browser-clangd.js?v=8cceee5a8051';
+import { BrowserClangd } from './zed/browser-clangd.js?v=rust-lsp-1';
+import { BrowserRust } from './zed/browser-rust.js?v=rust-lsp-1';
 import { prepareEditorIsolation } from './zed/isolation.js';
 
 const loading = document.querySelector('#loading');
@@ -36,7 +37,7 @@ async function start() {
     import(`/assets/vendor/zed/pkg/zed_browser_probe.js?v=${build}`),
     downloadWasm(),
   ]);
-  const host = installNativeHost(installNativeTerminal(), new BrowserPython(zed), new BrowserClangd(zed));
+  const host = installNativeHost(installNativeTerminal(), new BrowserPython(zed), new BrowserClangd(zed), new BrowserRust(zed));
   installFileDialogs(zed, host);
   await zed.default({ module_or_path: wasm });
   const deadline = performance.now() + 30000;

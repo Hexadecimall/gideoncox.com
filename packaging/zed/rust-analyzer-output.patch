@@ -1,0 +1,31 @@
+--- a/crates/rust-analyzer/src/bin/main.rs
++++ b/crates/rust-analyzer/src/bin/main.rs
+@@ -30,6 +30,28 @@
+ #[cfg(all(feature = "jemalloc", not(target_env = "msvc")))]
+ #[global_allocator]
+ static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
++
++// The browser host fills allocator-owned output for rustc and Cargo queries.
++#[cfg(target_os = "wasi")]
++#[unsafe(no_mangle)]
++pub extern "C" fn zed_tool_output_alloc(len: u32) -> *mut u8 {
++    use std::alloc::{Layout, alloc};
++    if !(1..=2 * 1024 * 1024).contains(&len) {
++        return std::ptr::null_mut();
++    }
++    let layout = Layout::array::<u8>(len as usize).unwrap();
++    unsafe { alloc(layout) }
++}
++
++/// # Safety
++/// The pointer and length must be returned by `zed_tool_output_alloc` and freed once.
++#[cfg(target_os = "wasi")]
++#[unsafe(no_mangle)]
++pub unsafe extern "C" fn zed_tool_output_free(ptr: *mut u8, len: u32) {
++    use std::alloc::{Layout, dealloc};
++    let layout = Layout::array::<u8>(len as usize).unwrap();
++    unsafe { dealloc(ptr, layout) };
++}
+ 
+ fn main() -> anyhow::Result<ExitCode> {
+     if std::env::var("RA_RUSTC_WRAPPER").is_ok() {
