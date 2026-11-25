@@ -30,6 +30,13 @@ async function runTool(module, args, mounts, output, stdin, stdout) {
   return wasi.start(instance);
 }
 
+async function runProgram(data, executable, args, project, output, stdin) {
+  print(output, 'Running WebAssembly');
+  const module = await WebAssembly.compile(data);
+  const code = await runTool(module, [executable, ...args], [project], output, stdin);
+  return { code, ranProgram: true };
+}
+
 function addArchive(directory, archive) {
   for (const [path, bytes] of archive) writeFile(directory, '/' + path, bytes, true);
 }
@@ -129,7 +136,7 @@ async function clangBuild(job, settings, output) {
     const objectFile = new File([]);
     const status = await runTool(clang, ['clang', ...flags, source, '-o', '-'], [root], output,
       undefined, new OpenFile(objectFile));
-    if (status) return status;
+    if (status) return { code: status };
     writeFile(root.dir, object, objectFile.data);
     objects.push(object);
   }
@@ -142,17 +149,16 @@ async function clangBuild(job, settings, output) {
       '/wasi/lib/libm.a', '/wasi/lib/libc.a', '/wasi/lib/libclang_rt.builtins.a'];
   print(output, 'Linking');
   const status = await runTool(linker, [...link, '-o', binary], [root], output);
-  if (status) return status;
+  if (status) return { code: status };
   const data = root.dir.contents.get(CC_OUTPUT.slice(1)).contents.get(binary.split('/').pop())?.data;
   if (!data?.length) throw new Error('Linker produced no executable.');
   if (isNative) {
     const artifact = data.slice();
     postMessage({ artifact }, [artifact.buffer]);
-    return 0;
+    return { code: 0 };
   }
-  print(output, 'Running WebAssembly');
-  return runTool(await WebAssembly.compile(data), [relative(job.cwd, job.script), ...(settings.args ?? [])],
-    [projectDirectory(job.cwd, job.files)], output, job.stdin);
+  return runProgram(data, relative(job.cwd, job.script), settings.args ?? [],
+    projectDirectory(job.cwd, job.files), output, job.stdin);
 }
 
 async function zigBuild(job, settings, output) {
@@ -168,21 +174,20 @@ async function zigBuild(job, settings, output) {
   const status = await runTool(compiler, ['zig', 'build-exe', source, '.zed-compiler-rt.o',
     '-fno-compiler-rt', '-fno-ubsan-rt', '-femit-bin=.zed-output.wasm'],
   [project, lib, new PreopenDirectory('/cache', new Map())], output);
-  if (status) return status;
+  if (status) return { code: status };
   const data = project.dir.contents.get('.zed-output.wasm')?.data;
   if (!data?.length) throw new Error('Zig produced no executable.');
-  print(output, 'Running WebAssembly');
-  return runTool(await WebAssembly.compile(data), [source, ...(settings.args ?? [])], [project], output, job.stdin);
+  return runProgram(data, source, settings.args ?? [], project, output, job.stdin);
 }
 
 self.addEventListener('message', async ({ data: job }) => {
   const output = new TerminalOutput();
   try {
     const settings = readSettings(job);
-    const code = job.command === 'browser-zig'
+    const result = job.command === 'browser-zig'
       ? await zigBuild(job, settings, output) : await clangBuild(job, settings, output);
     output.flush();
-    postMessage({ code });
+    postMessage(result);
   } catch (error) {
     output.flush();
     postMessage({ error: error.message });

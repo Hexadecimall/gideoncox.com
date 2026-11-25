@@ -25,7 +25,9 @@ default build inputs. Program output and its numeric exit code appear in the
 task terminal, including exit code 0.
 
 Use **Run and Build → Configure Build…** to open the project's configuration
-from a C, C++, or Zig buffer.
+from a C, C++, or Zig buffer. Save the configuration, switch back to the source
+file, and select **Build and Run WebAssembly**. Each element of `args` arrives
+as written, including spaces, empty strings, and non-ASCII characters.
 
 **Cross-Compile → Linux x86-64 (Freestanding)** downloads a statically linked
 ELF executable. It supports `int main(void)` or a project-provided `_start`.

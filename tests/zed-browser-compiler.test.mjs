@@ -23,7 +23,9 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files }) {
       if (message.chunk) output += stdout.decode(message.chunk, { stream: true });
       if (message.artifact) artifact = message.artifact;
       if (message.error) reject(new Error(message.error));
-      if (message.code !== undefined) resolve({ code: message.code, output: output + stdout.decode(), artifact });
+      if (message.code !== undefined) {
+        resolve({ code: message.code, ranProgram: message.ranProgram, output: output + stdout.decode(), artifact });
+      }
     };
   });
   await import(`${worker.href}?run=${encodeURIComponent(target + script)}`);
@@ -42,6 +44,7 @@ test('the shipped browser toolchains compile, link, report diagnostics, and run'
     'lib/math_test.c': '#include "math_test.h"\nint twice(int value) { return value * 2; }',
   } });
   assert.equal(c.code, 0, c.output);
+  assert.equal(c.ranProgram, true);
   assert.match(c.output, /C: 42/);
 
   const cpp = await run({ script: 'main.cpp', files: {
@@ -58,6 +61,7 @@ int main(int argc, char **argv) {
     'math_test.cpp': 'int twice(int value) { return value * 2; }',
   } });
   assert.equal(cpp.code, 23, cpp.output);
+  assert.equal(cpp.ranProgram, true);
   assert.match(cpp.output, /\r\n42\r\n/);
   assert.match(cpp.output, /\[main\.cpp\]\r\n\[--mode\]\r\n\[two words\]\r\n\[\]\r\n\[雪\]\r\n/);
 
@@ -65,6 +69,7 @@ int main(int argc, char **argv) {
     'broken.c': 'int main(void) { return missing_name; }',
   } });
   assert.equal(broken.code, 1);
+  assert.equal(broken.ranProgram, undefined);
   assert.match(broken.output, /broken\.c:1:25: error: use of undeclared identifier 'missing_name'/);
 
   const zig = await run({ command: 'browser-zig', script: 'main.zig', files: {
@@ -76,6 +81,7 @@ pub fn main(init: std.process.Init) !void {
 }`,
   } });
   assert.equal(zig.code, 0, zig.output);
+  assert.equal(zig.ranProgram, true);
   assert.match(zig.output, /Zig 42/);
 
   const linux = await run({ target: 'linux-x86_64', script: 'main.cpp', files: {
@@ -83,6 +89,7 @@ pub fn main(init: std.process.Init) !void {
     'lib/math_test.c': 'int twice(int value) { return value * 2; }',
   } });
   assert.equal(linux.code, 0, linux.output);
+  assert.equal(linux.ranProgram, undefined);
   const elf = new DataView(linux.artifact.buffer);
   assert.equal(elf.getUint32(0), 0x7f454c46);
   assert.equal(elf.getUint8(4), 2); // ELFCLASS64

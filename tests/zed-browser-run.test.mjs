@@ -67,7 +67,7 @@ test('running Python snapshots the active buffer and keeps the project and termi
   assert.equal(worker.terminated, true);
 });
 
-test('a successful WebAssembly task displays exit code zero', async t => {
+test('a WebAssembly task displays the program exit code only after it ran', async t => {
   t.mock.method(globalThis, 'fetch', () => { throw new Error('The task must stay local'); });
   const isolation = Object.getOwnPropertyDescriptor(globalThis, 'crossOriginIsolated');
   Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value: true });
@@ -76,18 +76,21 @@ test('a successful WebAssembly task displays exit code zero', async t => {
     else delete globalThis.crossOriginIsolated;
   });
 
-  const worker = new EventTarget();
-  worker.terminate = () => {};
-  const posted = new Promise(resolve => { worker.postMessage = resolve; });
-  const bridge = new BrowserRunBridge({ async list_browser_paths() { return '[]'; } }, () => worker);
-  const id = await bridge.open({
-    cwd: '/home/web/project', command: 'browser-cc', args: ['/home/web/project/main.c', 'wasi'],
-    env: { ZED_BROWSER_SOURCE: 'int main(void) { return 0; }' },
-  });
-  t.after(() => bridge.close(id));
-  await posted;
-  worker.dispatchEvent(new MessageEvent('message', { data: { code: 0 } }));
-  const result = await bridge.read(id);
-  assert.equal(result.exitCode, 0);
-  assert.match(decode(result.data), /\r\nExit code: 0\r\n/);
+  for (const data of [{ code: 0, ranProgram: true }, { code: 23, ranProgram: true }, { code: 1 }]) {
+    const worker = new EventTarget();
+    worker.terminate = () => {};
+    const posted = new Promise(resolve => { worker.postMessage = resolve; });
+    const bridge = new BrowserRunBridge({ async list_browser_paths() { return '[]'; } }, () => worker);
+    const id = await bridge.open({
+      cwd: '/home/web/project', command: 'browser-cc', args: ['/home/web/project/main.c', 'wasi'],
+      env: { ZED_BROWSER_SOURCE: 'int main(void) { return 0; }' },
+    });
+    t.after(() => bridge.close(id));
+    await posted;
+    worker.dispatchEvent(new MessageEvent('message', { data }));
+    const result = await bridge.read(id);
+    assert.equal(result.exitCode, data.code);
+    const exitLine = `\r\nExit code: ${data.code}\r\n`;
+    assert.equal(decode(result.data).includes(exitLine), Boolean(data.ranProgram));
+  }
 });
