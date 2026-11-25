@@ -1,57 +1,51 @@
 import { createStdin } from '../../../editor/runtime/python/stdin.js';
-import { isBrowserProject } from './browser-python.js?v=cf8d2baff46f';
+import { isLanguageProject, projectFiles } from './browser-language-server.js?v=2';
 import { joinBytes } from './lsp-stream.js';
 
-const PROGRAM = 'browser-python';
+const PROGRAMS = new Map([
+  ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=2', targets: ['python'] }],
+  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=1', targets: ['wasi', 'linux-x86_64'] }],
+  ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=1', targets: ['wasi'] }],
+]);
+const SESSION_PREFIX = 'browser-run:';
 const MAX_FILE = 2 * 1024 * 1024;
-const MAX_PROJECT = 24 * 1024 * 1024;
-const MAX_FILES = 3000;
 const INPUT_LIMIT = 8192;
 const encoder = new TextEncoder();
 
 function projectPath(path, root) {
-  return isBrowserProject(path) && path.startsWith(root + '/') && !path.includes('\0')
-    && !path.split('/').some(part => ['.git', '.config', '.venv', '__pycache__'].includes(part));
+  return isLanguageProject(path) && path.startsWith(root + '/') && !path.includes('\0')
+    && !path.slice(root.length + 1).split('/').some(part => !part || part === '.' || part === '..');
 }
 
 async function readProject(zed, root, script, source, running) {
-  const files = [[script, encoder.encode(source)]];
-  let total = files[0][1].length;
-  const paths = JSON.parse(await zed.list_browser_paths());
-  for (const { path, isDirectory } of paths) {
-    if (!running()) break;
-    if (isDirectory || path === script || !projectPath(path, root)) continue;
-    let bytes;
-    try { bytes = await zed.read_browser_file(path); }
-    catch { continue; }
-    if (bytes.byteLength > MAX_FILE || total + bytes.byteLength > MAX_PROJECT) continue;
-    files.push([path, bytes]);
-    total += bytes.byteLength;
-    if (files.length === MAX_FILES) break;
-  }
-  return files;
+  const files = await projectFiles(zed, root, path => path !== script, running);
+  return [[script, encoder.encode(source)], ...files];
 }
 
-/** Binary terminal transport backed by a sandboxed CPython worker. */
-class BrowserPythonProcess {
-  constructor(worker) {
+/** Binary terminal transport backed by a sandboxed WASI worker. */
+class BrowserTaskProcess {
+  constructor(worker, label, onArtifact) {
     this.worker = worker;
     this.stdin = createStdin();
     this.decoder = new TextDecoder();
     this.output = [];
     this.line = '';
     this.exitCode = null;
-    this.timer = setTimeout(() => this.fail('Python exceeded the five-minute run limit.'), 300000);
+    this.timer = setTimeout(() => this.fail(`${label} exceeded the five-minute task limit.`), 300000);
     worker.addEventListener('message', ({ data }) => {
       if (data.chunk instanceof Uint8Array) this.append(data.chunk);
+      else if (data.artifact instanceof Uint8Array) {
+        try { onArtifact(data.artifact); }
+        catch (error) { this.fail(error.message); }
+      }
       else if (typeof data.code === 'number') this.finish(data.code);
       else if (typeof data.error === 'string') this.fail(data.error);
     });
     worker.addEventListener('error', event => {
       event.preventDefault();
-      this.fail(event.message || 'Python worker stopped.');
+      this.fail(event.message || `${label} worker stopped.`);
     });
-    worker.addEventListener('messageerror', () => this.fail('Python returned an invalid message.'));
+    worker.addEventListener('messageerror', () => this.fail(`${label} returned an invalid message.`));
   }
 
   fail(message) {
@@ -120,29 +114,45 @@ class BrowserPythonProcess {
 }
 
 export class BrowserRunBridge {
-  constructor(zed, makeWorker = () => new Worker('/editor/runtime/python/worker.js?v=1', { type: 'module' })) {
+  constructor(zed, makeWorker = path => new Worker(path, { type: 'module' })) {
     this.zed = zed;
     this.makeWorker = makeWorker;
     this.sessions = new Map();
   }
 
-  accepts(options) { return options.command === PROGRAM; }
-  owns(id) { return id.startsWith(PROGRAM + ':'); }
+  accepts(options) { return PROGRAMS.has(options.command); }
+  owns(id) { return id.startsWith(SESSION_PREFIX); }
 
-  async open({ cwd, args, env }) {
+  async open({ cwd, command, args, env }) {
+    const program = PROGRAMS.get(command);
     const source = env?.ZED_BROWSER_SOURCE;
     const script = args?.[0];
-    if (!globalThis.crossOriginIsolated) throw new Error('Open the top-level Zed page to run Python.');
-    if (!isBrowserProject(cwd) || !projectPath(script, cwd) || typeof source !== 'string'
-      || encoder.encode(source).length > MAX_FILE) throw new Error('The Python file is outside the browser project or too large.');
-    if (this.sessions.size >= 3) throw new Error('Close a running Python terminal first.');
-    const id = PROGRAM + ':' + crypto.randomUUID();
-    const process = new BrowserPythonProcess(this.makeWorker());
+    const target = args?.[1] ?? (command === 'browser-python' ? 'python' : undefined);
+    if (!program?.targets.includes(target)) throw new Error('Unsupported browser build target.');
+    if (!globalThis.crossOriginIsolated) throw new Error('Open the top-level Zed page to run browser tasks.');
+    if (!isLanguageProject(cwd) || !projectPath(script, cwd) || typeof source !== 'string'
+      || encoder.encode(source).length > MAX_FILE) throw new Error('The file is outside the browser project or too large.');
+    if (this.sessions.size >= 3 || (command !== 'browser-python' && this.compiling)) {
+      throw new Error('Finish the running browser build or close a browser task terminal first.');
+    }
+    const id = SESSION_PREFIX + crypto.randomUUID();
+    const process = new BrowserTaskProcess(this.makeWorker(program.worker), program.label, data => {
+      if (target !== 'linux-x86_64') throw new Error('Unexpected browser build artifact.');
+      const stem = script.split('/').pop().replace(/\.[^.]+$/, '').replace(/[^\w.-]/g, '_');
+      const link = document.createElement('a');
+      const url = URL.createObjectURL(new Blob([data], { type: 'application/octet-stream' }));
+      link.href = url;
+      link.download = `${stem || 'program'}-linux-x86_64.elf`;
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(url), 30_000);
+      process.append(encoder.encode(`Built ${link.download}\r\n`));
+    });
+    if (command !== 'browser-python') this.compiling = id;
     this.sessions.set(id, process);
-    process.append(encoder.encode('Starting Python…\r\n'));
+    process.append(encoder.encode(`Starting ${program.label}…\r\n`));
     const running = () => process.exitCode === null;
     readProject(this.zed, cwd, script, source, running).then(files => {
-      if (running()) process.worker.postMessage({ cwd, script, files, stdin: process.stdin.buffer });
+      if (running()) process.worker.postMessage({ cwd, script, files, command, target, stdin: process.stdin.buffer });
     }).catch(error => process.fail(error.message));
     return id;
   }
@@ -151,7 +161,10 @@ export class BrowserRunBridge {
     const process = this.sessions.get(id);
     if (!process) return { data: new Uint8Array(), ended: true };
     const result = await process.read();
-    if (result.ended) this.sessions.delete(id);
+    if (result.ended) {
+      this.sessions.delete(id);
+      if (this.compiling === id) this.compiling = undefined;
+    }
     return result;
   }
 
@@ -159,5 +172,6 @@ export class BrowserRunBridge {
   async close(id) {
     this.sessions.get(id)?.finish(130);
     this.sessions.delete(id);
+    if (this.compiling === id) this.compiling = undefined;
   }
 }

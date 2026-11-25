@@ -22,6 +22,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Python execution | CPython WASI worker and upstream task terminal for browser workspace files | WASI runtime and buffer snapshot tests |
 | Diagnostics | Upstream Language Servers menu and Project Diagnostics view | Browser status bar and diagnostic checks |
 | C/C++ | clangd 21 in a WebAssembly worker, with browser project files and bundled WASI headers | Chromium language-server and browser workspace checks |
+| Browser builds | Clang and LLD compile multi-file C and C++ for WASI with standard libraries, or link a freestanding Linux x86-64 executable. Zig builds and runs WASI programs. | Chromium task terminal and compiler-worker checks |
 | Rust | rust-analyzer in a WASI worker with a bundled standard library, Rust project graphs, and local Cargo path dependencies | Concurrent Chromium worktrees and browser workspace checks |
 | Tasks | Upstream task picker and task terminal; native command, arguments, environment, working directory and completion status | Real task PTY exit/output tests; integrated browser check pending |
 
@@ -36,7 +37,7 @@ menu. The pending controls display a Zed notification when activated.
 - Native debugger sessions and debugger UI.
 - Extension installation, execution, grammars, themes and extension-provided language servers.
 - Browser LSP runners for languages beyond C/C++, Python and Rust.
-- Browser compilation and cross-compilation, including Zig, Cargo, Clippy, registry packages, build scripts, procedural macros, and rustfmt.
+- Rust browser tooling, including Cargo, Clippy, registry packages, build scripts, procedural macros, and rustfmt. Native targets with standard libraries and build-system integration for browser C, C++, and Zig projects.
 - Collaboration, authentication, hosted services and AI integrations.
 - Durable workspace/session metadata; SQLite databases currently live in memory.
 - Desktop platform integrations, multiple OS windows and native file dialogs.

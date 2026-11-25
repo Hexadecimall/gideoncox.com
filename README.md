@@ -212,6 +212,11 @@ present. The editor route supplies cross-origin isolation for the threaded
 servers through a scoped service worker on static hosting. See the
 [clangd build and limits](editor/runtime/clangd/README.md).
 
+**Run and Build** compiles C, C++, and Zig to WASI and runs them in Zed's
+terminal. Clang and LLD link multi-file C and C++ projects with their WASI
+standard libraries. The same menu can build a freestanding Linux x86-64
+executable from C or C++. See the [browser build guide](editor/runtime/compiler/README.md).
+
 Browser Rust files use rust-analyzer. The worker includes Rust standard library
 sources for WASI and understands standalone files, local Cargo packages and
 path dependencies, and explicit `rust-project.json` graphs. See the

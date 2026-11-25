@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Check first-party source and artifacts without printing sensitive values."""
 import gzip
+from hashlib import sha256
 import re
 import sys
 import tarfile
@@ -11,6 +12,18 @@ EXCLUDED = {'.git', '.cache', 'target', '__pycache__', 'vendor'}
 # The browser filesystem and anonymous Rust toolchain remaps are intentional.
 HOME_ALLOWLIST = {'/home/web', '/home/.cargo', '/home/.rustup'}
 HOME_PATH = re.compile(r'/(?:Users|Volumes|home)/[\w.-]+')
+# These exact upstream Zig 0.17.0 sources contain filesystem examples and tests.
+ZIG_PATH_EXAMPLES = {
+    'lib/std/Build/Cache/DepTokenizer.zig': '37f19eb81d66a87fbbe59da50dad048d52c975a20ca0d580a87f590a46149b38',
+    'lib/std/Io/Threaded.zig': '1a770001e309f24c8c58a9fdb3c095994c454cbfa9dba9d4f1dede2f134eeac7',
+    'lib/std/Io/Threaded/test.zig': '2d633785f1e9af43b8fb89b2623711ee467c0761e6fe5c5b16db3bf751950937',
+    'lib/std/fs/path.zig': 'fa05488f142bf45ee10cf6f5a75ba35c34fa99ff6fa8770f8b9fbe0db28ed91e',
+    'lib/std/fs/test.zig': '05e81a478603564c4ed555f8d11256dfa2b24cd336841e6c2b5fb2270085bd1b',
+    'lib/std/os/windows.zig': '1ba50bc9e2a1f5a6c41e5141a8300a242cb457cedbf4ce8f3af76c2854c2db4c',
+    'lib/std/process/Args.zig': '46dfd4197ed704ae39f6aa352c0ea8a9f4f663570c0c9ae15c1c59d09da4d049',
+    'lib/std/process/Environ.zig': 'e3eb7f0e6e1ff28914702d3742948c371b005df32d1421c05d0d6b2b1fbd1eb6',
+    'lib/std/zig/WindowsSdk.zig': 'e3d9e2d5c44f47df7e994ecdd6819a109cd6db2b4475fd587afd1ffc81dd4539',
+}
 PATTERNS = {
     'native Windows path': re.compile(r'(?<!\w)[A-Za-z]:[\\/]+[\w][\w. -]{2,}[\\/]+[\w.-]'),
     'native root home path': re.compile(r'(?<![\w./-])/root(?:/|(?=[\s\x00\'"<>]|$))'),
@@ -24,7 +37,7 @@ PATTERNS = {
 }
 
 
-def inspect_data(data, label):
+def inspect_data(data, label, *, path_examples=False):
     """Inspect embedded UTF-8 strings and BOM-marked UTF-16 text."""
     encoding = 'utf-16' if data.startswith((b'\xff\xfe', b'\xfe\xff')) else 'utf-8'
     try:
@@ -40,6 +53,9 @@ def inspect_data(data, label):
         categories = [category for category, pattern in PATTERNS.items() if pattern.search(line)]
         if any(match.group() not in HOME_ALLOWLIST for match in HOME_PATH.finditer(line)):
             categories.append('native user home path')
+        if path_examples:
+            categories = [category for category in categories
+                          if category not in {'native Windows path', 'native user home path'}]
         failures.extend(f'{label}:{number}: {category}' for category in categories)
     return failures
 
@@ -54,13 +70,17 @@ def audit(root):
             continue
         try:
             if path.name.endswith(('.tar.gz', '.tgz')):
+                examples = ZIG_PATH_EXAMPLES if relative.as_posix() == 'editor/runtime/compiler/zig-sdk.tar.gz' else {}
                 with tarfile.open(path) as archive:
                     for member in archive:
                         label = f'{relative}:{member.name}'
                         if member.uname or member.gname or member.uid or member.gid:
                             failures.append(f'{label}: archive contains owner metadata')
                         if member.isfile():
-                            failures.extend(inspect_data(archive.extractfile(member).read(), label))
+                            data = archive.extractfile(member).read()
+                            example_hash = examples.get(member.name)
+                            verified_example = example_hash is not None and sha256(data).hexdigest() == example_hash
+                            failures.extend(inspect_data(data, label, path_examples=verified_example))
             elif path.name.endswith('.wasm.gz'):
                 with gzip.open(path, 'rb') as executable:
                     failures.extend(inspect_data(executable.read(), str(relative)))
