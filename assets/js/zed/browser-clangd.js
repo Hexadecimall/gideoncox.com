@@ -1,5 +1,6 @@
 import { BrowserLanguageServer } from './browser-language-server.js?v=2';
 
+const configFiles = new Set(['.clangd', '.clang-format', '_clang-format', 'compile_commands.json', 'compile_flags.txt']);
 const flags = [
   '--target=wasm32-wasi',
   '-isystem/usr/include/c++/v1',
@@ -14,7 +15,8 @@ export class BrowserClangd extends BrowserLanguageServer {
       command: 'clangd', makeWorker, initializeOptions: { fallbackFlags: flags },
       includePath(path) {
         const name = path.slice(path.lastIndexOf('/') + 1);
-        return !name.includes('.') || /(?:\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx|inl|inc|ipp|tpp|ixx|cppm|m|mm)$|^\.clangd$|^compile_commands\.json$|^compile_flags\.txt$)/i.test(name);
+        return configFiles.has(name.toLowerCase()) || !name.includes('.')
+          || /\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx|inl|inc|ipp|tpp|ixx|cppm|m|mm)$/i.test(name);
       },
     });
   }

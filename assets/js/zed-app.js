@@ -3,7 +3,7 @@ import { installNativeTerminal } from './zed/native-terminal.js?v=run-menu-1';
 import { installNativeHost } from './zed/native-host.js?v=folder-memory-1';
 import { BrowserPython } from './zed/browser-python.js?v=5';
 
-import { BrowserClangd } from './zed/browser-clangd.js?v=multi-lsp-1';
+import { BrowserClangd } from './zed/browser-clangd.js?v=format-config-1';
 import { BrowserRust } from './zed/browser-rust.js?v=multi-lsp-1';
 import { BrowserRunBridge } from './zed/browser-run.js?v=5';
 import { prepareEditorIsolation } from './zed/isolation.js';

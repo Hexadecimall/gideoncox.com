@@ -69,7 +69,7 @@ test('same-language projects keep independent workers and skip unrelated assets'
   const zed = {
     async list_browser_paths() {
       return JSON.stringify(roots.flatMap(root => [
-        { path: `${root}/main.cpp` }, { path: `${root}/assets/logo.png` },
+        { path: `${root}/main.cpp` }, { path: `${root}/.clang-format` }, { path: `${root}/assets/logo.png` },
         { path: `${root}/node_modules/addon.cpp` },
       ]));
     },
@@ -93,7 +93,7 @@ test('same-language projects keep independent workers and skip unrelated assets'
   await Promise.all([first, second].map(({ id }) => clangd.processWrite(id, lspFrame({
     jsonrpc: '2.0', id: 1, method: 'initialize', params: {},
   }))));
-  assert.deepEqual(reads.sort(), roots.map(root => `${root}/main.cpp`));
+  assert.deepEqual(reads.sort(), roots.flatMap(root => [`${root}/.clang-format`, `${root}/main.cpp`]));
   assert.deepEqual(workers.map(worker => worker.messages[0].root), roots);
   await clangd.processClose(first.id);
   assert.equal(workers[0].stopped, true);
