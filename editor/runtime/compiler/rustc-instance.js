@@ -1,5 +1,5 @@
 import { WASIFarmAnimal, thread_spawn_on_worker } from '../rust/wasi-threads.js?v=rename-1';
-import { cargoImports } from './cargo-imports.js?v=1';
+import { cargoImports } from './cargo-imports.js?v=registry-1';
 
 async function run({ args, env, wasiRef, wasmModule, memory, cargo }) {
   const animal = new WASIFarmAnimal(wasiRef, args, env, {

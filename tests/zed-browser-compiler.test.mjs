@@ -1,13 +1,16 @@
 import assert from 'node:assert/strict';
+import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { gzipSync } from 'node:zlib';
 import { WorkerHost } from './fixtures/zed-worker-host.mjs';
 
 const worker = new URL('../editor/runtime/compiler/worker.js', import.meta.url);
 const encoder = new TextEncoder();
 const cwd = '/home/web/compiler-test';
+let job = 0;
 
-async function run({ command = 'browser-cc', target = 'wasi', script, files, programArgs }) {
+async function run({ command = 'browser-cc', target = 'wasi', script, files, programArgs, registry }) {
   const handler = new EventTarget();
   handler.close = () => {};
   globalThis.self = handler;
@@ -19,6 +22,10 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files, pro
     const asset = new URL(location);
     asset.search = '';
     fetched.add(asset.pathname.split('/').pop());
+    if (asset.protocol === 'https:') {
+      const data = registry?.get(asset.href);
+      return data ? new Response(data) : new Response(null, { status: 404 });
+    }
     return new Response(await readFile(asset));
   };
   const stdout = new TextDecoder();
@@ -37,7 +44,7 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files, pro
       }
     };
   });
-  await import(`${worker.href}?run=${encodeURIComponent(target + script)}`);
+  await import(`${worker.href}?run=${++job}`);
   handler.dispatchEvent(new MessageEvent('message', { data: {
     cwd, command, target, script: `${cwd}/${script}`, programArgs,
     files: Object.entries(files).map(([name, contents]) => [`${cwd}/${name}`, encoder.encode(contents)]),
@@ -188,4 +195,49 @@ test('Cargo runs build.rs with a writable OUT_DIR and applies its directives', a
   assert.deepEqual(generated.env, [['BUILD_CHANNEL', 'browser']]);
   assert.deepEqual(generated.files.map(([name, content]) => [name, new TextDecoder().decode(content)]),
     [['generated.rs', 'const MESSAGE: &str = "built in the browser";']]);
+});
+
+function crateTar(name, files) {
+  const blocks = [];
+  for (const [path, text] of Object.entries(files)) {
+    const data = Buffer.from(text);
+    const header = Buffer.alloc(512);
+    header.write(`${name}-0.1.0/${path}`, 0);
+    header.write('0000644\0', 100);
+    header.write(data.length.toString(8).padStart(11, '0') + '\0', 124);
+    header.write('00000000001\0', 136);
+    header.fill(32, 148, 156);
+    header.write('0', 156);
+    header.write('ustar\0' + '00', 257);
+    const sum = header.reduce((previous, byte) => previous + byte, 0);
+    header.write(sum.toString(8).padStart(6, '0') + '\0 ', 148);
+    blocks.push(header, data, Buffer.alloc((512 - data.length % 512) % 512));
+  }
+  return gzipSync(Buffer.concat([...blocks, Buffer.alloc(1024)]));
+}
+
+test('Cargo checks, unpacks, and compiles direct and transitive sparse registry packages', { timeout: 20000 }, async () => {
+  const registry = new Map([['https://index.crates.io/config.json', '{"dl":"https://static.crates.io/crates"}']]);
+  const manifest = name => `[package]\nname = "${name}"\nversion = "0.1.0"\nedition = "2021"\n`;
+  function publish(name, source, dependency) {
+    const archive = crateTar(name, {
+      'Cargo.toml': manifest(name) + (dependency ? `[dependencies]\n${dependency} = "0.1"\n` : ''),
+      'src/lib.rs': source,
+    });
+    const deps = dependency ? [{ name: dependency, req: '^0.1', features: [], optional: false,
+      default_features: true, target: null, kind: 'normal', registry: null }] : [];
+    const index = JSON.stringify({ name, vers: '0.1.0', deps, features: {}, yanked: false,
+      cksum: createHash('sha256').update(archive).digest('hex') });
+    registry.set(`https://index.crates.io/qa/te/${name}`, index + '\n');
+    registry.set(`https://static.crates.io/crates/${name}/${name}-0.1.0.crate`, archive);
+  }
+  publish('qatesource', 'pub fn answer() -> u32 { 40 }');
+  publish('qateshared', 'pub fn answer() -> u32 { qatesource::answer() + 2 }', 'qatesource');
+  const cargo = await run({ command: 'browser-rust', script: 'src/main.rs', registry, files: {
+    'Cargo.toml': manifest('cargo-browser-test') + '[dependencies]\nqateshared = "0.1"\n',
+    'src/main.rs': 'fn main() { println!("crate answer: {}", qateshared::answer()); }',
+  } });
+  assert.equal(cargo.code, 0, cargo.output);
+  assert.match(cargo.output, /crate answer: 42/);
+  assert.equal(cargo.fetched.has('qatesource-0.1.0.crate'), true);
 });

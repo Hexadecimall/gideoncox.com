@@ -14,16 +14,42 @@
          Ok(gctx) => gctx,
 --- a/src/cargo/core/global_cache_tracker.rs
 +++ b/src/cargo/core/global_cache_tracker.rs
-@@ -1620,6 +1620,9 @@
+@@ -1620,6 +1620,12 @@
      }
  
      fn save_with_gctx(&mut self, gctx: &GlobalContext) -> CargoResult<()> {
-+        if self.is_empty() {
++        // The WASI cache lives only for the invocation. Browser Cache Storage
++        // owns reuse across builds, so no local last-use database is needed.
++        if self.is_empty() || cfg!(target_os = "wasi") {
++            self.clear();
 +            return Ok(());
 +        }
          let mut tracker = gctx.global_cache_tracker()?;
          self.save(&mut tracker)
      }
+--- a/src/cargo/sources/registry/mod.rs
++++ b/src/cargo/sources/registry/mod.rs
+@@ -988,6 +988,8 @@
+         let gz = GzDecoder::new(tarball);
+         let gz = LimitErrorReader::new(gz, size_limit);
+         let mut tar = Archive::new(gz);
++        #[cfg(target_os = "wasi")]
++        tar.set_preserve_mtime(false);
+         set_mask(&mut tar);
+         tar
+     };
+--- a/src/cargo/core/gc.rs
++++ b/src/cargo/core/gc.rs
+@@ -49,6 +49,9 @@
+ /// It should be cheap to call this multiple times (subsequent calls are
+ /// ignored), but try not to abuse that.
+ pub fn auto_gc(gctx: &GlobalContext) {
++    if cfg!(target_os = "wasi") {
++        return;
++    }
+     if !gctx.network_allowed() {
+         // As a conservative choice, auto-gc is disabled when offline. If the
+         // user is indefinitely offline, we don't want to delete things they
 --- a/vendor/filetime-0.2.27/src/wasm.rs
 +++ b/vendor/filetime-0.2.27/src/wasm.rs
 @@ -19,14 +19,36 @@

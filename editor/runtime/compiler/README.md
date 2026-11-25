@@ -41,15 +41,19 @@ C++ target does not support exceptions. Zig uses Zig 0.17.0's WebAssembly-hosted
 compiler and standard library to build WASI executables.
 
 The Rust browser task uses Cargo when the active file belongs to a package
-with a `Cargo.toml`. It runs offline with workspace packages and local
-`path` dependencies. Rust build scripts run in the crate directory with
-writable `OUT_DIR` and receive Cargo's environment. Script-generated files
+with a `Cargo.toml`. Add public crates.io dependencies in `[dependencies]` as
+usual. Cargo resolves the sparse index and checks each downloaded crate against
+its checksum. The browser caches registry responses for reuse. Workspace
+packages and local `path` dependencies also work. Rust build scripts run in the
+crate directory with writable `OUT_DIR` and receive Cargo's environment. Generated files
 and directives are available to the crate. The WASI host libraries download
 on demand for build scripts and their build dependencies. Open the entry
 file to choose among multiple binaries.
 Standalone Rust files use rustc 1.83 and the matching WASI standard library.
-Registry and Git dependencies, procedural macros, Clippy, and build scripts
-that launch external tools are pending. The editor uses
+Git and private registries, procedural macros, Clippy, and build scripts
+that launch external tools are pending. Registry resolution uses the project's
+saved `Cargo.lock` when present. Changes to the lockfile made by Cargo remain in
+the build snapshot. The editor uses
 [rustfmt](../rust/README.md) for formatting.
 
 Builds run in a browser worker with a temporary project snapshot. The active

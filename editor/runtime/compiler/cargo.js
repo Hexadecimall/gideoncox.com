@@ -1,8 +1,9 @@
 import { Directory, OpenDirectory, PreopenDirectory, wasi } from '../rust/wasi/index.js';
 import { writeFile } from '../terminal-wasi.js';
 import { loadArchive, loadModule } from './assets.js';
-import { MAX_TOOL_BYTES } from './cargo-imports.js?v=1';
-import { loadRustToolchain, RUST_ENV, runRustTool } from './rustc.js?v=cargo-1';
+import { MAX_TOOL_BYTES } from './cargo-imports.js?v=registry-1';
+import { CargoRegistry } from './cargo-registry.js?v=1';
+import { loadRustToolchain, RUST_ENV, runRustTool } from './rustc.js?v=registry-1';
 
 const PROJECT = '/workspace';
 const BUILD = '/build';
@@ -10,6 +11,7 @@ const TARGET = 'wasm32-wasip1';
 const HOST = 'wasm32-wasip1-threads';
 const CARGO = '/toolchain/bin/cargo';
 const RUSTC = '/toolchain/bin/rustc';
+const REGISTRY_SOURCE = '/cargo-home/registry/src/';
 const ENCODER = new TextEncoder();
 const DECODER = new TextDecoder();
 const CARGO_ENV = [
@@ -105,8 +107,9 @@ function failure(message, code = 1) {
 async function runProcess(wasmModule, root, request, args, versionProbe = false) {
   const cwd = request.cwd || PROJECT;
   const directory = lookup(root, cwd);
-  if (!(directory instanceof Directory) || (cwd !== PROJECT && !cwd.startsWith(PROJECT + '/'))) {
-    return failure('Cargo subprocess working directory is outside the project.');
+  if (!(directory instanceof Directory) || (cwd !== PROJECT && !cwd.startsWith(PROJECT + '/')
+    && !cwd.startsWith(REGISTRY_SOURCE))) {
+    return failure('Cargo subprocess working directory is outside the project and Cargo registry.');
   }
 
   const out = capture();
@@ -249,6 +252,7 @@ export async function compileCargo(directory, manifest, source, output) {
   writeFile(root, CARGO, [], true);
   writeFile(root, RUSTC, [], true);
   const path = `${PROJECT}/${manifest}`;
+  const registry = new CargoRegistry();
   let hostLibraries;
   const loadHostLibraries = () => hostLibraries ??= loadArchive('rust-host-sysroot.tar.gz').then(archive => {
     for (const [name, bytes] of archive) writeFile(compiler.sysroot.dir, '/' + name, bytes, true);
@@ -257,11 +261,13 @@ export async function compileCargo(directory, manifest, source, output) {
   const cargo = async args => {
     const stdout = capture(2 * MAX_TOOL_BYTES);
     const code = await runRustTool({
-      wasmModule: cargoModule, args: [CARGO, ...args, '--offline', '--manifest-path', path], env: CARGO_ENV,
+      wasmModule: cargoModule, args: [CARGO, ...args, '--manifest-path', path], env: CARGO_ENV,
       directories: [mount('.', directory), mount('/', root)], stdout: stdout.write,
       stderr: bytes => output.write(bytes),
       spawn: async request => {
         try {
+          if (request.kind === 'registry') return await registry.begin(request);
+          if (request.kind === 'registry-chunk') return registry.chunk(request);
           if (request.program === RUSTC) return await runCompiler(compiler.wasmModule, root, request, loadHostLibraries);
           return await runBuildScript(root, request);
         }

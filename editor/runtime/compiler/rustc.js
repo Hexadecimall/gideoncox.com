@@ -25,7 +25,7 @@ export async function runRustTool({
         reject(event.reason);
       };
       addEventListener('unhandledrejection', filesystemError);
-      compiler = new Worker(new URL('./rustc-instance.js?v=cargo-1', import.meta.url), { type: 'module' });
+      compiler = new Worker(new URL('./rustc-instance.js?v=registry-1', import.meta.url), { type: 'module' });
       compiler.onmessage = ({ data }) => {
         if (typeof data.code === 'number') resolve(data.code);
         else if (data.error) reject(new Error(data.error));

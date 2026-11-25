@@ -1,4 +1,7 @@
+import { REGISTRY_CHUNK } from './cargo-registry.js?v=1';
+
 const decoder = new TextDecoder('utf-8', { fatal: true });
+const encoder = new TextEncoder();
 export const MAX_TOOL_BYTES = 1024 * 1024;
 
 /** The WASIp1 process imports used by the browser Cargo fork. */
@@ -25,7 +28,33 @@ export function cargoImports(animal, imports, instance) {
   return {
     ...imports,
     '__wasip1_vfs-host': {
-      wasi_ext_fetch: () => 1,
+      wasi_ext_fetch(method, methodLength, url, urlLength, _headers, _headersLength,
+        _body, bodyLength, statusAddress, pointerAddress, lengthAddress) {
+        if (bodyLength !== 0) return 1;
+        const result = animal.call_unknown_fn(0, {
+          kind: 'registry', method: decoder.decode(read(method, methodLength)),
+          url: decoder.decode(read(url, urlLength)),
+        });
+        if (!result) return 1;
+        const { status, headers, length, token, error } = result;
+        const prefix = encoder.encode(`${status}\n${headers.map(([name, value]) => `${name}:${value}\n`).join('')}\n`);
+        const errorBody = error ? encoder.encode(error) : null;
+        const size = prefix.length + (errorBody?.length ?? length);
+        const address = instance().exports.wasi_ext_allocate(size) >>> 0;
+        if (!address) return 1;
+        new Uint8Array(memory.buffer, address, prefix.length).set(prefix);
+        if (errorBody) new Uint8Array(memory.buffer, address + prefix.length, errorBody.length).set(errorBody);
+        for (let offset = 0; offset < length; offset += REGISTRY_CHUNK) {
+          const chunk = animal.call_unknown_fn(0, { kind: 'registry-chunk', token, offset });
+          if (chunk.length !== Math.min(REGISTRY_CHUNK, length - offset)) return 1;
+          new Uint8Array(memory.buffer, address + prefix.length + offset, chunk.length).set(chunk);
+        }
+        const view = new DataView(memory.buffer);
+        view.setUint16(statusAddress >>> 0, status, true);
+        view.setUint32(pointerAddress >>> 0, address, true);
+        view.setUint32(lengthAddress >>> 0, size, true);
+        return 0;
+      },
       wasi_ext_git_clone: () => 1,
       wasi_ext_git_fetch: () => 1,
       wasi_ext_spawn(
