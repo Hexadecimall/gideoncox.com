@@ -23,14 +23,17 @@ function projectPath(path, root) {
 async function readProject(zed, { cwd: root, script, source, command, target }, running) {
   const inputs = new Map([[script, encoder.encode(source)]]);
   let reserved = inputs.get(script).byteLength;
-  if (command === 'browser-cc') {
+  let config;
+  if (target === 'wasi' || command === 'browser-cc') {
     const configPath = `${root}/${BUILD_CONFIG}`;
-    const config = await readProjectFile(zed, configPath).catch(() => undefined);
+    config = await readProjectFile(zed, configPath).catch(() => undefined);
     if (config) {
       if (config.byteLength > MAX_FILE) throw new Error(`${BUILD_CONFIG} exceeds the 2 MB limit.`);
       inputs.set(configPath, config);
       reserved += config.byteLength;
     }
+  }
+  if (command === 'browser-cc') {
     const libraries = new Set(clangLibraryPaths(parseBuildConfig(config), target));
     for (const path of libraries) {
       if (!running()) return [];
@@ -48,8 +51,9 @@ async function readProject(zed, { cwd: root, script, source, command, target }, 
 
 /** Binary terminal transport backed by a sandboxed WASI worker. */
 class BrowserTaskProcess {
-  constructor(worker, label, onArtifact, onBuild) {
+  constructor(worker, label, showExitCode, onArtifact, onBuild) {
     this.worker = worker;
+    this.showExitCode = showExitCode;
     this.stdin = createStdin();
     this.decoder = new TextDecoder();
     this.output = [];
@@ -65,8 +69,7 @@ class BrowserTaskProcess {
         catch (error) { this.fail(error.message); }
       }
       else if (typeof data.code === 'number') {
-        if (data.ranProgram) this.append(encoder.encode(`\r\nExit code: ${data.code}\r\n`));
-        this.finish(data.code);
+        this.finish(data.code, data.ranProgram ? 'Exit code' : 'Build exit code');
       }
       else if (typeof data.error === 'string') this.fail(data.error);
     });
@@ -83,9 +86,10 @@ class BrowserTaskProcess {
     this.finish(1);
   }
 
-  finish(code) {
+  finish(code, statusLabel = 'Task exit code') {
     if (this.exitCode !== null) return;
     this.exitCode = code;
+    if (this.showExitCode) this.append(encoder.encode(`\r\n${statusLabel}: ${code}\r\n`));
     clearTimeout(this.timer);
     this.stdin.close();
     this.worker.terminate();
@@ -175,7 +179,7 @@ export class BrowserRunBridge {
     }
     const id = SESSION_PREFIX + crypto.randomUUID();
     const onBuild = command === 'browser-rust' ? snapshot => this.onRustBuild?.(cwd, snapshot) : undefined;
-    const process = new BrowserTaskProcess(this.makeWorker(program.worker), program.label, data => {
+    const process = new BrowserTaskProcess(this.makeWorker(program.worker), program.label, target === 'wasi', data => {
       if (target !== 'linux-x86_64' && target !== 'linux-x86_64-static') {
         throw new Error('Unexpected browser build artifact.');
       }

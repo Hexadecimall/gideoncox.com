@@ -76,10 +76,11 @@ test('a WebAssembly task forwards exact program arguments and displays the exit 
     else delete globalThis.crossOriginIsolated;
   });
 
-  for (const [programArgs, data] of [
-    [['--mode', 'two words', '', '雪'], { code: 23, ranProgram: true }],
-    [[], { code: 0, ranProgram: true }],
-    [undefined, { code: 1 }],
+  for (const [programArgs, data, code, exitLine] of [
+    [['--mode', 'two words', '', '雪'], { code: 23, ranProgram: true }, 23, 'Exit code: 23'],
+    [[], { code: 0, ranProgram: true }, 0, 'Exit code: 0'],
+    [undefined, { code: 1 }, 1, 'Build exit code: 1'],
+    [undefined, { error: 'WebAssembly runtime trap' }, 1, 'Task exit code: 1'],
   ]) {
     const worker = new EventTarget();
     worker.terminate = () => {};
@@ -96,9 +97,39 @@ test('a WebAssembly task forwards exact program arguments and displays the exit 
     assert.deepEqual((await posted).programArgs, programArgs);
     worker.dispatchEvent(new MessageEvent('message', { data }));
     const result = await bridge.read(id);
-    assert.equal(result.exitCode, data.code);
-    const exitLine = `\r\nExit code: ${data.code}\r\n`;
-    assert.equal(decode(result.data).includes(exitLine), Boolean(data.ranProgram));
+    assert.equal(result.exitCode, code);
+    assert.ok(decode(result.data).includes(`\r\n${exitLine}\r\n`));
+  }
+});
+
+test('Zig and Rust snapshot saved arguments even when the project listing omits the config', async t => {
+  const isolation = Object.getOwnPropertyDescriptor(globalThis, 'crossOriginIsolated');
+  Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value: true });
+  t.after(() => {
+    if (isolation) Object.defineProperty(globalThis, 'crossOriginIsolated', isolation);
+    else delete globalThis.crossOriginIsolated;
+  });
+
+  const cwd = '/home/web/project';
+  const config = `${cwd}/.zed/browser-build.json`;
+  for (const [command, name] of [['browser-zig', 'main.zig'], ['browser-rust', 'main.rs']]) {
+    const source = `${cwd}/${name}`;
+    const worker = new EventTarget();
+    worker.terminate = () => {};
+    const posted = new Promise(resolve => { worker.postMessage = resolve; });
+    const bridge = new BrowserRunBridge({
+      async list_browser_paths() { return '[]'; },
+      async read_browser_file(path) {
+        assert.equal(path, config);
+        return encode('{"args":["two words",""]}');
+      },
+    }, () => worker);
+    const id = await bridge.open({ cwd, command, args: [source, 'wasi'], env: { ZED_BROWSER_SOURCE: '' } });
+    t.after(() => bridge.close(id));
+    const { files, programArgs } = await posted;
+    assert.deepEqual(files.map(([path]) => path), [source, config]);
+    assert.deepEqual(JSON.parse(decode(files[1][1])).args, ['two words', '']);
+    assert.equal(programArgs, undefined);
   }
 });
 

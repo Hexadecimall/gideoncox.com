@@ -40,9 +40,11 @@ file, and select **Build and Run WebAssembly**. Each element of `args` arrives
 as written, including spaces, empty strings, and non-ASCII characters.
 
 For one run, select **Run and Build → Run WebAssembly with Arguments…** and
-enter a JSON array such as `["convert", "--name", "two words"]`. This overrides
-the configured arguments for that run. Submit an empty field to run without
-arguments. The task's result uses the program's return or exit status.
+enter `convert --name "two words"`. The field splits quoted arguments and passes
+them directly to the program. It also accepts a JSON array such as
+`["convert", "--name", "two words"]`. This overrides the configured arguments for
+that run. Submit an empty field to run without arguments. The task terminal shows
+the program's return or exit status, or the build status if compilation fails.
 
 **Cross-Compile → Linux x86-64 (Static)** downloads an ELF executable linked
 with musl. C++ builds also link libc++ and its exception runtime. Run the file
