@@ -1,37 +1,35 @@
 import { installFileDialogs } from './zed/dialogs.js?v=folder-memory-1';
 import { installNativeTerminal } from './zed/native-terminal.js?v=run-menu-1';
 import { installNativeHost } from './zed/native-host.js?v=folder-memory-1';
-import { BrowserPython } from './zed/browser-python.js?v=4';
+import { BrowserPython } from './zed/browser-python.js?v=5';
 
 import { BrowserClangd } from './zed/browser-clangd.js?v=multi-lsp-1';
 import { BrowserRust } from './zed/browser-rust.js?v=multi-lsp-1';
 import { BrowserRunBridge } from './zed/browser-run.js?v=5';
 import { prepareEditorIsolation } from './zed/isolation.js';
-import { editorWasmResponse } from './zed/wasm-cache.js?v=1';
+import { editorWasmResponse } from './zed/wasm-cache.js?v=3';
 
 const loading = document.querySelector('#loading');
-const build = '45325469f3e5';
+const build = 'd0c202a129d9';
+const gzip = true;
 
 async function downloadWasm() {
-  const download = await editorWasmResponse(build);
+  const download = await editorWasmResponse(build, { gzip });
   const { response } = download;
   if (!response.ok) throw new Error(`Download failed (${response.status})`);
   const saved = download.save();
   try {
+    let length = 0;
+    const body = download.body(bytes => {
+      length += bytes;
+      loading.textContent = `Loading Zed · ${(length / 1048576).toFixed(1)} MB`;
+    });
     let module;
-    if (!response.body || typeof TransformStream !== 'function' || !WebAssembly.compileStreaming) {
-      module = await WebAssembly.compile(await response.arrayBuffer());
+    if (!body || !WebAssembly.compileStreaming) {
+      module = await WebAssembly.compile(await new Response(body).arrayBuffer());
     } else {
-      let length = 0;
-      const stream = response.body.pipeThrough(new TransformStream({
-        transform(chunk, controller) {
-          length += chunk.byteLength;
-          loading.textContent = `Loading Zed · ${(length / 1048576).toFixed(1)} MB`;
-          controller.enqueue(chunk);
-        },
-      }));
       module = await WebAssembly.compileStreaming(
-        new Response(stream, { headers: { 'Content-Type': 'application/wasm' } }),
+        new Response(body, { headers: { 'Content-Type': 'application/wasm' } }),
       );
     }
     loading.textContent = 'Starting Zed…';

@@ -3212,7 +3212,7 @@ function __wbg_get_imports() {
         },
         __wbindgen_cast_0000000000000007: function(arg0, arg1) {
             // Cast intrinsic for `Closure(Closure { owned: true, function: Function { arguments: [Ref(NamedExternref("MessageEvent"))], shim_idx: 8594, ret: Unit, inner_ret: Some(Unit) }, mutable: true }) -> Externref`.
-            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_80138);
+            const ret = makeMutClosure(arg0, arg1, __wasm_bindgen_func_elem_80137);
             return addHeapObject(ret);
         },
         __wbindgen_cast_0000000000000008: function(arg0, arg1) {
@@ -3314,9 +3314,9 @@ function __wasm_bindgen_func_elem_25055_5(arg0, arg1, arg2) {
     wasm.__wasm_bindgen_func_elem_25055_5(arg0, arg1, addHeapObject(arg2));
 }
 
-function __wasm_bindgen_func_elem_80138(arg0, arg1, arg2) {
+function __wasm_bindgen_func_elem_80137(arg0, arg1, arg2) {
     try {
-        wasm.__wasm_bindgen_func_elem_80138(arg0, arg1, addBorrowedObject(arg2));
+        wasm.__wasm_bindgen_func_elem_80137(arg0, arg1, addBorrowedObject(arg2));
     } finally {
         heap[stack_pointer++] = undefined;
     }

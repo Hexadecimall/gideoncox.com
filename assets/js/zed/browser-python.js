@@ -1,6 +1,7 @@
 import { isBrowserProject } from './paths.js?v=local-folders-1';
 import { isLanguageProject, projectFiles, readProjectFile } from './browser-language-server.js?v=2';
 import { joinBytes, LspFrames, lspFrame } from './lsp-stream.js';
+import { applyDocumentChanges, documentReplacement, formatPython } from './python-format.js?v=2';
 
 const VENDOR = new URL('../../vendor/pyright/', import.meta.url);
 const VERSION = '1.1.299';
@@ -41,11 +42,13 @@ function filePath(uri) {
 }
 
 class PyrightProcess {
-  constructor(zed, worker, typeshed, root) {
+  constructor(zed, worker, typeshed, root, format) {
     this.zed = zed;
     this.worker = worker;
     this.typeshed = typeshed;
     this.root = root;
+    this.format = format;
+    this.documents = new Map();
     this.input = new LspFrames();
     this.output = [];
     this.outputLength = 0;
@@ -63,13 +66,10 @@ class PyrightProcess {
             catch { item.scopeUri = this.rootUri; }
           }
         }
-        const frame = lspFrame(data);
-        if (frame.byteLength + this.outputLength > MAX_OUTPUT) {
-          throw new Error('Python language server output exceeded its buffer limit.');
+        if (data.id === this.initializeId && data.result?.capabilities) {
+          data.result.capabilities.documentFormattingProvider = true;
         }
-        this.output.push(frame);
-        this.outputLength += frame.byteLength;
-        this.reader?.();
+        this.receive(data);
       } catch (error) { this.close(1, error.message); }
     });
     worker.addEventListener('error', event => {
@@ -78,6 +78,35 @@ class PyrightProcess {
     });
     worker.addEventListener('messageerror', () => this.close(1, 'Python worker sent an invalid message.'));
     worker.postMessage({ type: 'browser/boot', mode: 'foreground' });
+  }
+
+  receive(message) {
+    if (this.exitCode !== null) return;
+    const frame = lspFrame(message);
+    if (frame.byteLength + this.outputLength > MAX_OUTPUT) {
+      throw new Error('Python language server output exceeded its buffer limit.');
+    }
+    this.output.push(frame);
+    this.outputLength += frame.byteLength;
+    this.reader?.();
+  }
+
+  async formatDocument(id, { textDocument: { uri }, options }) {
+    const text = this.documents.get(uri);
+    const send = response => this.receive({ jsonrpc: '2.0', id, ...response });
+    if (text === undefined) { send({ result: null }); return; }
+    try {
+      const settings = { format: { 'indent-style': options?.insertSpaces === false ? 'tab' : 'space' } };
+      if (Number.isInteger(options?.tabSize) && options.tabSize > 0 && options.tabSize <= 32) {
+        settings['indent-width'] = options.tabSize;
+      }
+      const formatted = await this.format(text, settings);
+      if (this.documents.get(uri) !== text) {
+        send({ error: { code: -32801, message: 'The document changed during formatting.' } });
+      } else send({ result: documentReplacement(text, formatted) });
+    } catch (error) {
+      send({ error: { code: -32603, message: error.message } });
+    }
   }
 
   read() {
@@ -124,6 +153,7 @@ class PyrightProcess {
     for (const message of this.input.push(bytes)) {
       const { method, params } = message;
       if (method === 'initialize') {
+        this.initializeId = message.id;
         const [stubs, bytes] = await Promise.all([
           this.typeshed(), projectFiles(this.zed, this.root, isPythonInput, () => this.exitCode === null),
         ]);
@@ -143,7 +173,18 @@ class PyrightProcess {
       } else if (method === 'workspace/didChangeWorkspaceFolders') {
         continue;
       } else if (method === 'textDocument/didOpen' && filePath(params?.textDocument?.uri)) {
+        this.documents.set(params.textDocument.uri, params.textDocument.text);
         this.updateFile(params.textDocument.uri, params.textDocument.text);
+      } else if (method === 'textDocument/didChange') {
+        const uri = params.textDocument.uri;
+        if (this.documents.has(uri)) {
+          this.documents.set(uri, applyDocumentChanges(this.documents.get(uri), params.contentChanges));
+        }
+      } else if (method === 'textDocument/didClose') {
+        this.documents.delete(params.textDocument.uri);
+      } else if (method === 'textDocument/formatting') {
+        this.formatDocument(message.id, params).catch(error => this.close(1, error.message));
+        continue;
       } else if (method === 'textDocument/didSave') {
         await this.updateSavedFile(params?.textDocument?.uri, params?.text);
       } else if (method === 'workspace/didChangeWatchedFiles') {
@@ -170,10 +211,11 @@ class PyrightProcess {
 }
 
 export class BrowserPython {
-  constructor(zed, makeWorker = () => new Worker(WORKER), typeshed = loadTypeshed) {
+  constructor(zed, makeWorker = () => new Worker(WORKER), typeshed = loadTypeshed, format = formatPython) {
     this.zed = zed;
     this.makeWorker = makeWorker;
     this.typeshed = typeshed;
+    this.format = format;
     this.running = new Map();
   }
 
@@ -187,7 +229,7 @@ export class BrowserPython {
     if (!this.accepts(options)) throw new Error('The Python worker opens browser files only.');
     if (this.running.size >= MAX_SESSIONS) throw new Error('Too many Python projects are open.');
     const id = 'browser-python:' + crypto.randomUUID();
-    this.running.set(id, new PyrightProcess(this.zed, this.makeWorker(), this.typeshed, options.cwd));
+    this.running.set(id, new PyrightProcess(this.zed, this.makeWorker(), this.typeshed, options.cwd, this.format));
     return { id, pid: 0 };
   }
 

@@ -6,6 +6,7 @@ filesystem examples. Reject actual local paths in corresponding sources, and
 all native absolute build paths in compiled distribution files.
 """
 import argparse
+import gzip
 from pathlib import Path
 import re
 import tarfile
@@ -34,7 +35,15 @@ for path in args.bundle.rglob('*'):
                     if credentials.search(data):
                         errors.append(f'{member.name}: credential-shaped value')
         continue
-    data = path.read_bytes()
+    if path.name.endswith('.wasm.gz'):
+        with path.open('rb') as stream:
+            header = stream.read(10)
+            if len(header) != 10 or header[:3] != b'\x1f\x8b\x08' or header[3] or any(header[4:8]):
+                errors.append(f'{path.name}: unexpected gzip metadata')
+            stream.seek(0)
+            data = gzip.GzipFile(fileobj=stream).read()
+    else:
+        data = path.read_bytes()
     if compiled_paths.search(data) or any(value in data for value in private):
         errors.append(f'{path.name}: local build path')
     if credentials.search(data):

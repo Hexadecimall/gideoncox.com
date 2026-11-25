@@ -1,8 +1,9 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
+import { gzipSync } from 'node:zlib';
 import { editorWasmResponse } from '../assets/js/zed/wasm-cache.js';
 
-test('editor assets reuse the cached build and download a new build once', async () => {
+function cacheStorageFixture() {
   const entries = new Map();
   const cache = {
     async match(url) { return entries.get(String(url))?.clone(); },
@@ -13,34 +14,73 @@ test('editor assets reuse the cached build and download a new build once', async
       return entries.delete(url.pathname + url.search);
     },
   };
-  const storage = { open: async () => cache };
+  return { entries, cacheStorage: { open: async () => cache } };
+}
+
+test('editor assets reuse the cached build and download a new build once', async () => {
+  const { entries, cacheStorage } = cacheStorageFixture();
   let requests = 0;
   const fetcher = async url => {
     requests++;
     return new Response(url.split('=').pop());
   };
-  const first = await editorWasmResponse('one', storage, fetcher);
+  const options = { cacheStorage, request: fetcher };
+  const first = await editorWasmResponse('one', options);
   await first.save();
   assert.equal(await first.response.text(), 'one');
-  const warm = await editorWasmResponse('one', storage, fetcher);
+  const warm = await editorWasmResponse('one', options);
   assert.equal(await warm.response.text(), 'one');
   assert.equal(requests, 1);
   for (const build of ['two', 'three']) {
-    const update = await editorWasmResponse(build, storage, fetcher);
+    const update = await editorWasmResponse(build, options);
     await update.save();
     assert.equal(await update.response.text(), build);
   }
   assert.equal(requests, 3);
   assert.equal(entries.size, 2);
   assert.deepEqual([...entries.keys()].map(url => url.split('=').pop()), ['two', 'three']);
-  const failed = await editorWasmResponse('three', storage, fetcher);
+  const failed = await editorWasmResponse('three', options);
   await failed.discard();
   assert.equal(entries.size, 1);
 });
 
 test('startup falls back to the network when site storage is blocked', async () => {
-  const storage = { async open() { throw Error('Storage unavailable'); } };
-  const download = await editorWasmResponse('uncached', storage, async () => new Response('editor'));
+  const cacheStorage = { async open() { throw Error('Storage unavailable'); } };
+  const download = await editorWasmResponse('uncached', {
+    cacheStorage, request: async () => new Response('editor'),
+  });
   await download.save();
   assert.equal(await download.response.text(), 'editor');
+});
+
+test('gzip builds stream into WebAssembly while the cache keeps compressed bytes', async () => {
+  const { entries, cacheStorage } = cacheStorageFixture();
+  const wasm = Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0);
+  const compressed = new Uint8Array(gzipSync(wasm));
+  const options = {
+    gzip: true,
+    cacheStorage,
+    async request(url) {
+      assert.match(url, /_bg\.wasm\.gz\?v=gzip-build$/);
+      return new Response(compressed);
+    },
+  };
+  const cold = await editorWasmResponse('gzip-build', options);
+  const saved = cold.save();
+  let received = 0;
+  const body = cold.body(bytes => { received += bytes; });
+  const fromDownload = await WebAssembly.compileStreaming(new Response(body, {
+    headers: { 'Content-Type': 'application/wasm' },
+  }));
+  assert.ok(fromDownload instanceof WebAssembly.Module);
+  assert.equal(received, compressed.length);
+  await saved;
+  const cached = [...entries.values()][0];
+  assert.deepEqual(new Uint8Array(await cached.clone().arrayBuffer()), compressed);
+  const warm = await editorWasmResponse('gzip-build', {
+    ...options, request: () => { assert.fail('The cached gzip should be reused'); },
+  });
+  assert.deepEqual(new Uint8Array(await new Response(warm.body()).arrayBuffer()), wasm);
+  await warm.discard();
+  assert.equal(entries.size, 0);
 });

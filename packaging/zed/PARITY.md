@@ -19,6 +19,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Local projects | Explicitly paired project mount; native reads, atomic writes, directory operations and polling file changes | Connector filesystem tests; integrated browser check pending |
 | Language servers | Installed clangd and rust-analyzer through upstream LSP; binary pipes, stdin EOF and exit status | Real clangd diagnostics through connector; integrated browser check pending |
 | Python | Pyright in a browser worker with project source snapshots and standard library stubs | Browser completion, hover, go-to-definition and diagnostics that clear after an edit. Worker tests include cross-file definitions, signature help and rename. |
+| Python formatting | Ruff WebAssembly worker through Zed's Format command and formatting settings | LSP document edit and formatting tests |
 | Python execution | CPython WASI worker and upstream task terminal for browser workspace files | WASI runtime and buffer snapshot tests |
 | Diagnostics | Upstream Language Servers menu and Project Diagnostics view | Browser status bar and diagnostic checks |
 | C/C++ | clangd 21 in a WebAssembly worker, with browser project files and bundled WASI headers | Chromium language-server and browser workspace checks |

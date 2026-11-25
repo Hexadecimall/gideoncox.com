@@ -12,6 +12,21 @@ that run. The runtime includes Python's portable standard library. Native
 extensions, sockets, subprocesses and package installation are unavailable.
 Browser cross-origin isolation enables blocking terminal input in the worker.
 
+## Formatting
+
+Zed's **editor: format** command formats the current Python buffer with Ruff.
+The formatter loads in a browser worker on first use and uses the editor's
+indentation settings. Set Python's `format_on_save` to `"on"` in Zed settings
+to format at save time. Ruff project configuration and import organization
+are separate from this formatting path.
+
+The formatter comes from [Ruff 0.17.6](https://github.com/astral-sh/ruff/tree/0.17.6/crates/ruff_wasm)
+and the corresponding [WebAssembly package](https://www.npmjs.com/package/@astral-sh/ruff-wasm-web/v/0.17.6).
+The package's SHA-512 integrity value is
+`/Pp6yrmV8oLg6cHkMEqYp0E3G+vbFF7lhSmYDMcKLddp2z3iV+y6gn2g4TsJ2+xOGgKR3wOAaOplfqjotmP1gg==`.
+Copy `LICENSE` and `ruff_wasm.js` verbatim. In the WASM asset, replace each
+CI build-root prefix with the same-length relative prefix `./ruff-build/`.
+
 ## Runtime source
 
 - [CPython 3.14.10](https://www.python.org/downloads/release/python-31410/)

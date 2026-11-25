@@ -4,6 +4,7 @@ import { readFile } from 'node:fs/promises';
 import { BrowserPython } from '../assets/js/zed/browser-python.js';
 import { LspFrames, lspFrame } from '../assets/js/zed/lsp-stream.js';
 import { WorkerHost } from './fixtures/zed-worker-host.mjs';
+import { initSync, PositionEncoding, Workspace } from '../assets/vendor/ruff/ruff_wasm.js';
 
 test('LSP frames preserve split Unicode bytes and multiple messages', () => {
   const first = { jsonrpc: '2.0', method: 'text', params: 'π 🐍' };
@@ -32,8 +33,18 @@ test('browser Pyright resolves project imports and returns core LSP results', { 
     read_browser_file: async path => encode.encode(contents.get(path)),
   };
   const vendor = new URL('../assets/vendor/pyright/', import.meta.url);
+  const ruff = new URL('../assets/vendor/ruff/ruff_wasm_bg.wasm', import.meta.url);
   const python = new BrowserPython(fs, () => new WorkerHost(new URL('pyright.worker.js', vendor)),
-    async () => JSON.parse(await readFile(new URL('typeshed-stdlib.json', vendor), 'utf8')));
+    async () => JSON.parse(await readFile(new URL('typeshed-stdlib.json', vendor), 'utf8')),
+    async (text, options) => {
+      initSync({ module: await readFile(ruff) });
+      const workspace = new Workspace(options, PositionEncoding.Utf16);
+      try {
+        return workspace.format(text);
+      } finally {
+        workspace.free();
+      }
+    });
   context.after(() => python.close());
   const command = 'zed-browser-pyright';
   await assert.rejects(python.processOpen({ command, cwd: '/outside' }), /browser files only/);
@@ -84,6 +95,7 @@ test('browser Pyright resolves project imports and returns core LSP results', { 
     } });
     const { capabilities } = await reply(1);
     assert.ok(capabilities.hoverProvider && capabilities.completionProvider && capabilities.definitionProvider);
+    assert.equal(capabilities.documentFormattingProvider, true);
     await send({ method: 'initialized', params: {} });
     await send({ method: 'textDocument/didOpen', params: {
       textDocument: { uri, languageId: 'python', version: 1, text: contents.get(source) },
@@ -113,6 +125,20 @@ test('browser Pyright resolves project imports and returns core LSP results', { 
     } });
     await receive(item => item.method === 'textDocument/publishDiagnostics'
       && item.params.uri === uri && item.params.diagnostics.length === 0, 'cleared diagnostic after edit');
+    await send({ method: 'textDocument/didChange', params: {
+      textDocument: { uri, version: 3 },
+      contentChanges: [{ text: 'message=" hi 🐍"\nprint(   message )' }, {
+        range: { start: { line: 0, character: 9 }, end: { line: 0, character: 10 } },
+        text: '',
+      }],
+    } });
+    await send({ id: 8, method: 'textDocument/formatting', params: {
+      textDocument: { uri }, options: { tabSize: 4, insertSpaces: true },
+    } });
+    assert.deepEqual(await reply(8), [{
+      range: { start: { line: 0, character: 0 }, end: { line: 1, character: 18 } },
+      newText: 'message = "hi 🐍"\nprint(message)\n',
+    }]);
     await send({ id: 7, method: 'shutdown', params: null });
     await reply(7);
     await send({ method: 'exit', params: null });
