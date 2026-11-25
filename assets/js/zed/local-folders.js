@@ -1,5 +1,8 @@
+import { rememberedFolder, rememberFolder } from './folder-history.js?v=1';
+
 const PREFIX = '/browser-folders';
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
+const ACCESS = { mode: 'readwrite' };
 
 function safePart(part) {
   return part && part !== '.' && part !== '..' && !/[\\/\x00]/.test(part);
@@ -36,16 +39,42 @@ export class LocalFolders {
 
   available() { return typeof globalThis.showDirectoryPicker === 'function'; }
   async pick() {
-    const folder = await globalThis.showDirectoryPicker({ mode: 'readwrite', id: 'zed-project-folder' });
-    return this.mount(folder);
+    const folder = await globalThis.showDirectoryPicker({ ...ACCESS, id: 'zed-project-folder' });
+    const previous = await this.lastSelected();
+    const same = previous && await folder.isSameEntry(previous.handle).catch(() => false);
+    const root = await this.mount(folder, same ? previous.root : undefined);
+    await rememberFolder(root, folder).catch(() => {});
+    return root;
   }
 
-  async mount(folder) {
+  async lastSelected() {
+    if (!this.available()) return undefined;
+    const record = await rememberedFolder().catch(() => undefined);
+    const name = record?.handle?.name;
+    const [, mounts, id, last] = typeof record?.root === 'string' ? record.root.split('/') : [];
+    if (record?.handle?.kind === 'directory' && safePart(name) && mounts === PREFIX.slice(1)
+        && /^[0-9a-f-]{36}$/i.test(id) && last === name && record.root === `${PREFIX}/${id}/${name}`) return record;
+  }
+
+  async restore() {
+    const record = await this.lastSelected();
+    if (record && await record.handle.queryPermission(ACCESS).catch(() => 'denied') === 'granted') {
+      return this.mount(record.handle, record.root);
+    }
+  }
+
+  async reauthorize(record) {
+    // This must be the first awaited action in the click handler so the browser sees user activation.
+    if (await record.handle.requestPermission(ACCESS) !== 'granted') throw new Error('Folder access was not granted.');
+    return this.mount(record.handle, record.root);
+  }
+
+  async mount(folder, root) {
     if (folder.kind !== 'directory' || !safePart(folder.name)) throw new Error('Choose a folder.');
     for (const [path, handle] of this.mounts) {
       if (await folder.isSameEntry(handle)) return path;
     }
-    const path = `${PREFIX}/${crypto.randomUUID()}/${folder.name}`;
+    const path = root ?? `${PREFIX}/${crypto.randomUUID()}/${folder.name}`;
     this.mounts.set(path, folder);
     return path;
   }

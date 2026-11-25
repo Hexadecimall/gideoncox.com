@@ -4,6 +4,7 @@ import { joinBytes, LspFrames, lspFrame } from './lsp-stream.js';
 
 const VENDOR = new URL('../../vendor/pyright/', import.meta.url);
 const VERSION = '1.1.299';
+const WORKER = `/editor/runtime/python/pyright-worker.js?v=${VERSION}-1`;
 const COMMAND = 'zed-browser-pyright';
 const MAX_FILE = 2 * 1024 * 1024;
 const MAX_OUTPUT = 24 * 1024 * 1024;
@@ -169,7 +170,7 @@ class PyrightProcess {
 }
 
 export class BrowserPython {
-  constructor(zed, makeWorker = () => new Worker(new URL(`pyright.worker.js?v=${VERSION}`, VENDOR)), typeshed = loadTypeshed) {
+  constructor(zed, makeWorker = () => new Worker(WORKER), typeshed = loadTypeshed) {
     this.zed = zed;
     this.makeWorker = makeWorker;
     this.typeshed = typeshed;

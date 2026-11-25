@@ -192,13 +192,19 @@ Bubble wrap supports clicking, dragging, touch, and keyboard activation. Sound i
 
 The browser build runs Zed's upstream Rust workspace and editor through GPUI Web. It includes panes, tabs, project and outline panels, the command palette, Vim mode, and all 22 bundled syntax configurations. Files saved in the browser persist separately from session metadata. Clearing site data removes browser files.
 
-Zed's terminal opens a real Ark PTY through the optional local connector. To edit a local project, start the connector from the project folder and use **Open → Connect local folder…** in Zed. Add `--allow-processes` to run installed C/C++ and Rust language servers and project tasks.
+Zed's terminal opens a real Ark PTY through the optional local connector. Start
+the connector from the project folder and choose **Open with Ark connector…**
+in Zed's Open Folder dialog. Add `--allow-processes` to run installed C/C++ and
+Rust language servers and project tasks.
 
 Python completion, hover, signature help, navigation, and diagnostics run in a
 local Pyright browser worker. Import a folder or save a `.py` file in the browser
 workspace. The worker uses the browser's project files and bundled standard
 library stubs. It requires neither a host connector nor a local Python install.
 Third-party libraries need source files or stubs in the browser project.
+To execute a Python file, open **Run and Build** in the status bar and select
+**Run Python File**. CPython runs in a WebAssembly worker and sends its output
+to Zed's terminal. This runtime uses browser workspace files.
 
 C/C++ browser projects use clangd WebAssembly. Opening a C or C++ file loads
 the server on demand and uses bundled WASI headers when no compile database is
@@ -213,8 +219,14 @@ path dependencies, and explicit `rust-project.json` graphs. See the
 
 **Open Folder → Open local folder…** opens a Chromium folder picker. Saving
 edits writes through the selected folder handle. Import Folder remains available
-for browsers that lack this picker. A folder handle lasts for the current editor
-session. Folder rename and delete are unavailable through this connection.
+for browsers that lack this picker. Zed remembers the most recently opened
+folder and can reopen it while browser permission is still granted. The **Reopen**
+button for that folder requests permission again when needed. Folder rename and
+delete are unavailable through this connection.
+
+Zed saves `settings.json` and individual project trust decisions in browser
+storage. The editor also caches its versioned WebAssembly file and fetches a new
+copy when the deployed build changes.
 
 ```sh
 python3 path/to/ark_connector.py --project .
@@ -228,6 +240,7 @@ Pairing lasts for the current page session. Native programs run as the connector
 Package a rebuilt source tree and check the vendored distribution with:
 
 ```sh
+python3 packaging/zed/version-bindgen-imports.py assets/vendor/zed/pkg
 python3 packaging/zed/package-source.py /path/to/zed-browser assets/vendor/zed/source.tar.gz
 python3 packaging/zed/audit.py assets/vendor/zed
 ```

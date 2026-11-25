@@ -9,13 +9,17 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | --- | --- | --- |
 | Workspace | Upstream Workspace/MultiWorkspace, project and outline panels, panes, tabs, command palette, search and settings | WASM build and browser workspace checks |
 | Documents | Browser filesystem with persisted documents and import/export dialogs | Browser file round trips |
-| Device folders | Chromium folder picker and direct file reads and writes through the selected handle | Chromium picker and folder-handle checks |
+| Device folders | Chromium folder picker and direct file reads and writes through the selected handle. Zed remembers the most recent folder and checks its permission on reopen. | Chromium folder-handle and reload checks |
+| Settings and trust | Browser-backed `settings.json`, native settings UI and remembered project trust choices | Workspace reload checks |
+| Startup cache | Versioned WebAssembly download in Cache Storage, with a network fallback | Cache tests and Chromium reload checks |
 | Vim | Upstream modes, keymap and status, enabled by `vim_mode` in Zed settings | WASM build and module validation |
 | Syntax | All 22 bundled upstream syntax configurations, Tree-sitter grammars and queries | WASM build and module validation |
 | Terminal | Upstream TerminalPanel, terminal_view and Alacritty grid; authenticated local Ark PTYs | Connector PTY and JavaScript transport tests |
 | Local projects | Explicitly paired project mount; native reads, atomic writes, directory operations and polling file changes | Connector filesystem tests; integrated browser check pending |
 | Language servers | Installed clangd and rust-analyzer through upstream LSP; binary pipes, stdin EOF and exit status | Real clangd diagnostics through connector; integrated browser check pending |
 | Python | Pyright in a browser worker with project source snapshots and standard library stubs | Browser completion, hover, go-to-definition and diagnostics that clear after an edit. Worker tests include cross-file definitions, signature help and rename. |
+| Python execution | CPython WASI worker and upstream task terminal for browser workspace files | WASI runtime and buffer snapshot tests |
+| Diagnostics | Upstream Language Servers menu and Project Diagnostics view | Browser status bar and diagnostic checks |
 | C/C++ | clangd 21 in a WebAssembly worker, with browser project files and bundled WASI headers | Chromium language-server and browser workspace checks |
 | Rust | rust-analyzer in a WASI worker with a bundled standard library, Rust project graphs, and local Cargo path dependencies | Concurrent Chromium worktrees and browser workspace checks |
 | Tasks | Upstream task picker and task terminal; native command, arguments, environment, working directory and completion status | Real task PTY exit/output tests; integrated browser check pending |
@@ -26,7 +30,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 - Native debugger sessions and debugger UI.
 - Extension installation, execution, grammars, themes and extension-provided language servers.
 - Browser LSP runners for languages beyond C/C++, Python and Rust.
-- Rust Cargo execution, registry packages, build scripts, procedural macros, and rustfmt in the browser.
+- Browser compilation and cross-compilation, including Zig, Cargo, Clippy, registry packages, build scripts, procedural macros, and rustfmt.
 - Collaboration, authentication, hosted services and AI integrations.
 - Durable workspace/session metadata; SQLite databases currently live in memory.
 - Desktop platform integrations, multiple OS windows and native file dialogs.

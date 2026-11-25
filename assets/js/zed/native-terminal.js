@@ -172,17 +172,19 @@ function pair(purpose = 'terminal') {
   });
 }
 
-export function installNativeTerminal() {
+export function installNativeTerminal(browser = null) {
   const bridge = new NativeTerminalBridge(pair);
+  const route = id => browser?.owns(id) ? browser : bridge;
   globalThis.zedNativeTerminal = {
-    open: options => bridge.open(options),
-    read: id => bridge.read(id),
-    write: (id, data) => bridge.write(id, data),
-    resize: (id, size) => bridge.resize(id, size),
-    close: id => bridge.close(id),
+    open: options => (browser?.accepts(options) ? browser : bridge).open(options),
+    read: id => route(id).read(id),
+    write: (id, data) => route(id).write(id, data),
+    resize: (id, size) => route(id).resize?.(id, size),
+    close: id => route(id).close(id),
   };
   window.addEventListener('pagehide', () => {
     for (const id of [...bridge.sessions.keys()]) bridge.close(id, true);
+    for (const id of browser?.sessions.keys() ?? []) browser.close(id);
   });
   return bridge;
 }

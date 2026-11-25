@@ -1,5 +1,5 @@
 import { isBrowserProject } from './paths.js?v=local-folders-1';
-import { LocalFolders } from './local-folders.js';
+import { LocalFolders } from './local-folders.js?v=folder-memory-1';
 
 function encode(bytes) {
   let text = '';
@@ -170,6 +170,16 @@ export function installNativeHost(transport, ...browserServices) {
   host.openLocalFolder = async () => {
     const root = await folders.pick();
     host.activeRoot = root;
+    return root;
+  };
+  host.reopenLocalFolder = async record => {
+    const root = await folders.reauthorize(record);
+    host.activeRoot = root;
+    return root;
+  };
+  host.restoreLocalFolder = async () => {
+    const root = await folders.restore();
+    if (root) host.activeRoot = root;
     return root;
   };
   const processOwner = id => browserServices.find(service => service.owns(id)) ?? host;

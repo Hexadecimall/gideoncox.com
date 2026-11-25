@@ -23,6 +23,7 @@ export function installFileDialogs(zed, host) {
         if (result !== 'browser') return result;
       }
       const saveLocally = mode === 'save' && localDirectory;
+      const remembered = mode === 'open' && options.directories && await host?.folders?.lastSelected();
       const entries = saveLocally
         ? await Promise.all((await host.folders.fs('read_dir', { path: options.directory })).map(async path => ({
           path, isDirectory: (await host.folders.fs('metadata', { path }))?.is_dir,
@@ -122,6 +123,17 @@ export function installFileDialogs(zed, host) {
             catch (failure) { error.textContent = failure.message || String(failure); }
           });
           imports.append(button, picker);
+        }
+        if (remembered) {
+          const reopen = element('button', `Reopen ${remembered.handle.name}`);
+          reopen.type = 'button';
+          reopen.addEventListener('click', async () => {
+            reopen.disabled = true;
+            try { finish([await host.reopenLocalFolder(remembered)]); }
+            catch (failure) { error.textContent = failure.message || String(failure); }
+            finally { reopen.disabled = false; }
+          });
+          imports.append(reopen);
         }
         if (mode === 'open' && options.directories && host?.folders?.available()) {
           const choose = element('button', 'Open local folder…');
