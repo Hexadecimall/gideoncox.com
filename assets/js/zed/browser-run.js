@@ -4,7 +4,8 @@ import { joinBytes } from './lsp-stream.js';
 
 const PROGRAMS = new Map([
   ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=2', targets: ['python'] }],
-  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi', 'linux-x86_64'] }],
+  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=linux-static-2',
+    targets: ['wasi', 'linux-x86_64', 'linux-x86_64-static'] }],
   ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi'] }],
   ['browser-rust', { label: 'Rust', worker: '/editor/runtime/compiler/worker.js?v=cargo-diagnostics-3', targets: ['wasi'] }],
 ]);
@@ -153,13 +154,18 @@ export class BrowserRunBridge {
     const id = SESSION_PREFIX + crypto.randomUUID();
     const onBuild = command === 'browser-rust' ? snapshot => this.onRustBuild?.(cwd, snapshot) : undefined;
     const process = new BrowserTaskProcess(this.makeWorker(program.worker), program.label, data => {
-      if (target !== 'linux-x86_64') throw new Error('Unexpected browser build artifact.');
+      if (target !== 'linux-x86_64' && target !== 'linux-x86_64-static') {
+        throw new Error('Unexpected browser build artifact.');
+      }
       const stem = script.split('/').pop().replace(/\.[^.]+$/, '').replace(/[^\w.-]/g, '_');
       const link = document.createElement('a');
       const url = URL.createObjectURL(new Blob([data], { type: 'application/octet-stream' }));
       link.href = url;
-      link.download = `${stem || 'program'}-linux-x86_64.elf`;
-      link.click();
+      link.download = `${stem || 'program'}-${target}.elf`;
+      link.hidden = true;
+      document.body.append(link);
+      try { link.click(); }
+      finally { link.remove(); }
       setTimeout(() => URL.revokeObjectURL(url), 30_000);
       process.append(encoder.encode(`Built ${link.download}\r\n`));
     }, onBuild);

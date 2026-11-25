@@ -34,11 +34,15 @@ enter a JSON array such as `["convert", "--name", "two words"]`. This overrides
 the configured arguments for that run. Submit an empty field to run without
 arguments. The task's result uses the program's return or exit status.
 
-**Cross-Compile → Linux x86-64 (Freestanding)** downloads a statically linked
-ELF executable. It supports `int main(void)` or a project-provided `_start`.
-This target has no Linux system headers or C/C++ runtime libraries. The WASI
-C++ target does not support exceptions. Zig uses Zig 0.17.0's WebAssembly-hosted
-compiler and standard library to build WASI executables.
+**Cross-Compile → Linux x86-64 (Static)** downloads an ELF executable linked
+with musl. C++ builds also link libc++ and its exception runtime. Run the file
+on x86-64 Linux after making it executable. The Linux headers and libraries
+download on demand.
+
+**Linux x86-64 (Freestanding)** uses `int main(void)` or a project-provided
+`_start` and skips the system libraries. The WASI C++ target uses libc++ without
+exceptions. Zig uses Zig 0.17.0's WebAssembly-hosted compiler and standard
+library to build WASI executables.
 
 The Rust browser task uses Cargo when the active file belongs to a package
 with a `Cargo.toml`. Add public crates.io dependencies in `[dependencies]` as
@@ -70,6 +74,7 @@ reused through browser Cache Storage.
 - [Clang and LLD source](https://github.com/YoWASP/llvm-project/tree/97196c8eeb1d495fa43bb8af2fb26af5ef5b89fb)
 - [WASI SDK 29](https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-29), including [wasi-libc](https://github.com/WebAssembly/wasi-libc/tree/ac020b86fd44bafe60aa4fa12f407d16e3731329) and [LLVM runtime libraries](https://github.com/llvm/llvm-project/tree/222fc11f2b8f25f6a0f4976272ef1bb7bf49521d)
 - [Zig source](https://codeberg.org/ziglang/zig/src/commit/7647adab80dd088f4de3610fd245915a912eb6ad) and [Zigtools browser build](https://github.com/zigtools/playground/blob/60baeb6b2bba8686adb8557d9484688ff9106862/build.zig)
+- [Zig 0.17.0 Linux sysroot source](https://ziglang.org/download/0.17.0/zig-0.17.0.tar.xz). The source tree includes musl, libc++, libc++abi, libunwind, and their headers and licenses.
 - [WASI-hosted Rust release](https://github.com/oligamiq/rust_wasm/releases/tag/v0.2.1-release) and [corresponding Rust source](https://github.com/oligamiq/rust/tree/cf327c2068549194a29160499c2ecafa9061e46e)
 - [WASI Cargo source](https://github.com/oligamiq/cargo/tree/eb6c32a4a364d83946a36adbec3b4d2ee863a669), [filetime 0.2.27](https://crates.io/crates/filetime/0.2.27), and the [browser build patch](../../../packaging/zed/cargo-browser.patch)
 
@@ -83,4 +88,14 @@ python3 packaging/zed/pack-browser-compilers.py LLVM_BUILD WASI_SDK ZIG_ARTIFACT
 python3 packaging/zed/pack-browser-rustc.py rustc_opt.wasm.tar.gz wasm32-wasip1.tar.gz editor/runtime/compiler \
   --host-libraries wasm32-wasip1-threads.tar.gz --wasi-sdk WASI_SDK
 sh packaging/zed/build-browser-cargo.sh WASI_SDK SCRATCH editor/runtime/compiler
+```
+
+To prepare the static Linux target, use Zig 0.17.0 and LLVM 22's `llvm-strip`.
+Run the two commands from the same directory so the packer can resolve paths
+in Zig's linker trace.
+
+```sh
+printf '#include <iostream>\nint main() { std::cout << 7; }\n' > probe.cpp
+ZIG_VERBOSE_LINK=1 zig c++ -target x86_64-linux-musl -static -O2 probe.cpp -o probe 2> zig-link.log
+python3 packaging/zed/pack-linux-sysroot.py zig-0.17.0.tar.xz zig-link.log LLVM_BIN/llvm-strip editor/runtime/compiler
 ```

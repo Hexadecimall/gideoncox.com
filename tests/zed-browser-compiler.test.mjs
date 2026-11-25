@@ -1,6 +1,9 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
 import { createHash } from 'node:crypto';
-import { readFile } from 'node:fs/promises';
+import { mkdtemp, readFile, rm, writeFile } from 'node:fs/promises';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import test from 'node:test';
 import { gzipSync } from 'node:zlib';
 import { WorkerHost } from './fixtures/zed-worker-host.mjs';
@@ -31,18 +34,22 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files, pro
   const stdout = new TextDecoder();
   let output = '';
   let artifact;
+  let artifactOutput;
   let buildOutput;
   let cargoDiagnostics;
   const result = new Promise((resolve, reject) => {
     globalThis.postMessage = message => {
       if (message.chunk) output += stdout.decode(message.chunk, { stream: true });
-      if (message.artifact) artifact = message.artifact;
+      if (message.artifact) {
+        artifact = message.artifact;
+        artifactOutput = output;
+      }
       if (message.buildOutput) buildOutput = message.buildOutput;
       if (message.cargoDiagnostics) cargoDiagnostics = message.cargoDiagnostics;
       if (message.error) reject(new Error(message.error));
       if (message.code !== undefined) {
         resolve({ code: message.code, ranProgram: message.ranProgram, output: output + stdout.decode(),
-          artifact, fetched, buildOutput, cargoDiagnostics });
+          artifact, artifactOutput, fetched, buildOutput, cargoDiagnostics });
       }
     };
   });
@@ -121,6 +128,72 @@ test('browser builds reject non-string arguments before starting the toolchain',
     'invalid-args.c': 'int main(void) { return 0; }',
     '.zed/browser-build.json': '{"args":["--count",3]}',
   } }), /"args".*must be an array of strings/);
+});
+
+test('the browser cross-compiles and statically links C and C++ with Linux standard libraries', async context => {
+  const target = 'linux-x86_64-static';
+  const helper = '#include <string.h>\nint score(const char *value) { return strlen(value) * 14; }';
+  const c = await run({ target, script: 'main.c', files: {
+    'main.c': '#include <stdio.h>\nint score(const char *);\nint main(int argc, char **argv) {'
+      + ' printf("C: %d\\n", score(argc > 1 ? argv[1] : "Zed")); return 7; }',
+    'src/helper.c': helper,
+  } });
+  assert.equal(c.fetched.has('linux-x86_64-cxx.tar.gz'), false);
+
+  const cpp = await run({ target, script: 'main.cpp', files: {
+    'main.cpp': `#include <iostream>
+#include <stdexcept>
+#include <vector>
+extern "C" int score(const char *);
+int main(int argc, char **argv) {
+    const std::vector<int> values{score(argc > 1 ? argv[1] : "Zed")};
+    try {
+        std::cout << "C++: " << values.at(0) << "\\n";
+        throw std::runtime_error("unwound");
+    } catch (const std::exception &error) {
+        std::cout << error.what() << "\\n";
+    }
+    return 23;
+}`,
+    'src/helper.c': helper,
+  } });
+  assert.equal(cpp.fetched.has('linux-x86_64-cxx.tar.gz'), true);
+
+  for (const build of [c, cpp]) {
+    assert.equal(build.code, 0, build.output);
+    assert.match(build.artifactOutput, /Linking\r\n/);
+    assert.equal(build.fetched.has('linux-x86_64-sdk.tar.gz'), true);
+    assert.equal(build.fetched.has('wasi-sdk.tar.gz'), false);
+    assert.equal(build.ranProgram, undefined);
+    const elf = new DataView(build.artifact.buffer, build.artifact.byteOffset, build.artifact.length);
+    assert.equal(elf.getUint32(0), 0x7f454c46);
+    assert.equal(elf.getUint8(4), 2);
+    assert.equal(elf.getUint16(16, true), 2);
+    assert.equal(elf.getUint16(18, true), 62);
+    assert.notEqual(elf.getBigUint64(24, true), 0n);
+    const headerOffset = Number(elf.getBigUint64(32, true));
+    const headerSize = elf.getUint16(54, true);
+    const headers = Array.from({ length: elf.getUint16(56, true) },
+      (_, index) => elf.getUint32(headerOffset + headerSize * index, true));
+    assert.ok(headers.includes(1)); // PT_LOAD
+    assert.equal(headers.includes(2), false); // PT_DYNAMIC
+    assert.equal(headers.includes(3), false); // PT_INTERP
+  }
+
+  if (process.platform === 'linux' && process.arch === 'x64') {
+    const directory = await mkdtemp(join(tmpdir(), 'zed-linux-static-'));
+    context.after(() => rm(directory, { recursive: true, force: true }));
+    for (const [name, build, exit, expected] of [
+      ['c', c, 7, 'C: 42\n'], ['cpp', cpp, 23, 'C++: 42\nunwound\n'],
+    ]) {
+      const binary = join(directory, name);
+      await writeFile(binary, build.artifact, { mode: 0o700 });
+      const result = spawnSync(binary, ['Zed'], { encoding: 'utf8', timeout: 5000 });
+      assert.equal(result.error, undefined);
+      assert.equal(result.status, exit, result.stderr);
+      assert.equal(result.stdout, expected);
+    }
+  }
 });
 
 test('standalone Rust still builds with the bundled rustc', async () => {

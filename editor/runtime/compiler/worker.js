@@ -6,6 +6,13 @@ import { loadArchive, loadModule } from './assets.js';
 const CC_OUTPUT = '/.zed-compiler';
 const SOURCE = /\.(?:c|C|cc|cpp|cxx|c\+\+|CPP)$/;
 const SKIP_SOURCES = new Set(['.zed', '.zed-build', 'build', 'dist', 'vendor', 'tests', 'test']);
+const LINUX_HEADERS = [
+  '/linux/include', '/linux/libc/include/x86_64-linux-musl', '/linux/libc/include/generic-musl',
+  '/linux/libc/include/x86-linux-any', '/linux/libc/include/any-linux-any',
+];
+const LINUX_CXX_HEADERS = [
+  '/linux/libcxx/include', '/linux/libcxxabi/include', ...LINUX_HEADERS, '/linux/libunwind/include',
+];
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
 const linuxStartup = encoder.encode(`
@@ -98,33 +105,43 @@ function clangSettings({ cwd, script, files }, settings) {
 }
 
 async function clangBuild(job, settings, output) {
-  const isNative = job.target === 'linux-x86_64';
+  const freestanding = job.target === 'linux-x86_64';
+  const linuxStatic = job.target === 'linux-x86_64-static';
+  const isNative = freestanding || linuxStatic;
   const { sources, includes } = clangSettings(job, settings);
-  const [clang, linker, sdk] = await Promise.all([
+  const usesCpp = sources.some(source => !source.endsWith('.c'));
+  const sdkName = linuxStatic ? 'linux-x86_64-sdk.tar.gz' : 'wasi-sdk.tar.gz';
+  const [clang, linker, sdk, cxx] = await Promise.all([
     loadModule('clang.wasm.gz'), loadModule('lld.wasm.gz'),
-    isNative ? null : loadArchive('wasi-sdk.tar.gz'),
+    freestanding ? null : loadArchive(sdkName),
+    linuxStatic && usesCpp ? loadArchive('linux-x86_64-cxx.tar.gz') : null,
   ]);
   const root = new PreopenDirectory('/', new Map());
   for (const [path, bytes] of job.files) writeFile(root.dir, path, bytes, true);
   if (sdk) addArchive(root.dir, sdk);
+  if (cxx) addArchive(root.dir, cxx);
   root.dir.create_entry_for_path(CC_OUTPUT.slice(1), true);
-  if (isNative) {
+  if (freestanding) {
     const startup = `${CC_OUTPUT}/start.c`;
     writeFile(root.dir, startup, linuxStartup, true);
     sources.push(startup);
   }
 
   const objects = [];
-  let usesCpp = false;
   for (const source of sources) {
     const cpp = !source.endsWith('.c');
-    usesCpp ||= cpp;
     const object = `${CC_OUTPUT}/${objects.length}.o`;
     const target = isNative ? 'x86_64-unknown-linux-musl' : 'wasm32-unknown-wasip1';
     const flags = ['-cc1', '-triple', target, '-emit-obj', '-std=' + (cpp ? 'c++20' : 'c17'),
       '-x', cpp ? 'c++' : 'c'];
-    if (isNative) flags.push('-fno-builtin', '-ffunction-sections', '-fdata-sections');
-    else {
+    if (freestanding) {
+      flags.push('-fno-builtin', '-ffunction-sections', '-fdata-sections');
+    } else if (linuxStatic) {
+      const systemHeaders = cpp ? LINUX_CXX_HEADERS : LINUX_HEADERS;
+      flags.push('-mrelocation-model', 'static', '-fgnuc-version=4.2.1', '-ffunction-sections', '-fdata-sections');
+      if (cpp) flags.push('-fcxx-exceptions', '-fexceptions', '-include', '/linux/libcxx/zig_config.h');
+      for (const header of systemHeaders) flags.push('-internal-isystem', header);
+    } else {
       if (cpp) flags.push('-internal-isystem', '/wasi/include/c++/v1');
       flags.push('-internal-isystem', '/clang/include', '-internal-isystem', '/wasi/include');
     }
@@ -141,11 +158,19 @@ async function clangBuild(job, settings, output) {
   }
 
   const binary = `${CC_OUTPUT}/${isNative ? 'program.elf' : 'program.wasm'}`;
-  const link = isNative
-    ? ['ld.lld', '-m', 'elf_x86_64', '-static', '--gc-sections', '-e', '_start', ...objects]
-    : ['wasm-ld', '-z', 'stack-size=1048576', '/wasi/lib/crt1-command.o', ...objects,
+  let link;
+  if (freestanding) {
+    link = ['ld.lld', '-m', 'elf_x86_64', '-static', '--gc-sections', '-e', '_start', ...objects];
+  } else if (linuxStatic) {
+    const cxxRuntime = usesCpp ? ['/linux/lib/libc++.a', '/linux/lib/libc++abi.a', '/linux/lib/libunwind.a'] : [];
+    link = ['ld.lld', '-m', 'elf_x86_64', '-static', '--gc-sections', '--eh-frame-hdr',
+      '/linux/lib/crt1.o', ...objects, '--start-group', ...cxxRuntime,
+      '/linux/lib/libc.a', '/linux/lib/libzigc.a', '/linux/lib/libcompiler_rt.a', '--end-group'];
+  } else {
+    link = ['wasm-ld', '-z', 'stack-size=1048576', '/wasi/lib/crt1-command.o', ...objects,
       ...(usesCpp ? ['/wasi/lib/libc++.a', '/wasi/lib/libc++abi.a'] : []),
       '/wasi/lib/libm.a', '/wasi/lib/libc.a', '/wasi/lib/libclang_rt.builtins.a'];
+  }
   print(output, 'Linking');
   const status = await runTool(linker, [...link, '-o', binary], [root], output);
   if (status) return { code: status };
@@ -153,6 +178,7 @@ async function clangBuild(job, settings, output) {
   if (!data?.length) throw new Error('Linker produced no executable.');
   if (isNative) {
     const artifact = data.slice();
+    output.flush();
     postMessage({ artifact }, [artifact.buffer]);
     return { code: 0 };
   }

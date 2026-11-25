@@ -101,3 +101,42 @@ test('a WebAssembly task forwards exact program arguments and displays the exit 
     assert.equal(decode(result.data).includes(exitLine), Boolean(data.ranProgram));
   }
 });
+
+test('the static Linux task offers the linked ELF under its target-specific filename', async t => {
+  const isolation = Object.getOwnPropertyDescriptor(globalThis, 'crossOriginIsolated');
+  Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value: true });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const link = {
+    click() { assert.equal(this.attached, true); this.clicked = true; },
+    remove() { this.attached = false; },
+  };
+  globalThis.document = {
+    createElement(tag) { assert.equal(tag, 'a'); return link; },
+    body: { append(element) { element.attached = true; } },
+  };
+  t.after(() => {
+    if (isolation) Object.defineProperty(globalThis, 'crossOriginIsolated', isolation);
+    else delete globalThis.crossOriginIsolated;
+    delete globalThis.document;
+  });
+  const worker = new EventTarget();
+  worker.terminate = () => {};
+  const posted = new Promise(resolve => { worker.postMessage = resolve; });
+  const bridge = new BrowserRunBridge({ async list_browser_paths() { return '[]'; } }, () => worker);
+  const id = await bridge.open({
+    cwd: '/home/web/project', command: 'browser-cc',
+    args: ['/home/web/project/main.cpp', 'linux-x86_64-static'],
+    env: { ZED_BROWSER_SOURCE: 'int main() { return 0; }' },
+  });
+  t.after(() => bridge.close(id));
+  assert.equal((await posted).target, 'linux-x86_64-static');
+  const artifact = Uint8Array.of(0x7f, 0x45, 0x4c, 0x46);
+  worker.dispatchEvent(new MessageEvent('message', { data: { artifact } }));
+  worker.dispatchEvent(new MessageEvent('message', { data: { code: 0 } }));
+  assert.equal(link.clicked, true);
+  assert.equal(link.attached, false);
+  assert.equal(link.download, 'main-linux-x86_64-static.elf');
+  assert.deepEqual(new Uint8Array(await (await fetch(link.href)).arrayBuffer()), artifact);
+  t.mock.timers.tick(30000);
+  assert.equal((await bridge.read(id)).exitCode, 0);
+});

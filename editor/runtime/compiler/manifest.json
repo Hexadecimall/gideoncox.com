@@ -7,5 +7,7 @@
   "rustc.wasm.gz": "6d9fd0e0cc6d56cf8b5fecee3574c2a9c0795963d42215e28e4af4caeb27aa32",
   "rust-sysroot.tar.gz": "3eb9dc4b149f3eb1745a62edbc1be3c759c180e772b67e1c177a087eab617708",
   "cargo.wasm.gz": "ea915faa8dde38ad68b779a0d88be2f715d5fd59e650288c0d2b6cdaab4fba1f",
-  "rust-host-sysroot.tar.gz": "11de2a3ef8448e4b12e121148cf87e8093e7a8968c972dfd91782e34896de6fd"
+  "rust-host-sysroot.tar.gz": "11de2a3ef8448e4b12e121148cf87e8093e7a8968c972dfd91782e34896de6fd",
+  "linux-x86_64-sdk.tar.gz": "846d0b09f73cc018f6d19c547b6c9d0f2df33673de41acb090b1d1a51f294f2e",
+  "linux-x86_64-cxx.tar.gz": "445af00eb0509ca509ff9adfe6622f813bb10c43fb67ef01360c466ee712e7e8"
 }
