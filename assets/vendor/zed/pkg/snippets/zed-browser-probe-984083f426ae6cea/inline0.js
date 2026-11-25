@@ -1,15 +1,17 @@
 
-const trustKey = 'zed.worktree-trust.v1';
-export function browserTrustedPaths() {
-    try { return localStorage.getItem(trustKey) ?? '[]'; } catch { return '[]'; }
+export function select_model() {
+  const runtime = globalThis.zedLma;
+  if (!runtime) throw new Error('Browser LMA is unavailable.');
+  return runtime.selectModel();
 }
-export function saveBrowserTrustedPaths(value) {
-    try {
-        const paths = new Set([...JSON.parse(browserTrustedPaths()), ...JSON.parse(value)]);
-        localStorage.setItem(trustKey, JSON.stringify([...paths]));
-    } catch { /* An unavailable store does not affect the current session. */ }
+export function load_recommended_model() {
+  const runtime = globalThis.zedLma;
+  if (!runtime) throw new Error('Browser LMA is unavailable.');
+  return runtime.loadRecommendedModel();
 }
-export function clearBrowserTrustedPaths() {
-    try { localStorage.removeItem(trustKey); return true; } catch { return false; }
+export function start_completion(id, options) {
+  const runtime = globalThis.zedLma;
+  if (!runtime) throw new Error('Browser LMA is unavailable.');
+  runtime.start(id, JSON.parse(options));
 }
-export function restoredBrowserFolder() { return globalThis.zedInitialFolder ?? null; }
+export function cancel_completion(id) { globalThis.zedLma?.cancel(id); }

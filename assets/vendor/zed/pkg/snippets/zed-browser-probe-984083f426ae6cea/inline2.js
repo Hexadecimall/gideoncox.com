@@ -1,0 +1,1 @@
+export function disconnectLocalProject() { globalThis.zedHost?.disconnect().catch(error => console.error(error)); }

@@ -45,6 +45,10 @@ PATTERNS = {
 
 def inspect_data(data, label, *, path_examples=False):
     """Inspect embedded UTF-8 strings and BOM-marked UTF-16 text."""
+    allowed_homes = HOME_ALLOWLIST
+    if label.replace('\\', '/') == 'editor/runtime/lma/lma-runtime.mjs':
+        # Emscripten creates this home inside its virtual filesystem.
+        allowed_homes = HOME_ALLOWLIST | {'/home/web_user'}
     encoding = 'utf-16' if data.startswith((b'\xff\xfe', b'\xfe\xff')) else 'utf-8'
     try:
         text = data.decode(encoding)
@@ -57,7 +61,7 @@ def inspect_data(data, label, *, path_examples=False):
     failures = []
     for number, line in enumerate(text.splitlines(), 1):
         categories = [category for category, pattern in PATTERNS.items() if pattern.search(line)]
-        if any(match.group() not in HOME_ALLOWLIST for match in HOME_PATH.finditer(line)):
+        if any(match.group() not in allowed_homes for match in HOME_PATH.finditer(line)):
             categories.append('native user home path')
         if path_examples:
             categories = [category for category in categories
