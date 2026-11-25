@@ -40,10 +40,12 @@ This target has no Linux system headers or C/C++ runtime libraries. The WASI
 C++ target does not support exceptions. Zig uses Zig 0.17.0's WebAssembly-hosted
 compiler and standard library to build WASI executables.
 
-The Rust browser task compiles a crate from its active entry file with rustc
-1.83 and the matching WASI standard library. Rust `mod` files are resolved from
-the same project snapshot. Cargo builds and crates.io dependencies remain
-pending. The editor uses [rustfmt](../rust/README.md) for formatting.
+The Rust browser task uses Cargo when the active file belongs to a package
+with a `Cargo.toml`. It runs offline with workspace packages and local
+`path` dependencies. Open the entry file to choose among multiple binaries.
+Standalone Rust files use rustc 1.83 and the matching WASI standard library.
+Registry and Git dependencies, build scripts, procedural macros, and Clippy
+are pending. The editor uses [rustfmt](../rust/README.md) for formatting.
 
 Builds run in a browser worker with a temporary project snapshot. The active
 buffer's unsaved text is included. Save changes in other buffers before a run.
@@ -57,6 +59,7 @@ reused through browser Cache Storage.
 - [WASI SDK 29](https://github.com/WebAssembly/wasi-sdk/releases/tag/wasi-sdk-29), including [wasi-libc](https://github.com/WebAssembly/wasi-libc/tree/ac020b86fd44bafe60aa4fa12f407d16e3731329) and [LLVM runtime libraries](https://github.com/llvm/llvm-project/tree/222fc11f2b8f25f6a0f4976272ef1bb7bf49521d)
 - [Zig source](https://codeberg.org/ziglang/zig/src/commit/7647adab80dd088f4de3610fd245915a912eb6ad) and [Zigtools browser build](https://github.com/zigtools/playground/blob/60baeb6b2bba8686adb8557d9484688ff9106862/build.zig)
 - [WASI-hosted Rust release](https://github.com/oligamiq/rust_wasm/releases/tag/v0.2.1-release) and [corresponding Rust source](https://github.com/oligamiq/rust/tree/cf327c2068549194a29160499c2ecafa9061e46e)
+- [WASI Cargo source](https://github.com/oligamiq/cargo/tree/eb6c32a4a364d83946a36adbec3b4d2ee863a669), [filetime 0.2.27](https://crates.io/crates/filetime/0.2.27), and the [browser build patch](../../../packaging/zed/cargo-browser.patch)
 
 Build Clang and LLD with matching native LLVM 22 table generators and the WASI
 SDK. Obtain `zig.wasm`, `compiler_rt.o`, and the `lib/std` archive from the Zigtools
@@ -66,4 +69,5 @@ browser build. Extract its archive into `ZIG_ARTIFACTS/sdk` before packaging.
 packaging/zed/build-browser-llvm.sh LLVM_SOURCE WASI_SDK NATIVE_LLVM_BIN LLVM_BUILD
 python3 packaging/zed/pack-browser-compilers.py LLVM_BUILD WASI_SDK ZIG_ARTIFACTS editor/runtime/compiler
 python3 packaging/zed/pack-browser-rustc.py rustc_opt.wasm.tar.gz wasm32-wasip1.tar.gz editor/runtime/compiler
+sh packaging/zed/build-browser-cargo.sh WASI_SDK SCRATCH editor/runtime/compiler
 ```

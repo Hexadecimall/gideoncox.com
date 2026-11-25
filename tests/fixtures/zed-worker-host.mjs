@@ -1,4 +1,4 @@
-// Exercise the shipped Web Worker in Node without replacing its Python engine.
+// Exercise shipped browser workers in Node with their WebAssembly engines.
 import { MessageChannel, MessagePort, parentPort, workerData, Worker } from 'node:worker_threads';
 
 export class WorkerHost {
@@ -10,6 +10,14 @@ export class WorkerHost {
     });
     this.thread.stdout.resume();
     this.thread.stderr.resume();
+    this.thread.on('message', data => this.onmessage?.({ data }));
+    this.thread.on('messageerror', error => this.onmessageerror?.(error));
+  }
+
+  set onerror(listener) {
+    if (this.handleError) this.thread.off('error', this.handleError);
+    this.handleError = listener;
+    if (listener) this.thread.on('error', listener);
   }
 
   addEventListener(type, listener) {

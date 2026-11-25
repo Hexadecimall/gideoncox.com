@@ -1,0 +1,65 @@
+--- a/src/bin/cargo/main.rs
++++ b/src/bin/cargo/main.rs
+@@ -18,11 +18,7 @@
+ use crate::command_prelude::*;
+ 
+ fn main() {
+-    #[cfg(target_os = "wasi")]
+-    println!("DEBUG: main started");
+     let _guard = setup_logger();
+-    #[cfg(target_os = "wasi")]
+-    println!("DEBUG: logger setup done");
+ 
+     let mut gctx = match GlobalContext::default() {
+         Ok(gctx) => gctx,
+--- a/src/cargo/core/global_cache_tracker.rs
++++ b/src/cargo/core/global_cache_tracker.rs
+@@ -1620,6 +1620,9 @@
+     }
+ 
+     fn save_with_gctx(&mut self, gctx: &GlobalContext) -> CargoResult<()> {
++        if self.is_empty() {
++            return Ok(());
++        }
+         let mut tracker = gctx.global_cache_tracker()?;
+         self.save(&mut tracker)
+     }
+--- a/vendor/filetime-0.2.27/src/wasm.rs
++++ b/vendor/filetime-0.2.27/src/wasm.rs
+@@ -19,14 +19,36 @@
+     Err(io::Error::new(io::ErrorKind::Other, "Wasm not implemented"))
+ }
+ 
++#[cfg(target_os = "wasi")]
++pub fn from_last_modification_time(meta: &fs::Metadata) -> FileTime {
++    meta.modified()
++        .map(FileTime::from_system_time)
++        .unwrap_or_else(|_| FileTime::zero())
++}
++
++#[cfg(not(target_os = "wasi"))]
+ pub fn from_last_modification_time(_meta: &fs::Metadata) -> FileTime {
+     unimplemented!()
+ }
+ 
++#[cfg(target_os = "wasi")]
++pub fn from_last_access_time(meta: &fs::Metadata) -> FileTime {
++    meta.accessed()
++        .map(FileTime::from_system_time)
++        .unwrap_or_else(|_| FileTime::zero())
++}
++
++#[cfg(not(target_os = "wasi"))]
+ pub fn from_last_access_time(_meta: &fs::Metadata) -> FileTime {
+     unimplemented!()
+ }
+ 
++#[cfg(target_os = "wasi")]
++pub fn from_creation_time(meta: &fs::Metadata) -> Option<FileTime> {
++    meta.created().ok().map(FileTime::from_system_time)
++}
++
++#[cfg(not(target_os = "wasi"))]
+ pub fn from_creation_time(_meta: &fs::Metadata) -> Option<FileTime> {
+     unimplemented!()
+ }

@@ -1,0 +1,210 @@
+import { Directory, OpenDirectory, PreopenDirectory, wasi } from '../rust/wasi/index.js';
+import { writeFile } from '../terminal-wasi.js';
+import { loadModule } from './assets.js';
+import { MAX_TOOL_BYTES } from './cargo-imports.js?v=1';
+import { loadRustToolchain, RUST_ENV, runRustTool } from './rustc.js?v=cargo-1';
+
+const PROJECT = '/workspace';
+const BUILD = '/build';
+const CARGO = '/toolchain/bin/cargo';
+const RUSTC = '/toolchain/bin/rustc';
+const ENCODER = new TextEncoder();
+const DECODER = new TextDecoder();
+const CARGO_ENV = [
+  'HOME=/cargo-home', 'CARGO_HOME=/cargo-home', `PWD=${PROJECT}`, 'TMPDIR=/tmp',
+  'PATH=/toolchain/bin', `RUSTC=${RUSTC}`, `CARGO=${CARGO}`,
+  'CARGO_BUILD_JOBS=1', 'CARGO_INCREMENTAL=0', 'CARGO_CACHE_AUTO_CLEAN_FREQUENCY=never',
+];
+
+function lookup(root, path) {
+  let entry = root;
+  for (const segment of path.split('/').filter(Boolean)) {
+    if (!(entry instanceof Directory) || segment === '.' || segment === '..') return;
+    entry = entry.contents.get(segment);
+  }
+  return entry;
+}
+
+export function findCargoManifest(directory, source) {
+  const parts = source.split('/');
+  parts.pop();
+  while (parts.length) {
+    const path = `${parts.join('/')}/Cargo.toml`;
+    if (lookup(directory, path)?.data) return path;
+    parts.pop();
+  }
+  if (lookup(directory, 'Cargo.toml')?.data) return 'Cargo.toml';
+}
+
+function readlink(path) {
+  const { ret } = this.path_lookup(path, 0);
+  // The project snapshot has files and directories. WASI libc realpath
+  // expects EINVAL when an existing entry is not a symbolic link.
+  return { ret: ret || wasi.ERRNO_INVAL, data: null };
+}
+
+function openPath(...args) {
+  const result = OpenDirectory.prototype.path_open.call(this, ...args);
+  if (result.fd_obj instanceof OpenDirectory) {
+    result.fd_obj.path_readlink = readlink;
+    result.fd_obj.path_open = openPath;
+  }
+  return result;
+}
+
+function mount(name, directory) {
+  const preopen = new PreopenDirectory(name, new Map());
+  preopen.dir = directory;
+  preopen.path_readlink = readlink;
+  preopen.path_open = openPath;
+  return preopen;
+}
+
+function capture(limit = MAX_TOOL_BYTES) {
+  const chunks = [];
+  let length = 0;
+  let truncated = false;
+  return {
+    write(bytes) {
+      const remaining = limit - length;
+      if (bytes.length > remaining) truncated = true;
+      if (remaining <= 0) return;
+      const chunk = bytes.slice(0, remaining);
+      chunks.push(chunk);
+      length += chunk.length;
+    },
+    take() {
+      if (truncated) throw new Error('Cargo tool output exceeded the buffer limit.');
+      const bytes = new Uint8Array(length);
+      let offset = 0;
+      for (const chunk of chunks) {
+        bytes.set(chunk, offset);
+        offset += chunk.length;
+      }
+      return bytes;
+    },
+  };
+}
+
+function rustEnvironment(entries, cwd) {
+  const env = new Map([...CARGO_ENV, ...entries, ...RUST_ENV].map(pair => [pair.split('=', 1)[0], pair]));
+  env.set('PWD', `PWD=${cwd}`);
+  // The WASI port uses in-process LLD. Its std::env::split_paths panics
+  // when the driver tries to read a native linker search path.
+  env.delete('PATH');
+  return [...env.values()];
+}
+
+function failure(message, code = 1) {
+  return { code, stdout: [], stderr: Array.from(ENCODER.encode(message + '\n')) };
+}
+
+async function runCompiler(wasmModule, root, request) {
+  if (request.program !== RUSTC) {
+    return failure(`Cargo subprocess ${request.program} is unavailable in this browser build.`, 127);
+  }
+  const cwd = request.cwd || PROJECT;
+  const directory = lookup(root, cwd);
+  if (!(directory instanceof Directory) || (cwd !== PROJECT && !cwd.startsWith(PROJECT + '/'))) {
+    return failure('Rust compiler working directory is outside the project.');
+  }
+
+  const versionProbe = request.args.length === 1 && request.args[0] === '-vV';
+  const args = [RUSTC, ...request.args];
+  if (!versionProbe) args.push('--sysroot', '/sysroot', '-Zthreads=1', '-Ccodegen-units=1');
+  const out = capture();
+  const err = capture();
+  let code;
+  try {
+    code = await runRustTool({
+      wasmModule, args, env: rustEnvironment(request.env, cwd), stdin: request.stdin,
+      directories: [mount('.', directory), ...[PROJECT, BUILD, '/sysroot', '/tmp', '/cargo-home']
+        .map(name => mount(name, lookup(root, name)))],
+      stdout: out.write, stderr: err.write,
+    });
+  } catch (error) {
+    const stderr = DECODER.decode(err.take());
+    if (versionProbe && stderr.includes('Failed finding sysroot: "current_dll_path not supported"')) {
+      // The driver writes its version and host before a failing optional
+      // LLVM version query. Cargo requires only the fields already emitted.
+      const stdout = out.take();
+      if (/^rustc [^\n]+\nbinary: rustc\n[\s\S]*\nhost: wasm32-wasip1-threads\nrelease: [^\n]+\n$/
+        .test(DECODER.decode(stdout))) return { code: 0, stdout: Array.from(stdout), stderr: [] };
+    }
+    if (!stderr) return failure(error.message);
+    code = 1;
+  }
+  return { code, stdout: Array.from(out.take()), stderr: Array.from(err.take()) };
+}
+
+function packageTarget(metadata, manifest, source) {
+  const packages = metadata.packages.filter(item => metadata.workspace_members.includes(item.id));
+  const member = packages.find(item => item.manifest_path === manifest);
+  const candidates = (member ? [member] : packages).flatMap(pkg => pkg.targets
+    .filter(target => target.kind.includes('bin'))
+    .map(target => ({ pkg, target })));
+  const exact = candidates.find(({ target }) => target.src_path === source);
+  const preferred = member?.default_run && candidates.find(({ target }) => target.name === member.default_run);
+  if (exact || preferred) return exact || preferred;
+  if (candidates.length === 1) return candidates[0];
+  throw new Error(candidates.length
+    ? 'Open the entry file of the Cargo binary to run.'
+    : 'This Cargo project has no binary target to run.');
+}
+
+function messages(bytes) {
+  const result = [];
+  for (const line of DECODER.decode(bytes).split('\n')) {
+    if (line[0] === '{') result.push(JSON.parse(line));
+  }
+  return result;
+}
+
+export async function compileCargo(directory, manifest, source, output) {
+  const [cargoModule, compiler] = await Promise.all([loadModule('cargo.wasm.gz'), loadRustToolchain()]);
+  const root = new Directory(new Map([
+    ['workspace', directory], ['sysroot', compiler.sysroot.dir], ['build', new Directory(new Map())],
+    ['tmp', new Directory(new Map())], ['cargo-home', new Directory(new Map())],
+  ]));
+  // Cargo resolves these absolute paths before asking the worker to launch a
+  // process. The runtime only executes the bundled WebAssembly compiler.
+  writeFile(root, CARGO, [], true);
+  writeFile(root, RUSTC, [], true);
+  const path = `${PROJECT}/${manifest}`;
+
+  const cargo = async args => {
+    const stdout = capture(2 * MAX_TOOL_BYTES);
+    const code = await runRustTool({
+      wasmModule: cargoModule, args: [CARGO, ...args, '--offline', '--manifest-path', path], env: CARGO_ENV,
+      directories: [mount('.', directory), mount('/', root)], stdout: stdout.write,
+      stderr: bytes => output.write(bytes),
+      spawn: async request => {
+        try { return await runCompiler(compiler.wasmModule, root, request); }
+        catch (error) { return failure(error.message); }
+      },
+    });
+    return { code, stdout: stdout.take() };
+  };
+
+  const metadata = await cargo(['metadata', '--no-deps', '--format-version', '1']);
+  if (metadata.code) return { code: metadata.code };
+  const project = messages(metadata.stdout).find(entry => Array.isArray(entry.packages));
+  if (!project) throw new Error('Cargo did not return workspace metadata.');
+  const { pkg, target } = packageTarget(project, path, `${PROJECT}/${source}`);
+  const build = await cargo([
+    'build', '--package', pkg.name, '--bin', target.name, '--target', 'wasm32-wasip1',
+    '--target-dir', BUILD, '--message-format=json-render-diagnostics', '-j1',
+  ]);
+  let executable;
+  for (const message of messages(build.stdout)) {
+    if (message.reason === 'compiler-message' && message.message.rendered) {
+      output.write(ENCODER.encode(message.message.rendered));
+    } else if (message.reason === 'compiler-artifact' && message.target.src_path === target.src_path) {
+      executable = message.executable;
+    }
+  }
+  if (build.code) return { code: build.code };
+  const binary = executable?.startsWith(BUILD + '/') && lookup(root, executable)?.data;
+  if (!binary?.length) throw new Error('Cargo produced no WebAssembly executable.');
+  return { code: 0, binary, executable: target.name };
+}

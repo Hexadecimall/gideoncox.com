@@ -180,9 +180,17 @@ async function zigBuild(job, settings, output) {
 }
 
 async function rustBuild(job, settings, output) {
-  const { compileRust } = await import('./rustc.js?v=1');
   const project = projectDirectory(job.cwd, job.files);
   const source = relative(job.cwd, job.script);
+  const { compileCargo, findCargoManifest } = await import('./cargo.js?v=1');
+  const manifest = findCargoManifest(project.dir, source);
+  if (manifest) {
+    print(output, `Building ${manifest} with Cargo`);
+    const { code, binary, executable } = await compileCargo(project.dir, manifest, source, output);
+    if (code) return { code };
+    return runProgram(binary, executable, settings.args ?? [], project, output, job.stdin);
+  }
+  const { compileRust } = await import('./rustc.js?v=cargo-1');
   print(output, `Compiling ${source}`);
   const { code, binary } = await compileRust(project.dir, source, output);
   if (code) return { code };

@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { WorkerHost } from './fixtures/zed-worker-host.mjs';
 
 const worker = new URL('../editor/runtime/compiler/worker.js', import.meta.url);
 const encoder = new TextEncoder();
@@ -10,6 +11,9 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files, pro
   const handler = new EventTarget();
   handler.close = () => {};
   globalThis.self = handler;
+  globalThis.Worker = WorkerHost;
+  globalThis.addEventListener = handler.addEventListener.bind(handler);
+  globalThis.removeEventListener = handler.removeEventListener.bind(handler);
   globalThis.fetch = async location => {
     const asset = new URL(location);
     asset.search = '';
@@ -103,4 +107,42 @@ test('browser builds reject non-string arguments before starting the toolchain',
     'invalid-args.c': 'int main(void) { return 0; }',
     '.zed/browser-build.json': '{"args":["--count",3]}',
   } }), /"args".*must be an array of strings/);
+});
+
+test('standalone Rust still builds with the bundled rustc', async () => {
+  const standalone = await run({ command: 'browser-rust', script: 'standalone.rs', files: {
+    'standalone.rs': 'fn main() { println!("standalone rustc"); }',
+  } });
+  assert.equal(standalone.code, 0, standalone.output);
+  assert.equal(standalone.ranProgram, true);
+  assert.match(standalone.output, /standalone rustc/);
+});
+
+test('Cargo builds the selected Rust binary with a workspace path dependency', async () => {
+  const files = {
+    'Cargo.toml': '[workspace]\nmembers = ["app", "message"]\nresolver = "2"\n',
+    'app/Cargo.toml': '[package]\nname = "app"\nversion = "0.1.0"\nedition = "2021"\n'
+      + '[dependencies]\nmessage = { path = "../message" }\n',
+    'app/src/main.rs': `fn main() {
+        println!("{}: {}", message::hello(), std::env::args().nth(1).unwrap());
+        std::process::exit(23);
+    }`,
+    'app/src/bin/other.rs': 'fn main() { panic!("Selected the wrong binary"); }',
+    'message/Cargo.toml': '[package]\nname = "message"\nversion = "0.1.0"\nedition = "2021"\n',
+    'message/src/lib.rs': 'pub fn hello() -> &\'static str { "local Rust crate" }',
+  };
+  const cargo = await run({
+    command: 'browser-rust', script: 'app/src/main.rs', files, programArgs: ['two words'],
+  });
+  assert.equal(cargo.code, 23, cargo.output);
+  assert.equal(cargo.ranProgram, true);
+  assert.match(cargo.output, /local Rust crate: two words/);
+
+  const broken = await run({
+    command: 'browser-rust', script: 'app/src/bin/other.rs',
+    files: { ...files, 'app/src/bin/other.rs': 'fn main() { message::missing(); }' },
+  });
+  assert.notEqual(broken.code, 0);
+  assert.equal(broken.ranProgram, undefined);
+  assert.match(broken.output, /cannot find function `missing`/);
 });

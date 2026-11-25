@@ -5,5 +5,6 @@
   "zig.wasm.gz": "7fead6e25fe8e5680adeda99f24688e240f26e40c8b77291d60231eb2f2c5cd4",
   "zig-sdk.tar.gz": "53b278ac1038adf6eeb94cd008807e7bba527cfa15fb150175b2ada5b7e8c34d",
   "rustc.wasm.gz": "6d9fd0e0cc6d56cf8b5fecee3574c2a9c0795963d42215e28e4af4caeb27aa32",
-  "rust-sysroot.tar.gz": "3eb9dc4b149f3eb1745a62edbc1be3c759c180e772b67e1c177a087eab617708"
+  "rust-sysroot.tar.gz": "3eb9dc4b149f3eb1745a62edbc1be3c759c180e772b67e1c177a087eab617708",
+  "cargo.wasm.gz": "9b6cb84c0c47b68d2d8470deb5b987f5c120d4dc901ba1a43b12d97028a7e438"
 }
