@@ -25,6 +25,8 @@ Use the pinned analyzer source checkout and Rust 1.98.1 with the
 `wasm32-wasip1-threads` target and `rust-src` component. The build step applies
 the checked-in patches for tool output allocation and virtual file loading.
 The standard library packer uses the same toolchain's installed source.
+The bundled WASI threads shim applies `path_rename` when both paths share a
+directory descriptor. Rust compilation uses it to publish temporary metadata.
 
 ```sh
 sh packaging/zed/build-rust-analyzer.sh ANALYZER_SOURCE editor/runtime/rust

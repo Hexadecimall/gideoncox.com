@@ -24,6 +24,12 @@ ZIG_PATH_EXAMPLES = {
     'lib/std/process/Environ.zig': 'e3eb7f0e6e1ff28914702d3742948c371b005df32d1421c05d0d6b2b1fbd1eb6',
     'lib/std/zig/WindowsSdk.zig': 'e3d9e2d5c44f47df7e994ecdd6819a109cd6db2b4475fd587afd1ffc81dd4539',
 }
+RUSTC_BROWSER_SHA = 'b699239bd312046d1b33a0f6e20700cac18c8f45f0414bae2e6915fc7488ebdb'
+# The pinned libstd embeds path examples from its public documentation.
+RUST_PATH_EXAMPLES = {
+    'lib/rustlib/wasm32-wasip1/lib/libstd-915de2a49f0ab168.rlib':
+        '11d1e7e7961ee8b9806e73d56939176ae3263bdf16d98c745fcdb54e8147d03c',
+}
 PATTERNS = {
     'native Windows path': re.compile(r'(?<!\w)[A-Za-z]:[\\/]+[\w][\w. -]{2,}[\\/]+[\w.-]'),
     'native root home path': re.compile(r'(?<![\w./-])/root(?:/|(?=[\s\x00\'"<>]|$))'),
@@ -55,7 +61,7 @@ def inspect_data(data, label, *, path_examples=False):
             categories.append('native user home path')
         if path_examples:
             categories = [category for category in categories
-                          if category not in {'native Windows path', 'native user home path'}]
+                          if category not in {'native Windows path', 'native user home path', 'native root home path'}]
         failures.extend(f'{label}:{number}: {category}' for category in categories)
     return failures
 
@@ -70,7 +76,10 @@ def audit(root):
             continue
         try:
             if path.name.endswith(('.tar.gz', '.tgz')):
-                examples = ZIG_PATH_EXAMPLES if relative.as_posix() == 'editor/runtime/compiler/zig-sdk.tar.gz' else {}
+                examples = {
+                    'editor/runtime/compiler/zig-sdk.tar.gz': ZIG_PATH_EXAMPLES,
+                    'editor/runtime/compiler/rust-sysroot.tar.gz': RUST_PATH_EXAMPLES,
+                }.get(relative.as_posix(), {})
                 with tarfile.open(path) as archive:
                     for member in archive:
                         label = f'{relative}:{member.name}'
@@ -83,7 +92,12 @@ def audit(root):
                             failures.extend(inspect_data(data, label, path_examples=verified_example))
             elif path.name.endswith('.wasm.gz'):
                 with gzip.open(path, 'rb') as executable:
-                    failures.extend(inspect_data(executable.read(), str(relative)))
+                    data = executable.read()
+                if (relative.as_posix() == 'editor/runtime/compiler/rustc.wasm.gz'
+                        and sha256(data).hexdigest() == RUSTC_BROWSER_SHA):
+                    # Three panic strings are followed by an address whose low byte is x or X.
+                    data = re.sub(rb'(?<=entered unreachable code)[xX](?=[^\x20-\x7e])', b'\x00', data)
+                failures.extend(inspect_data(data, str(relative)))
             else:
                 failures.extend(inspect_data(path.read_bytes(), str(relative)))
         except (OSError, tarfile.TarError):

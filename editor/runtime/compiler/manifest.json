@@ -3,5 +3,7 @@
   "lld.wasm.gz": "5bda9cea75c727da78bf58f9908a7aabb04d7bc6be8571747124f01a37399fd1",
   "wasi-sdk.tar.gz": "2f1ddeb7844494c463809ad9cdb6ed4147fc3da56e62babdd5255f260bc342a8",
   "zig.wasm.gz": "7fead6e25fe8e5680adeda99f24688e240f26e40c8b77291d60231eb2f2c5cd4",
-  "zig-sdk.tar.gz": "53b278ac1038adf6eeb94cd008807e7bba527cfa15fb150175b2ada5b7e8c34d"
+  "zig-sdk.tar.gz": "53b278ac1038adf6eeb94cd008807e7bba527cfa15fb150175b2ada5b7e8c34d",
+  "rustc.wasm.gz": "6d9fd0e0cc6d56cf8b5fecee3574c2a9c0795963d42215e28e4af4caeb27aa32",
+  "rust-sysroot.tar.gz": "3eb9dc4b149f3eb1745a62edbc1be3c759c180e772b67e1c177a087eab617708"
 }

@@ -3477,7 +3477,6 @@ var Gt = class {
 				return i.path_remove_directory(r, a);
 			},
 			path_rename(e, t, n, r, i, a) {
-				if (e === r) return 0;
 				p.check_fds();
 				let [o, s] = p.get_fd_and_wasi_ref(e), [c, l] = p.get_fd_and_wasi_ref(r);
 				if (o === void 0 || s === void 0 || c === void 0 || l === void 0 || s !== l) return 8;

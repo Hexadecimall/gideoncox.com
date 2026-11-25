@@ -180,12 +180,23 @@ async function zigBuild(job, settings, output) {
   return runProgram(data, source, settings.args ?? [], project, output, job.stdin);
 }
 
+async function rustBuild(job, settings, output) {
+  const { compileRust } = await import('./rustc.js?v=1');
+  const project = projectDirectory(job.cwd, job.files);
+  const source = relative(job.cwd, job.script);
+  print(output, `Compiling ${source}`);
+  const { code, binary } = await compileRust(project.dir, source, output);
+  if (code) return { code };
+  return runProgram(binary, source, settings.args ?? [], project, output, job.stdin);
+}
+
 self.addEventListener('message', async ({ data: job }) => {
   const output = new TerminalOutput();
   try {
     const settings = readSettings(job);
-    const result = job.command === 'browser-zig'
-      ? await zigBuild(job, settings, output) : await clangBuild(job, settings, output);
+    const build = BROWSER_COMPILERS.get(job.command);
+    if (!build) throw new Error('Unsupported browser compiler.');
+    const result = await build(job, settings, output);
     output.flush();
     postMessage(result);
   } catch (error) {
@@ -195,3 +206,9 @@ self.addEventListener('message', async ({ data: job }) => {
     self.close();
   }
 }, { once: true });
+
+const BROWSER_COMPILERS = new Map([
+  ['browser-cc', clangBuild],
+  ['browser-zig', zigBuild],
+  ['browser-rust', rustBuild],
+]);
