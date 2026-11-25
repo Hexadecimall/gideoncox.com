@@ -1,10 +1,11 @@
 import { Directory, Fd, File, OpenFile, PreopenDirectory, ConsoleStdout } from './wasi/index.js';
 import { WASIFarm, wait_async_polyfill } from './wasi-threads.js';
-import { browserRustProject, SYSROOT } from './project.js';
+import { browserRustProject, SYSROOT } from './project.js?v=build-output-1';
 import { LspFrames, applyDocumentChanges, documentReplacement, lspFrame } from '/assets/js/zed/lsp-stream.js?v=document-edits-1';
 import { createRustfmt, rustfmtConfig } from './rustfmt/format.js?v=1';
 
 const TARGET = 'wasm32-wasip1';
+const GENERATED = '/zed-generated';
 const encoder = new TextEncoder();
 const input = [];
 const documents = new Map();
@@ -13,6 +14,9 @@ let waiting;
 let rootPath;
 let projectFiles;
 const standardFiles = new Map();
+const generatedFiles = new Map();
+const buildOutputs = new Map();
+let buildRevision = 0;
 let filesystem;
 let settings;
 let projectSignature;
@@ -80,7 +84,9 @@ class Output extends Fd {
 }
 
 function copySnapshot({ list, path, output, capacity }, memory) {
-  const files = path === SYSROOT || path.startsWith(SYSROOT + '/') ? standardFiles : projectFiles;
+  let files = projectFiles;
+  if (path === SYSROOT || path.startsWith(SYSROOT + '/')) files = standardFiles;
+  else if (path === GENERATED || path.startsWith(GENERATED + '/')) files = generatedFiles;
   const bytes = list
     ? encoder.encode([...files.keys()].filter(key => key.startsWith(path + '/')).join('\0'))
     : files.get(path);
@@ -108,7 +114,7 @@ function toolQuery(args) {
 }
 
 function rustSettings(previous = {}) {
-  const project = browserRustProject(projectFiles, rootPath);
+  const project = browserRustProject(projectFiles, rootPath, buildOutputs);
   projectSignature = JSON.stringify(project);
   return {
     ...previous,
@@ -128,6 +134,35 @@ function refreshProject() {
   if (projectSignature !== previous) {
     send({ jsonrpc: '2.0', method: 'workspace/didChangeConfiguration', params: { settings } });
   }
+}
+
+function updateBuildOutput(packages) {
+  if (!packages.length && !buildOutputs.size) return;
+  buildRevision++;
+  buildOutputs.clear();
+  generatedFiles.clear();
+  filesystem.contents.delete(GENERATED.slice(1));
+  for (const [index, output] of packages.entries()) {
+    if (!projectFiles.has(output.manifest)) continue;
+    const outDir = `${GENERATED}/${buildRevision}/${index}`;
+    const translate = value => {
+      if (value === output.outDir || value.startsWith(output.outDir + '/')) {
+        return outDir + value.slice(output.outDir.length);
+      }
+      if (value === '/workspace' || value.startsWith('/workspace/')) {
+        return output.root + value.slice('/workspace'.length);
+      }
+      return value;
+    };
+    const env = Object.fromEntries(output.env.map(([name, value]) => [name, translate(value)]));
+    buildOutputs.set(output.manifest, { env: { ...env, OUT_DIR: outDir }, cfg: output.cfg });
+    for (const [file, bytes] of output.files) {
+      const path = `${outDir}/${file}`;
+      generatedFiles.set(path, bytes);
+      writeFile(path, bytes);
+    }
+  }
+  refreshProject();
 }
 
 async function formatDocument(request) {
@@ -233,6 +268,7 @@ addEventListener('message', async ({ data }) => {
   try {
     if (data.type === 'start') await start(data.root, data.files);
     else if (data.type === 'lsp') await handleLsp(data.message);
+    else if (data.type === 'build-output') updateBuildOutput(data.packages);
     else if (data.type === 'file') {
       const wasPresent = projectFiles.has(data.path);
       if (data.bytes === null) projectFiles.delete(data.path);

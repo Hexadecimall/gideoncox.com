@@ -75,10 +75,13 @@ function packageTargets(files, base, root, manifest) {
       if (name) add('bin', path, name);
     }
   }
+  if (pkg.build !== false) {
+    add('build', resolvePath(base, typeof pkg.build === 'string' ? pkg.build : 'build.rs', root), 'build_script_build');
+  }
   return targets;
 }
 
-function rustProjectFromCargo(files, root) {
+function rustProjectFromCargo(files, root, buildOutputs) {
   const manifests = new Map();
   for (const path of files.keys()) {
     if (path.endsWith('/Cargo.toml') && !path.includes('/target/')) {
@@ -102,34 +105,36 @@ function rustProjectFromCargo(files, root) {
     let lib = null;
     for (const target of targets) {
       if (target.kind === 'lib') lib = crates.length;
+      const output = target.kind !== 'build' && buildOutputs.get(`${base}/Cargo.toml`);
       crates.push({
         display_name: crateName(target.name) ?? crateName(pkg.name),
         root_module: target.path,
         edition,
         deps: [],
-        cfg: defaultFeatures(manifest.features),
+        cfg: [...defaultFeatures(manifest.features), ...(output?.cfg ?? [])],
+        env: { CARGO_MANIFEST_DIR: base, ...output?.env },
+        ...(output ? { source: { include_dirs: [base, output.env.OUT_DIR], exclude_dirs: [] } } : {}),
         is_workspace_member: true,
       });
     }
-    packages.set(base, { first, end: crates.length, lib, workspace, workspaceBase, manifest });
+    packages.set(base, { first, targets, lib, workspace, workspaceBase, manifest });
   }
   for (const [base, pkg] of packages) {
-    const dependencies = new Map();
-    for (const [name, setting] of [
-      ...objectEntries(pkg.manifest.dependencies),
-      ...objectEntries(pkg.manifest['dev-dependencies']),
-    ]) {
-      const inherited = setting?.workspace === true;
-      const dependency = inherited ? pkg.workspace?.dependencies?.[name] : setting;
-      const depPath = resolvePath(inherited ? pkg.workspaceBase : base, dependency?.path, root);
-      const depLib = packages.get(depPath)?.lib;
-      if (Number.isInteger(depLib) && depLib !== pkg.lib && crateName(name)) {
-        dependencies.set(crateName(name), { crate: depLib, name: crateName(name) });
+    for (const [offset, target] of pkg.targets.entries()) {
+      const index = pkg.first + offset;
+      const dependencies = new Map();
+      const tables = target.kind === 'build' ? ['build-dependencies'] : ['dependencies', 'dev-dependencies'];
+      for (const [name, setting] of tables.flatMap(table => objectEntries(pkg.manifest[table]))) {
+        const inherited = setting?.workspace === true;
+        const dependency = inherited ? pkg.workspace?.dependencies?.[name] : setting;
+        const depPath = resolvePath(inherited ? pkg.workspaceBase : base, dependency?.path, root);
+        const depLib = packages.get(depPath)?.lib;
+        if (Number.isInteger(depLib) && depLib !== pkg.lib && crateName(name)) {
+          dependencies.set(crateName(name), { crate: depLib, name: crateName(name) });
+        }
       }
-    }
-    for (let index = pkg.first; index < pkg.end; index++) {
       crates[index].deps = [...dependencies.values()];
-      if (pkg.lib !== null && pkg.lib !== index) {
+      if (target.kind !== 'build' && pkg.lib !== null && pkg.lib !== index) {
         crates[index].deps.push({ crate: pkg.lib, name: crates[pkg.lib].display_name });
       }
     }
@@ -146,7 +151,7 @@ function looseCrates(files, root) {
   }));
 }
 
-export function browserRustProject(files, root) {
+export function browserRustProject(files, root, buildOutputs = new Map()) {
   const supplied = files.get(`${root}/rust-project.json`);
   if (supplied) {
     try {
@@ -154,6 +159,6 @@ export function browserRustProject(files, root) {
       if (Array.isArray(project.crates)) return { sysroot_src: SYSROOT, ...project };
     } catch { /* Keep editing possible while the project description is incomplete. */ }
   }
-  const crates = rustProjectFromCargo(files, root);
+  const crates = rustProjectFromCargo(files, root, buildOutputs);
   return { sysroot_src: SYSROOT, crates: crates.length ? crates : looseCrates(files, root) };
 }

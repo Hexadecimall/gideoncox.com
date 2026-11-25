@@ -6,6 +6,7 @@ import { loadRustToolchain, RUST_ENV, runRustTool } from './rustc.js?v=cargo-1';
 
 const PROJECT = '/workspace';
 const BUILD = '/build';
+const TARGET = 'wasm32-wasip1';
 const HOST = 'wasm32-wasip1-threads';
 const CARGO = '/toolchain/bin/cargo';
 const RUSTC = '/toolchain/bin/rustc';
@@ -199,6 +200,44 @@ function messages(bytes) {
   return result;
 }
 
+function buildScriptOutput(root, cargoMessages) {
+  const manifests = new Map();
+  const scriptOutputs = new Map();
+  for (const message of cargoMessages) {
+    if (message.reason === 'compiler-artifact' && message.manifest_path?.startsWith(PROJECT + '/')) {
+      manifests.set(message.package_id, message.manifest_path.slice(PROJECT.length + 1));
+    } else if (message.reason === 'build-script-executed' && message.out_dir?.startsWith(BUILD + '/')) {
+      if (!scriptOutputs.has(message.package_id) || message.out_dir.startsWith(`${BUILD}/${TARGET}/`)) {
+        scriptOutputs.set(message.package_id, message);
+      }
+    }
+  }
+  const packages = [];
+  let remainingBytes = 4 * 1024 * 1024;
+  let remainingFiles = 1024;
+  function copyFiles(directory, prefix, files) {
+    for (const [name, entry] of directory.contents) {
+      if (!remainingFiles || remainingBytes <= 0) break;
+      const path = prefix + name;
+      if (entry instanceof Directory) copyFiles(entry, path + '/', files);
+      else if (entry.data && entry.data.length <= remainingBytes) {
+        files.push([path, entry.data]);
+        remainingFiles--;
+        remainingBytes -= entry.data.length;
+      }
+    }
+  }
+  for (const message of scriptOutputs.values()) {
+    const manifest = manifests.get(message.package_id);
+    const out = lookup(root, message.out_dir);
+    if (!manifest || !(out instanceof Directory)) continue;
+    const files = [];
+    copyFiles(out, '', files);
+    packages.push({ manifest, outDir: message.out_dir, cfg: message.cfgs, env: message.env, files });
+  }
+  return { manifests: [...new Set(manifests.values())], packages };
+}
+
 export async function compileCargo(directory, manifest, source, output) {
   const [cargoModule, compiler] = await Promise.all([loadModule('cargo.wasm.gz'), loadRustToolchain()]);
   const root = new Directory(new Map([
@@ -238,11 +277,12 @@ export async function compileCargo(directory, manifest, source, output) {
   if (!project) throw new Error('Cargo did not return workspace metadata.');
   const { pkg, target } = packageTarget(project, path, `${PROJECT}/${source}`);
   const build = await cargo([
-    'build', '--package', pkg.name, '--bin', target.name, '--target', 'wasm32-wasip1',
+    'build', '--package', pkg.name, '--bin', target.name, '--target', TARGET,
     '--target-dir', BUILD, '--message-format=json-render-diagnostics', '-j1',
   ]);
   let executable;
-  for (const message of messages(build.stdout)) {
+  const cargoMessages = messages(build.stdout);
+  for (const message of cargoMessages) {
     if (message.reason === 'compiler-message' && message.message.rendered) {
       output.write(ENCODER.encode(message.message.rendered));
     } else if (message.reason === 'compiler-artifact' && message.target.src_path === target.src_path) {
@@ -252,5 +292,5 @@ export async function compileCargo(directory, manifest, source, output) {
   if (build.code) return { code: build.code };
   const binary = executable?.startsWith(BUILD + '/') && lookup(root, executable)?.data;
   if (!binary?.length) throw new Error('Cargo produced no WebAssembly executable.');
-  return { code: 0, binary, executable: target.name };
+  return { code: 0, binary, executable: target.name, buildOutput: buildScriptOutput(root, cargoMessages) };
 }

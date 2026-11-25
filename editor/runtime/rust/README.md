@@ -9,12 +9,15 @@ Standalone Rust files, local Cargo packages, Cargo path dependencies, and
 `rust-project.json` workspaces use rust-analyzer's crate graph and native
 diagnostics. A local Cargo manifest supplies package names, editions, library
 and binary roots, and default feature flags. Registry dependency resolution,
-build-script analysis, procedural macros, and opening definitions in the bundled
+procedural macros, and opening definitions in the bundled
 standard library through Zed's project filesystem remain pending.
 
 [Run and Build](../compiler/README.md) uses browser-hosted Cargo for an
 offline WebAssembly build when the Rust file is in a Cargo package. Local
 workspace members, path dependencies, and Rust build scripts build in the browser.
+After a successful build, rust-analyzer uses the generated files and the
+script's cfg and environment values for diagnostics in that browser session.
+Run the build again after changing a build script or reloading the page.
 
 Zed's Format command and format-on-save use rustfmt 1.10.0 in the worker.
 The formatter reads the nearest saved `.rustfmt.toml` or `rustfmt.toml` and the

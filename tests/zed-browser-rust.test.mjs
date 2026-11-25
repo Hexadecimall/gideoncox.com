@@ -53,3 +53,47 @@ test('new Rust files work without a manifest and folded browser paths stay local
   assert.equal(service.accepts({ command: 'rust-analyzer', cwd: root + '/../host' }), false);
   assert.equal(service.accepts({ command: 'rust-analyzer', cwd: '/native' }), false);
 });
+
+test('Rust analysis scopes generated files, environment and build dependencies to the right crates', () => {
+  const files = fileMap({
+    'Cargo.toml': '[package]\nname = "app"\n[build-dependencies]\ngenerator = { path = "generator" }',
+    'build.rs': '', 'src/main.rs': '',
+    'generator/Cargo.toml': '[package]\nname = "generator"\n',
+    'generator/src/lib.rs': '',
+  });
+  const out = '/zed-generated/1/0';
+  const outputs = new Map([[root + '/Cargo.toml', {
+    env: { OUT_DIR: out, BUILD_CHANNEL: 'browser' }, cfg: ['browser_generated'],
+  }]]);
+  const { crates: [app, script, generator] } = browserRustProject(files, root, outputs);
+  assert.equal(app.env.OUT_DIR, out);
+  assert.equal(app.env.BUILD_CHANNEL, 'browser');
+  assert.deepEqual(app.cfg, ['browser_generated']);
+  assert.deepEqual(app.source.include_dirs, [root, out]);
+  assert.deepEqual(app.deps, []);
+  assert.deepEqual(script.deps, [{ crate: 2, name: 'generator' }]);
+  assert.equal(script.env.OUT_DIR, undefined);
+  assert.equal(generator.env.OUT_DIR, undefined);
+});
+
+test('Cargo build output updates only the matching Rust worktree and removes old output', async () => {
+  const service = new BrowserRust({});
+  const messages = [[], []];
+  for (const [index, project] of [root + '/app', root + '/other'].entries()) {
+    service.running.set(index, {
+      root: project, ready: Promise.resolve(true), exitCode: null,
+      worker: { postMessage: message => messages[index].push(message) },
+    });
+  }
+  const output = { manifest: 'app/Cargo.toml', env: [], cfg: [], files: [] };
+  service.publishBuild(root, { manifests: [output.manifest], packages: [output] });
+  await Promise.resolve();
+  assert.deepEqual(messages[0], [{ type: 'build-output', packages: [
+    { ...output, manifest: root + '/app/Cargo.toml', root },
+  ] }]);
+  assert.deepEqual(messages[1], []);
+  service.publishBuild(root, { manifests: [output.manifest], packages: [] });
+  await Promise.resolve();
+  assert.deepEqual(messages[0].at(-1), { type: 'build-output', packages: [] });
+  assert.deepEqual(messages[1], []);
+});

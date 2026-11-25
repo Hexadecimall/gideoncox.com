@@ -4,8 +4,8 @@ import { installNativeHost } from './zed/native-host.js?v=folder-memory-1';
 import { BrowserPython } from './zed/browser-python.js?v=5';
 
 import { BrowserClangd } from './zed/browser-clangd.js?v=format-config-1';
-import { BrowserRust } from './zed/browser-rust.js?v=rustfmt-1';
-import { BrowserRunBridge } from './zed/browser-run.js?v=cargo-2';
+import { BrowserRust } from './zed/browser-rust.js?v=cargo-analysis-1';
+import { BrowserRunBridge } from './zed/browser-run.js?v=cargo-analysis-1';
 import { openBrowserDatabase } from './zed/browser-database.js?v=history-1';
 import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=3';
@@ -59,8 +59,9 @@ async function start() {
     console.warn('Could not open Zed database storage.', error);
     notifyDatabase('Zed could not open browser storage for its history.');
   }
-  const terminal = installNativeTerminal(new BrowserRunBridge(zed));
-  const host = installNativeHost(terminal, new BrowserPython(zed), new BrowserClangd(zed), new BrowserRust(zed));
+  const rust = new BrowserRust(zed);
+  const terminal = installNativeTerminal(new BrowserRunBridge(zed, undefined, (root, snapshot) => rust.publishBuild(root, snapshot)));
+  const host = installNativeHost(terminal, new BrowserPython(zed), new BrowserClangd(zed), rust);
   installFileDialogs(zed, host);
   globalThis.zedInitialFolder = await host.restoreLocalFolder().catch(() => undefined);
   const { BrowserLma } = await import('/editor/runtime/lma/client.js?v=qwen-tools-2');

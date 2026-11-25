@@ -24,13 +24,16 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files, pro
   const stdout = new TextDecoder();
   let output = '';
   let artifact;
+  let buildOutput;
   const result = new Promise((resolve, reject) => {
     globalThis.postMessage = message => {
       if (message.chunk) output += stdout.decode(message.chunk, { stream: true });
       if (message.artifact) artifact = message.artifact;
+      if (message.buildOutput) buildOutput = message.buildOutput;
       if (message.error) reject(new Error(message.error));
       if (message.code !== undefined) {
-        resolve({ code: message.code, ranProgram: message.ranProgram, output: output + stdout.decode(), artifact, fetched });
+        resolve({ code: message.code, ranProgram: message.ranProgram, output: output + stdout.decode(),
+          artifact, fetched, buildOutput });
       }
     };
   });
@@ -167,6 +170,7 @@ test('Cargo runs build.rs with a writable OUT_DIR and applies its directives', a
         std::fs::write(out.join("generated.rs"), generator::rust_source(&message)).unwrap();
         println!("cargo:rerun-if-changed=message.txt");
         println!("cargo:rustc-env=BUILD_CHANNEL=browser");
+        println!("cargo:rustc-cfg=browser_generated");
     }`,
     'src/main.rs': `
         include!(concat!(env!("OUT_DIR"), "/generated.rs"));
@@ -178,4 +182,10 @@ test('Cargo runs build.rs with a writable OUT_DIR and applies its directives', a
   assert.equal(cargo.ranProgram, true);
   assert.match(cargo.output, /built in the browser on browser/);
   assert.equal(cargo.fetched.has('rust-host-sysroot.tar.gz'), true);
+  const [generated] = cargo.buildOutput.packages;
+  assert.equal(generated.manifest, 'Cargo.toml');
+  assert.deepEqual(generated.cfg, ['browser_generated']);
+  assert.deepEqual(generated.env, [['BUILD_CHANNEL', 'browser']]);
+  assert.deepEqual(generated.files.map(([name, content]) => [name, new TextDecoder().decode(content)]),
+    [['generated.rs', 'const MESSAGE: &str = "built in the browser";']]);
 });

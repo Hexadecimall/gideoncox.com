@@ -6,7 +6,7 @@ const PROGRAMS = new Map([
   ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=2', targets: ['python'] }],
   ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi', 'linux-x86_64'] }],
   ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi'] }],
-  ['browser-rust', { label: 'Rust', worker: '/editor/runtime/compiler/worker.js?v=cargo-2', targets: ['wasi'] }],
+  ['browser-rust', { label: 'Rust', worker: '/editor/runtime/compiler/worker.js?v=cargo-analysis-1', targets: ['wasi'] }],
 ]);
 const SESSION_PREFIX = 'browser-run:';
 const MAX_FILE = 2 * 1024 * 1024;
@@ -25,7 +25,7 @@ async function readProject(zed, root, script, source, running) {
 
 /** Binary terminal transport backed by a sandboxed WASI worker. */
 class BrowserTaskProcess {
-  constructor(worker, label, onArtifact) {
+  constructor(worker, label, onArtifact, onBuild) {
     this.worker = worker;
     this.stdin = createStdin();
     this.decoder = new TextDecoder();
@@ -34,7 +34,9 @@ class BrowserTaskProcess {
     this.exitCode = null;
     this.timer = setTimeout(() => this.fail(`${label} exceeded the five-minute task limit.`), 300000);
     worker.addEventListener('message', ({ data }) => {
+      if (this.exitCode !== null) return;
       if (data.chunk instanceof Uint8Array) this.append(data.chunk);
+      else if (data.buildOutput) onBuild?.(data.buildOutput);
       else if (data.artifact instanceof Uint8Array) {
         try { onArtifact(data.artifact); }
         catch (error) { this.fail(error.message); }
@@ -118,9 +120,10 @@ class BrowserTaskProcess {
 }
 
 export class BrowserRunBridge {
-  constructor(zed, makeWorker = path => new Worker(path, { type: 'module' })) {
+  constructor(zed, makeWorker = path => new Worker(path, { type: 'module' }), onRustBuild) {
     this.zed = zed;
     this.makeWorker = makeWorker;
+    this.onRustBuild = onRustBuild;
     this.sessions = new Map();
   }
 
@@ -148,6 +151,7 @@ export class BrowserRunBridge {
       throw new Error('Finish the running browser build or close a browser task terminal first.');
     }
     const id = SESSION_PREFIX + crypto.randomUUID();
+    const onBuild = command === 'browser-rust' ? snapshot => this.onRustBuild?.(cwd, snapshot) : undefined;
     const process = new BrowserTaskProcess(this.makeWorker(program.worker), program.label, data => {
       if (target !== 'linux-x86_64') throw new Error('Unexpected browser build artifact.');
       const stem = script.split('/').pop().replace(/\.[^.]+$/, '').replace(/[^\w.-]/g, '_');
@@ -158,7 +162,7 @@ export class BrowserRunBridge {
       link.click();
       setTimeout(() => URL.revokeObjectURL(url), 30_000);
       process.append(encoder.encode(`Built ${link.download}\r\n`));
-    });
+    }, onBuild);
     if (command !== 'browser-python') this.compiling = id;
     this.sessions.set(id, process);
     process.append(encoder.encode(`Starting ${program.label}…\r\n`));
