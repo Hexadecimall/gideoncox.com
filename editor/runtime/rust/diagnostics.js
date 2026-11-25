@@ -19,6 +19,10 @@ function diagnosticKey({ range, code, message }) {
   return JSON.stringify([range.start.line, range.start.character, range.end.line, range.end.character, code ?? message]);
 }
 
+export function comparePosition(left, right) {
+  return left.line - right.line || left.character - right.character;
+}
+
 /** Keep the compiler's results and rust-analyzer's own diagnostics independent. */
 export class RustDiagnostics {
   constructor(publish, currentSource, version) {
@@ -79,12 +83,50 @@ export class RustDiagnostics {
     }
   }
 
+  async quickFixes({ textDocument, range, context }) {
+    if (context?.only?.length && !context.only.some(kind => kind === '' || kind === 'quickfix')) return [];
+    const uri = fileUri(filePath(textDocument.uri));
+    const result = this.compiler.get(uri);
+    if (!result || !range) return [];
+    const snapshots = new Map();
+    const snapshot = target => {
+      if (!snapshots.has(target)) {
+        const source = this.currentSource(target);
+        snapshots.set(target, { source, version: this.version(target),
+          digest: source === undefined ? undefined : sourceDigest(source) });
+      }
+      return snapshots.get(target);
+    };
+    const matches = item => comparePosition(item.range.start, range.end) <= 0
+      && comparePosition(range.start, item.range.end) <= 0;
+    const items = result.items.filter(item => item.fixes?.length && matches(item));
+    if (!items.length || await snapshot(uri).digest !== result.digest) return [];
+    const actions = new Map();
+    for (const { fixes, ...diagnostic } of items) {
+      for (const { title, files } of fixes) {
+        const documentChanges = await Promise.all(files.map(async ({ path, digest, edits }) => {
+          const target = fileUri(path);
+          const current = snapshot(target);
+          if (await current.digest !== digest) return null;
+          return { textDocument: { uri: target, version: current.version ?? null }, edits };
+        }));
+        if (documentChanges.some(change => !change)) continue;
+        actions.set(JSON.stringify([title, documentChanges]), {
+          title, kind: 'quickfix', diagnostics: [diagnostic], edit: { documentChanges },
+        });
+      }
+    }
+    if (this.compiler.get(uri) !== result || [...snapshots].some(([path, previous]) =>
+      previous.source !== this.currentSource(path) || previous.version !== this.version(path))) return [];
+    return [...actions.values()];
+  }
+
   send(uri) {
     const version = this.version(uri);
     const native = this.analyzer.get(uri);
     const analyzerItems = native && (version === undefined || native.version === undefined || native.version === version)
       ? native.diagnostics : [];
-    const compilerItems = this.compiler.get(uri)?.items ?? [];
+    const compilerItems = (this.compiler.get(uri)?.items ?? []).map(({ fixes, ...item }) => item);
     const keys = new Set(compilerItems.map(diagnosticKey));
     this.publish({ jsonrpc: '2.0', method: 'textDocument/publishDiagnostics', params: {
       uri, version: version ?? native?.version,

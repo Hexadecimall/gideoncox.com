@@ -219,8 +219,8 @@ function collectDiagnostics(stderr, directory, diagnostics) {
     if (diagnostics.length >= 400) break;
     const message = compilerMessage(line);
     if (message?.$message_type !== 'diagnostic' || !message.spans?.some(span => span.is_primary)) continue;
-    const { level, code, spans, message: text } = message;
-    diagnostics.push({ directory, message: { level, code: { code: code?.code }, spans, message: text } });
+    const { level, code, spans, children, message: text } = message;
+    diagnostics.push({ directory, message: { level, code: { code: code?.code }, spans, children, message: text } });
   }
 }
 

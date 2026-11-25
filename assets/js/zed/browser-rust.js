@@ -4,7 +4,7 @@ const MAX_GENERATED_BYTES = 8 * 1024 * 1024;
 const MAX_BUILD_PACKAGES = 32;
 
 export class BrowserRust extends BrowserLanguageServer {
-  constructor(zed, makeWorker = () => new Worker('/editor/runtime/rust/worker.js?v=clippy-1', { type: 'module' }), checkOnSave) {
+  constructor(zed, makeWorker = () => new Worker('/editor/runtime/rust/worker.js?v=quickfix-1', { type: 'module' }), checkOnSave) {
     super(zed, {
       command: 'rust-analyzer', makeWorker,
       includePath: path => /\.(?:rs|toml|json|md|txt)$/.test(path),

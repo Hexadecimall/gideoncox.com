@@ -3,7 +3,7 @@ import { WASIFarm, wait_async_polyfill } from './wasi-threads.js';
 import { browserRustProject, SYSROOT } from './project.js?v=build-output-1';
 import { LspFrames, applyDocumentChanges, documentReplacement, lspFrame } from '/assets/js/zed/lsp-stream.js?v=document-edits-1';
 import { createRustfmt, rustfmtConfig } from './rustfmt/format.js?v=1';
-import { filePath, fileUri, RustDiagnostics } from './diagnostics.js?v=1';
+import { filePath, fileUri, RustDiagnostics } from './diagnostics.js?v=quickfix-1';
 
 const TARGET = 'wasm32-wasip1';
 const GENERATED = '/zed-generated';
@@ -11,6 +11,7 @@ const encoder = new TextEncoder();
 const input = [];
 const documents = new Map();
 const documentVersions = new Map();
+const codeActionRequests = new Map();
 const formatRust = createRustfmt();
 let waiting;
 let rootPath;
@@ -85,7 +86,14 @@ class Output extends Fd {
         if (message.id === initializeId && message.result?.capabilities) {
           message.result.capabilities.documentFormattingProvider = true;
         }
-        publish(message);
+        const request = message.method === undefined && codeActionRequests.get(message.id);
+        if (request) {
+          codeActionRequests.delete(message.id);
+          diagnostics.quickFixes(request).then(fixes => {
+            if (!fixes.length) publish(message);
+            else publish({ jsonrpc: '2.0', id: message.id, result: [...(message.result ?? []), ...fixes] });
+          }).catch(() => publish(message));
+        } else publish(message);
       }
     }
     return { ret: 0, nwritten: bytes.length };
@@ -233,6 +241,11 @@ function handleLsp(message) {
     if (path?.endsWith('.rs')) postMessage({ type: 'clippy-on-save', path });
   } else if (message.method === 'textDocument/formatting') {
     return formatDocument(message);
+  } else if (message.method === 'textDocument/codeAction') {
+    codeActionRequests.set(message.id, message.params);
+    if (codeActionRequests.size > 64) codeActionRequests.delete(codeActionRequests.keys().next().value);
+  } else if (message.method === '$/cancelRequest') {
+    codeActionRequests.delete(message.params?.id);
   }
   send(message);
 }

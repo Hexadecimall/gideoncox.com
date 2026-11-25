@@ -73,6 +73,8 @@ Standalone Rust files use rustc 1.83 and the matching WASI standard library.
 Clippy uses `.clippy.toml` or `clippy.toml` and honors `[lints.clippy]` in Cargo
 manifests. Its warnings and errors appear in Project Diagnostics when the Rust
 language server is enabled. The driver downloads on first use.
+Compiler suggestions marked machine-applicable appear in Zed’s Quick Fix menu.
+Each file in a suggested edit must still match the checked source.
 
 To check on save, set `check.command` to `clippy` in the Rust Analyzer
 initialization options in `settings.json`:

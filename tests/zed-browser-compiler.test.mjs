@@ -165,6 +165,8 @@ test('Clippy respects a Cargo library manifest and fails when the package denies
   const [diagnostics] = result.cargoDiagnostics;
   assert.equal(diagnostics.path, `${cwd}/src/lib.rs`);
   assert.ok(diagnostics.items.some(item => item.code === 'clippy::bool_comparison' && item.severity === 1));
+  assert.ok(diagnostics.items.some(item => item.fixes?.some(fix =>
+    fix.files.some(file => file.edits.some(edit => edit.newText === 'helper::identity(flag)')))));
 });
 
 test('the browser cross-compiles and statically links C and C++ with Linux standard libraries', async context => {

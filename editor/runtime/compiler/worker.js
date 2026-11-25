@@ -204,14 +204,14 @@ async function zigBuild(job, settings, output) {
 async function rustBuild(job, settings, output) {
   const project = projectDirectory(job.cwd, job.files);
   const source = relative(job.cwd, job.script);
-  const { checkRustFile, compileCargo, findCargoManifest } = await import('./cargo.js?v=clippy-1');
+  const { checkRustFile, compileCargo, findCargoManifest } = await import('./cargo.js?v=quickfix-1');
   const manifest = findCargoManifest(project.dir, source);
   if (job.target === 'clippy') {
     print(output, `Checking ${manifest ?? source} with Clippy`);
     const { code, diagnostics, buildOutput } = manifest
       ? await compileCargo(project.dir, manifest, source, output, { clippy: true })
       : await checkRustFile(project.dir, source, output);
-    const { cargoDiagnostics } = await import('./rust-diagnostics.js?v=1');
+    const { cargoDiagnostics } = await import('./rust-diagnostics.js?v=quickfix-1');
     postMessage({ diagnosticSource: 'clippy', cargoDiagnostics: await cargoDiagnostics(job.cwd, job.files, diagnostics),
       buildOutput: code === 0 ? buildOutput : undefined });
     return { code };
@@ -219,7 +219,7 @@ async function rustBuild(job, settings, output) {
   if (manifest) {
     print(output, `Building ${manifest} with Cargo`);
     const { code, binary, executable, buildOutput, diagnostics } = await compileCargo(project.dir, manifest, source, output);
-    const { cargoDiagnostics } = await import('./rust-diagnostics.js?v=1');
+    const { cargoDiagnostics } = await import('./rust-diagnostics.js?v=quickfix-1');
     postMessage({ cargoDiagnostics: await cargoDiagnostics(job.cwd, job.files, diagnostics ?? []) });
     if (code) return { code };
     postMessage({ buildOutput });
