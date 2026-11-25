@@ -49,6 +49,9 @@ crate directory with writable `OUT_DIR` and receive Cargo's environment. Generat
 and directives are available to the crate. The WASI host libraries download
 on demand for build scripts and their build dependencies. Open the entry
 file to choose among multiple binaries.
+When the Rust language server is running, Cargo errors and warnings also appear
+in Project Diagnostics. They clear as the affected source changes or after a
+clean build.
 Standalone Rust files use rustc 1.83 and the matching WASI standard library.
 Git and private registries, procedural macros, Clippy, and build scripts
 that launch external tools are pending. Registry resolution uses the project's

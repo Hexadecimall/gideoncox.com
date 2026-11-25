@@ -32,15 +32,17 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files, pro
   let output = '';
   let artifact;
   let buildOutput;
+  let cargoDiagnostics;
   const result = new Promise((resolve, reject) => {
     globalThis.postMessage = message => {
       if (message.chunk) output += stdout.decode(message.chunk, { stream: true });
       if (message.artifact) artifact = message.artifact;
       if (message.buildOutput) buildOutput = message.buildOutput;
+      if (message.cargoDiagnostics) cargoDiagnostics = message.cargoDiagnostics;
       if (message.error) reject(new Error(message.error));
       if (message.code !== undefined) {
         resolve({ code: message.code, ranProgram: message.ranProgram, output: output + stdout.decode(),
-          artifact, fetched, buildOutput });
+          artifact, fetched, buildOutput, cargoDiagnostics });
       }
     };
   });
@@ -158,6 +160,11 @@ test('Cargo builds the selected Rust binary with a workspace path dependency', a
   assert.notEqual(broken.code, 0);
   assert.equal(broken.ranProgram, undefined);
   assert.match(broken.output, /cannot find function `missing`/);
+  assert.doesNotMatch(broken.output, /"\$message_type"/);
+  const [file] = broken.cargoDiagnostics;
+  assert.equal(file.path, `${cwd}/app/src/bin/other.rs`);
+  assert.equal(file.items[0].code, 'E0425');
+  assert.equal(file.items[0].severity, 1);
 });
 
 test('Cargo runs build.rs with a writable OUT_DIR and applies its directives', async () => {

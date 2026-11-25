@@ -3,12 +3,14 @@ import { WASIFarm, wait_async_polyfill } from './wasi-threads.js';
 import { browserRustProject, SYSROOT } from './project.js?v=build-output-1';
 import { LspFrames, applyDocumentChanges, documentReplacement, lspFrame } from '/assets/js/zed/lsp-stream.js?v=document-edits-1';
 import { createRustfmt, rustfmtConfig } from './rustfmt/format.js?v=1';
+import { filePath, fileUri, RustDiagnostics } from './diagnostics.js?v=1';
 
 const TARGET = 'wasm32-wasip1';
 const GENERATED = '/zed-generated';
 const encoder = new TextEncoder();
 const input = [];
 const documents = new Map();
+const documentVersions = new Map();
 const formatRust = createRustfmt();
 let waiting;
 let rootPath;
@@ -22,6 +24,10 @@ let settings;
 let projectSignature;
 let toolchain;
 let initializeId;
+
+const publish = message => postMessage({ type: 'lsp', message });
+const diagnostics = new RustDiagnostics(publish, uri => documents.get(uri) ?? projectFiles?.get(filePath(uri)),
+  uri => documentVersions.get(uri));
 
 function readStdin(length) {
   if (!length) return [];
@@ -72,11 +78,13 @@ class Output extends Fd {
       if (message.method === 'workspace/configuration' && message.id !== undefined) {
         const result = message.params.items.map(item => item.section === 'rust-analyzer' ? settings : null);
         send({ jsonrpc: '2.0', id: message.id, result });
+      } else if (message.method === 'textDocument/publishDiagnostics') {
+        diagnostics.fromAnalyzer(message);
       } else {
         if (message.id === initializeId && message.result?.capabilities) {
           message.result.capabilities.documentFormattingProvider = true;
         }
-        postMessage({ type: 'lsp', message });
+        publish(message);
       }
     }
     return { ret: 0, nwritten: bytes.length };
@@ -167,15 +175,16 @@ function updateBuildOutput(packages) {
 
 async function formatDocument(request) {
   const { uri } = request.params.textDocument;
-  const text = documents.get(uri);
+  const path = filePath(uri);
+  const key = fileUri(path);
+  const text = documents.get(key);
   const reply = response => postMessage({ type: 'lsp', message: { jsonrpc: '2.0', id: request.id, ...response } });
   if (text === undefined) { reply({ result: null }); return; }
   try {
-    const path = decodeURIComponent(new URL(uri).pathname);
     const files = request.formatFiles ? new Map(request.formatFiles) : projectFiles;
     const config = rustfmtConfig(files, rootPath, path, request.params.options);
     const formatted = await formatRust(text, config);
-    if (documents.get(uri) !== text) {
+    if (documents.get(key) !== text) {
       reply({ error: { code: -32801, message: 'The document changed during formatting.' } });
     } else reply({ result: documentReplacement(text, formatted) });
   } catch (error) {
@@ -188,18 +197,28 @@ function handleLsp(message) {
     initializeId = message.id;
     settings = rustSettings(message.params.initializationOptions);
     message.params.initializationOptions = settings;
+  } else if (message.method === 'initialized') {
+    diagnostics.initialize();
   } else if (message.method === 'workspace/didChangeConfiguration') {
     settings = rustSettings(message.params?.settings);
     message.params = { settings };
   } else if (message.method === 'textDocument/didOpen') {
-    const { uri, text } = message.params.textDocument;
-    documents.set(uri, text);
+    const { uri, text, version } = message.params.textDocument;
+    const key = fileUri(filePath(uri));
+    documents.set(key, text);
+    documentVersions.set(key, version);
+    diagnostics.verify(key).catch(() => {});
   } else if (message.method === 'textDocument/didChange') {
-    const { uri } = message.params.textDocument;
-    const text = documents.get(uri);
-    if (text !== undefined) documents.set(uri, applyDocumentChanges(text, message.params.contentChanges));
+    const { uri, version } = message.params.textDocument;
+    const key = fileUri(filePath(uri));
+    const text = documents.get(key);
+    if (text !== undefined) documents.set(key, applyDocumentChanges(text, message.params.contentChanges));
+    documentVersions.set(key, version);
+    diagnostics.invalidate(key);
   } else if (message.method === 'textDocument/didClose') {
-    documents.delete(message.params.textDocument.uri);
+    const key = fileUri(filePath(message.params.textDocument.uri));
+    documents.delete(key);
+    documentVersions.delete(key);
   } else if (message.method === 'textDocument/formatting') {
     return formatDocument(message);
   }
@@ -269,11 +288,13 @@ addEventListener('message', async ({ data }) => {
     if (data.type === 'start') await start(data.root, data.files);
     else if (data.type === 'lsp') await handleLsp(data.message);
     else if (data.type === 'build-output') updateBuildOutput(data.packages);
+    else if (data.type === 'cargo-diagnostics') await diagnostics.replace(data.files);
     else if (data.type === 'file') {
       const wasPresent = projectFiles.has(data.path);
       if (data.bytes === null) projectFiles.delete(data.path);
       else projectFiles.set(data.path, data.bytes);
       writeFile(data.path, data.bytes);
+      diagnostics.verify(fileUri(data.path)).catch(() => {});
       if (wasPresent !== (data.bytes !== null) || /\/(?:Cargo.toml|rust-project.json)$/.test(data.path)) {
         refreshProject();
       }

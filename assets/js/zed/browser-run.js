@@ -6,7 +6,7 @@ const PROGRAMS = new Map([
   ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=2', targets: ['python'] }],
   ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi', 'linux-x86_64'] }],
   ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi'] }],
-  ['browser-rust', { label: 'Rust', worker: '/editor/runtime/compiler/worker.js?v=cargo-registry-1', targets: ['wasi'] }],
+  ['browser-rust', { label: 'Rust', worker: '/editor/runtime/compiler/worker.js?v=cargo-diagnostics-3', targets: ['wasi'] }],
 ]);
 const SESSION_PREFIX = 'browser-run:';
 const MAX_FILE = 2 * 1024 * 1024;
@@ -36,7 +36,7 @@ class BrowserTaskProcess {
     worker.addEventListener('message', ({ data }) => {
       if (this.exitCode !== null) return;
       if (data.chunk instanceof Uint8Array) this.append(data.chunk);
-      else if (data.buildOutput) onBuild?.(data.buildOutput);
+      else if (data.buildOutput || data.cargoDiagnostics) onBuild?.(data);
       else if (data.artifact instanceof Uint8Array) {
         try { onArtifact(data.artifact); }
         catch (error) { this.fail(error.message); }

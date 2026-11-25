@@ -182,11 +182,13 @@ async function zigBuild(job, settings, output) {
 async function rustBuild(job, settings, output) {
   const project = projectDirectory(job.cwd, job.files);
   const source = relative(job.cwd, job.script);
-  const { compileCargo, findCargoManifest } = await import('./cargo.js?v=registry-1');
+  const { compileCargo, findCargoManifest } = await import('./cargo.js?v=diagnostics-3');
   const manifest = findCargoManifest(project.dir, source);
   if (manifest) {
     print(output, `Building ${manifest} with Cargo`);
-    const { code, binary, executable, buildOutput } = await compileCargo(project.dir, manifest, source, output);
+    const { code, binary, executable, buildOutput, diagnostics } = await compileCargo(project.dir, manifest, source, output);
+    const { cargoDiagnostics } = await import('./rust-diagnostics.js?v=1');
+    postMessage({ cargoDiagnostics: await cargoDiagnostics(job.cwd, job.files, diagnostics ?? []) });
     if (code) return { code };
     postMessage({ buildOutput });
     return runProgram(binary, executable, settings.args ?? [], project, output, job.stdin);

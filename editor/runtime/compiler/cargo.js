@@ -203,6 +203,54 @@ function messages(bytes) {
   return result;
 }
 
+function compilerMessage(line) {
+  line = line.trimStart();
+  if (!line.startsWith('{')) return null;
+  try {
+    const message = JSON.parse(line);
+    return typeof message?.$message_type === 'string' ? message : null;
+  } catch { return null; }
+}
+
+function collectDiagnostics(stderr, directory, diagnostics) {
+  if (!stderr.length || (directory !== PROJECT && !directory.startsWith(PROJECT + '/'))) return;
+  for (const line of DECODER.decode(Uint8Array.from(stderr)).split('\n')) {
+    if (diagnostics.length >= 400) break;
+    const message = compilerMessage(line);
+    if (message?.$message_type !== 'diagnostic' || !message.spans?.some(span => span.is_primary)) continue;
+    const { level, code, spans, message: text } = message;
+    diagnostics.push({ directory, message: { level, code: { code: code?.code }, spans, message: text } });
+  }
+}
+
+function cargoTerminalOutput(output) {
+  const decoder = new TextDecoder();
+  let pending = '';
+  function forward(line, ending) {
+    const message = compilerMessage(line);
+    if (message?.$message_type === 'diagnostic' && typeof message.rendered === 'string') {
+      output.write(ENCODER.encode(message.rendered));
+    } else if (!['artifact', 'future_incompat'].includes(message?.$message_type)) {
+      output.write(ENCODER.encode(line + ending));
+    }
+  }
+  return {
+    write(bytes) {
+      const lines = (pending + decoder.decode(bytes, { stream: true })).split('\n');
+      pending = lines.pop();
+      for (const line of lines) forward(line, '\n');
+      if (pending.length > MAX_TOOL_BYTES) {
+        forward(pending, '');
+        pending = '';
+      }
+    },
+    finish() {
+      pending += decoder.decode();
+      if (pending) forward(pending, '');
+    },
+  };
+}
+
 function buildScriptOutput(root, cargoMessages) {
   const manifests = new Map();
   const scriptOutputs = new Map();
@@ -253,6 +301,7 @@ export async function compileCargo(directory, manifest, source, output) {
   writeFile(root, RUSTC, [], true);
   const path = `${PROJECT}/${manifest}`;
   const registry = new CargoRegistry();
+  const diagnostics = [];
   let hostLibraries;
   const loadHostLibraries = () => hostLibraries ??= loadArchive('rust-host-sysroot.tar.gz').then(archive => {
     for (const [name, bytes] of archive) writeFile(compiler.sysroot.dir, '/' + name, bytes, true);
@@ -260,20 +309,25 @@ export async function compileCargo(directory, manifest, source, output) {
 
   const cargo = async args => {
     const stdout = capture(2 * MAX_TOOL_BYTES);
+    const stderr = cargoTerminalOutput(output);
     const code = await runRustTool({
       wasmModule: cargoModule, args: [CARGO, ...args, '--manifest-path', path], env: CARGO_ENV,
       directories: [mount('.', directory), mount('/', root)], stdout: stdout.write,
-      stderr: bytes => output.write(bytes),
+      stderr: stderr.write,
       spawn: async request => {
         try {
           if (request.kind === 'registry') return await registry.begin(request);
           if (request.kind === 'registry-chunk') return registry.chunk(request);
-          if (request.program === RUSTC) return await runCompiler(compiler.wasmModule, root, request, loadHostLibraries);
+          if (request.program === RUSTC) {
+            const result = await runCompiler(compiler.wasmModule, root, request, loadHostLibraries);
+            collectDiagnostics(result.stderr, request.cwd || PROJECT, diagnostics);
+            return result;
+          }
           return await runBuildScript(root, request);
         }
         catch (error) { return failure(error.message); }
       },
-    });
+    }).finally(stderr.finish);
     return { code, stdout: stdout.take() };
   };
 
@@ -295,8 +349,9 @@ export async function compileCargo(directory, manifest, source, output) {
       executable = message.executable;
     }
   }
-  if (build.code) return { code: build.code };
+  if (build.code) return { code: build.code, diagnostics };
   const binary = executable?.startsWith(BUILD + '/') && lookup(root, executable)?.data;
   if (!binary?.length) throw new Error('Cargo produced no WebAssembly executable.');
-  return { code: 0, binary, executable: target.name, buildOutput: buildScriptOutput(root, cargoMessages) };
+  return { code: 0, binary, executable: target.name, diagnostics,
+    buildOutput: buildScriptOutput(root, cargoMessages) };
 }
