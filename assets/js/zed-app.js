@@ -5,12 +5,12 @@ import { BrowserPython } from './zed/browser-python.js?v=multi-lsp-3';
 
 import { BrowserClangd } from './zed/browser-clangd.js?v=multi-lsp-1';
 import { BrowserRust } from './zed/browser-rust.js?v=multi-lsp-1';
-import { BrowserRunBridge } from './zed/browser-run.js?v=3';
+import { BrowserRunBridge } from './zed/browser-run.js?v=4';
 import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=1';
 
 const loading = document.querySelector('#loading');
-const build = '707404159ed9';
+const build = '45325469f3e5';
 
 async function downloadWasm() {
   const download = await editorWasmResponse(build);

@@ -11,7 +11,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Documents | Browser filesystem with persisted documents and import/export dialogs | Browser file round trips |
 | Clipboard | Upstream editor Copy, Cut and Paste. Standard shortcuts use the browser paste event, and Edit → Paste uses the browser clipboard API. | Browser clipboard round trips |
 | Device folders | Chromium folder picker and direct file reads and writes through the selected handle. Zed remembers the most recent folder and checks its permission on reopen. | Chromium folder-handle and reload checks |
-| Settings and trust | Browser-backed `settings.json`, native settings UI and remembered project trust choices | Workspace reload checks |
+| Settings and trust | Browser-backed `settings.json`, native settings UI, bundled read-only defaults and remembered project trust choices | Workspace reload and settings file checks |
 | Startup cache | Versioned WebAssembly download in Cache Storage, with a network fallback | Cache tests and Chromium reload checks |
 | Vim | Upstream modes, keymap and status, enabled by `vim_mode` in Zed settings | WASM build and module validation |
 | Syntax | All 22 bundled upstream syntax configurations, Tree-sitter grammars and queries | WASM build and module validation |
@@ -22,7 +22,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Python execution | CPython WASI worker and upstream task terminal for browser workspace files | WASI runtime and buffer snapshot tests |
 | Diagnostics | Upstream Language Servers menu and Project Diagnostics view | Browser status bar and diagnostic checks |
 | C/C++ | clangd 21 in a WebAssembly worker, with browser project files and bundled WASI headers | Chromium language-server and browser workspace checks |
-| Browser builds | Clang and LLD compile multi-file C and C++ for WASI with standard libraries, or link a freestanding Linux x86-64 executable. Zig builds and runs WASI programs. | Chromium task terminal and compiler-worker checks |
+| Browser builds | Clang and LLD compile multi-file C and C++ for WASI with standard libraries, or link a freestanding Linux x86-64 executable. Zig builds and runs WASI programs. Project build settings supply WASI arguments. | Chromium task terminal, argument forwarding, exit status and compiler-worker checks |
 | Rust | rust-analyzer in a WASI worker with a bundled standard library, Rust project graphs, and local Cargo path dependencies | Concurrent Chromium worktrees and browser workspace checks |
 | Tasks | Upstream task picker and task terminal; native command, arguments, environment, working directory and completion status | Real task PTY exit/output tests; integrated browser check pending |
 

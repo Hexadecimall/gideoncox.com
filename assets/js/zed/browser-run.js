@@ -4,8 +4,8 @@ import { joinBytes } from './lsp-stream.js';
 
 const PROGRAMS = new Map([
   ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=2', targets: ['python'] }],
-  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=2', targets: ['wasi', 'linux-x86_64'] }],
-  ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=2', targets: ['wasi'] }],
+  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=3', targets: ['wasi', 'linux-x86_64'] }],
+  ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=3', targets: ['wasi'] }],
 ]);
 const SESSION_PREFIX = 'browser-run:';
 const MAX_FILE = 2 * 1024 * 1024;

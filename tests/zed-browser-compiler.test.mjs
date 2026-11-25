@@ -36,6 +36,7 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files }) {
 
 test('the shipped browser toolchains compile, link, report diagnostics, and run', async () => {
   const c = await run({ script: 'main.c', files: {
+    '.zed/browser-build.json': '',
     'main.c': '#include <stdio.h>\n#include "math_test.h"\nint main(void) { printf("C: %d\\n", twice(21)); }',
     'include/math_test.h': 'int twice(int value);',
     'lib/math_test.c': '#include "math_test.h"\nint twice(int value) { return value * 2; }',

@@ -49,9 +49,11 @@ function readSettings({ cwd, files }) {
   const path = '.zed/browser-build.json';
   const file = files.find(([name]) => name === `${cwd}/${path}`);
   if (!file) return {};
+  const contents = decoder.decode(file[1]).trim();
+  if (!contents) return {};
   let settings;
   try {
-    settings = JSON.parse(decoder.decode(file[1]));
+    settings = JSON.parse(contents);
   } catch {
     throw new Error(`${path} must contain valid JSON.`);
   }

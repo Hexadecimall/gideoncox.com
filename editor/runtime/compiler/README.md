@@ -24,6 +24,9 @@ argument. C, C++, and Zig support this field. A file with only `args` keeps the
 default build inputs. Program output and its numeric exit code appear in the
 task terminal, including exit code 0.
 
+Use **Run and Build → Configure Build…** to open the project's configuration
+from a C, C++, or Zig buffer.
+
 **Cross-Compile → Linux x86-64 (Freestanding)** downloads a statically linked
 ELF executable. It supports `int main(void)` or a project-provided `_start`.
 This target has no Linux system headers or C/C++ runtime libraries. The WASI
