@@ -4,9 +4,9 @@ import { joinBytes } from './lsp-stream.js';
 
 const PROGRAMS = new Map([
   ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=2', targets: ['python'] }],
-  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=5', targets: ['wasi', 'linux-x86_64'] }],
-  ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=5', targets: ['wasi'] }],
-  ['browser-rust', { label: 'Rust', worker: '/editor/runtime/compiler/worker.js?v=5', targets: ['wasi'] }],
+  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi', 'linux-x86_64'] }],
+  ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi'] }],
+  ['browser-rust', { label: 'Rust', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi'] }],
 ]);
 const SESSION_PREFIX = 'browser-run:';
 const MAX_FILE = 2 * 1024 * 1024;
@@ -133,6 +133,14 @@ export class BrowserRunBridge {
     const script = args?.[0];
     const target = args?.[1] ?? (command === 'browser-python' ? 'python' : undefined);
     if (!program?.targets.includes(target)) throw new Error('Unsupported browser build target.');
+    let programArgs;
+    if (args?.length > 2) {
+      if (target !== 'wasi' || args[2] !== '--') throw new Error('Invalid browser task arguments.');
+      programArgs = args.slice(3);
+      if (programArgs.some(arg => typeof arg !== 'string' || arg.includes('\0'))) {
+        throw new Error('WebAssembly arguments must be strings without NUL characters.');
+      }
+    }
     if (!globalThis.crossOriginIsolated) throw new Error('Open the top-level Zed page to run browser tasks.');
     if (!isLanguageProject(cwd) || !projectPath(script, cwd) || typeof source !== 'string'
       || encoder.encode(source).length > MAX_FILE) throw new Error('The file is outside the browser project or too large.');
@@ -156,7 +164,9 @@ export class BrowserRunBridge {
     process.append(encoder.encode(`Starting ${program.label}…\r\n`));
     const running = () => process.exitCode === null;
     readProject(this.zed, cwd, script, source, running).then(files => {
-      if (running()) process.worker.postMessage({ cwd, script, files, command, target, stdin: process.stdin.buffer });
+      if (running()) process.worker.postMessage({
+        cwd, script, files, command, target, programArgs, stdin: process.stdin.buffer,
+      });
     }).catch(error => process.fail(error.message));
     return id;
   }

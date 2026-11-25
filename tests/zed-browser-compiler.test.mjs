@@ -6,7 +6,7 @@ const worker = new URL('../editor/runtime/compiler/worker.js', import.meta.url);
 const encoder = new TextEncoder();
 const cwd = '/home/web/compiler-test';
 
-async function run({ command = 'browser-cc', target = 'wasi', script, files }) {
+async function run({ command = 'browser-cc', target = 'wasi', script, files, programArgs }) {
   const handler = new EventTarget();
   handler.close = () => {};
   globalThis.self = handler;
@@ -30,7 +30,7 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files }) {
   });
   await import(`${worker.href}?run=${encodeURIComponent(target + script)}`);
   handler.dispatchEvent(new MessageEvent('message', { data: {
-    cwd, command, target, script: `${cwd}/${script}`,
+    cwd, command, target, script: `${cwd}/${script}`, programArgs,
     files: Object.entries(files).map(([name, contents]) => [`${cwd}/${name}`, encoder.encode(contents)]),
   } }));
   return result;
@@ -38,17 +38,17 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files }) {
 
 test('the shipped browser toolchains compile, link, report diagnostics, and run', async () => {
   const c = await run({ script: 'main.c', files: {
-    '.zed/browser-build.json': '',
-    'main.c': '#include <stdio.h>\n#include "math_test.h"\nint main(void) { printf("C: %d\\n", twice(21)); }',
+    '.zed/browser-build.json': JSON.stringify({ args: ['unused'] }),
+    'main.c': '#include <stdio.h>\n#include "math_test.h"\nint main(int argc, char **argv) { printf("C: %d\\n", twice(21)); return argc == 1 ? 0 : 1; }',
     'include/math_test.h': 'int twice(int value);',
     'lib/math_test.c': '#include "math_test.h"\nint twice(int value) { return value * 2; }',
-  } });
+  }, programArgs: [] });
   assert.equal(c.code, 0, c.output);
   assert.equal(c.ranProgram, true);
   assert.match(c.output, /C: 42/);
 
   const cpp = await run({ script: 'main.cpp', files: {
-    '.zed/browser-build.json': JSON.stringify({ args: ['--mode', 'two words', '', '雪'] }),
+    '.zed/browser-build.json': JSON.stringify({ args: ['unused'] }),
     'main.cpp': `#include <iostream>
 #include <vector>
 int twice(int);
@@ -59,7 +59,7 @@ int main(int argc, char **argv) {
     return 23;
 }`,
     'math_test.cpp': 'int twice(int value) { return value * 2; }',
-  } });
+  }, programArgs: ['--mode', 'two words', '', '雪'] });
   assert.equal(cpp.code, 23, cpp.output);
   assert.equal(cpp.ranProgram, true);
   assert.match(cpp.output, /\r\n42\r\n/);

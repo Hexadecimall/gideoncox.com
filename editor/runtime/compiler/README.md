@@ -29,6 +29,11 @@ from a C, C++, Zig, or Rust buffer. Save the configuration, switch back to the s
 file, and select **Build and Run WebAssembly**. Each element of `args` arrives
 as written, including spaces, empty strings, and non-ASCII characters.
 
+For one run, select **Run and Build → Run WebAssembly with Arguments…** and
+enter a JSON array such as `["convert", "--name", "two words"]`. This overrides
+the configured arguments for that run. Submit an empty field to run without
+arguments. The task's result uses the program's return or exit status.
+
 **Cross-Compile → Linux x86-64 (Freestanding)** downloads a statically linked
 ELF executable. It supports `int main(void)` or a project-provided `_start`.
 This target has no Linux system headers or C/C++ runtime libraries. The WASI

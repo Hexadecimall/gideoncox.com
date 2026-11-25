@@ -52,21 +52,20 @@ function projectDirectory(cwd, files) {
   return project;
 }
 
-function readSettings({ cwd, files }) {
+function readSettings({ cwd, files, programArgs }) {
   const path = '.zed/browser-build.json';
   const file = files.find(([name]) => name === `${cwd}/${path}`);
-  if (!file) return {};
-  const contents = decoder.decode(file[1]).trim();
-  if (!contents) return {};
+  const contents = file ? decoder.decode(file[1]).trim() : '';
   let settings;
   try {
-    settings = JSON.parse(contents);
+    settings = contents ? JSON.parse(contents) : {};
   } catch {
     throw new Error(`${path} must contain valid JSON.`);
   }
   if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
     throw new Error(`${path} must contain a JSON object.`);
   }
+  if (programArgs !== undefined) settings.args = programArgs;
   if (settings.args !== undefined && (!Array.isArray(settings.args)
     || settings.args.some(arg => typeof arg !== 'string' || arg.includes('\0')))) {
     throw new Error(`"args" in ${path} must be an array of strings without NUL characters.`);

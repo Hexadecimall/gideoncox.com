@@ -67,7 +67,7 @@ test('running Python snapshots the active buffer and keeps the project and termi
   assert.equal(worker.terminated, true);
 });
 
-test('a WebAssembly task displays the program exit code only after it ran', async t => {
+test('a WebAssembly task forwards exact program arguments and displays the exit code after running', async t => {
   t.mock.method(globalThis, 'fetch', () => { throw new Error('The task must stay local'); });
   const isolation = Object.getOwnPropertyDescriptor(globalThis, 'crossOriginIsolated');
   Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value: true });
@@ -76,17 +76,24 @@ test('a WebAssembly task displays the program exit code only after it ran', asyn
     else delete globalThis.crossOriginIsolated;
   });
 
-  for (const data of [{ code: 0, ranProgram: true }, { code: 23, ranProgram: true }, { code: 1 }]) {
+  for (const [programArgs, data] of [
+    [['--mode', 'two words', '', '雪'], { code: 23, ranProgram: true }],
+    [[], { code: 0, ranProgram: true }],
+    [undefined, { code: 1 }],
+  ]) {
     const worker = new EventTarget();
     worker.terminate = () => {};
     const posted = new Promise(resolve => { worker.postMessage = resolve; });
     const bridge = new BrowserRunBridge({ async list_browser_paths() { return '[]'; } }, () => worker);
-    const id = await bridge.open({
+    const options = {
       cwd: '/home/web/project', command: 'browser-cc', args: ['/home/web/project/main.c', 'wasi'],
       env: { ZED_BROWSER_SOURCE: 'int main(void) { return 0; }' },
-    });
+    };
+    await assert.rejects(bridge.open({ ...options, args: [...options.args, '--', 'bad\0arg'] }), /NUL/);
+    if (programArgs !== undefined) options.args.push('--', ...programArgs);
+    const id = await bridge.open(options);
     t.after(() => bridge.close(id));
-    await posted;
+    assert.deepEqual((await posted).programArgs, programArgs);
     worker.dispatchEvent(new MessageEvent('message', { data }));
     const result = await bridge.read(id);
     assert.equal(result.exitCode, data.code);
