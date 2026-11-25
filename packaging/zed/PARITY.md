@@ -29,6 +29,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Rust | rust-analyzer in a WASI worker with a bundled standard library, local Cargo path dependencies, and generated source from successful builds | Concurrent worktrees and browser diagnostics on generated Rust source |
 | Rust formatting | WASI rustfmt through Zed's Format command and format-on-save, with project rustfmt configuration and Cargo editions | Browser formatting and format-on-save checks |
 | Rust builds | WASI Cargo and rustc build workspaces with local path dependencies and public crates.io packages. Rust build scripts run inside WASI. Run and Build picks the binary from the active source and preserves arguments and exit status. Cargo compiler messages reach Project Diagnostics through the Rust language server. | Workspace, registry, build-script, and diagnostics tests, plus the Zed browser task |
+| Rust Clippy | On-demand WASI Clippy for Rust files and Cargo packages through Run and Build or Rust Analyzer's `check.command` setting. Clippy reports findings in Project Diagnostics and reads native lint configuration. | Standalone and Cargo lint tests, including local dependencies, build scripts, and denied lints. Browser save and diagnostic clearing checks. |
 | Tasks | Upstream task picker and task terminal; native command, arguments, environment, working directory and completion status | Real task PTY exit/output tests; integrated browser check pending |
 
 The browser uses the desktop status layout for Language Servers, Project Diagnostics
@@ -42,7 +43,7 @@ menu. The pending controls display a Zed notification when activated.
 - Native debugger sessions and debugger UI.
 - Extension installation, execution, grammars, themes and extension-provided language servers.
 - Browser LSP runners for languages beyond C/C++, Python and Rust.
-- Rust browser tooling for Clippy, Git and private registry dependencies, build scripts that launch external tools, and procedural macros. Additional native targets and build-system integration for browser C, C++, and Zig projects.
+- Rust browser tooling for Git and private registry dependencies, build scripts that launch external tools, and procedural macros. Additional native targets and build-system integration for browser C, C++, and Zig projects.
 - Collaboration, authentication, hosted services, and full Agent tool support.
 - Audit remaining desktop workspace and session state for browser persistence.
 - Desktop platform integrations, multiple OS windows and native file dialogs.

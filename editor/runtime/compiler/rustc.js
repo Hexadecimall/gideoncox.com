@@ -44,8 +44,8 @@ export async function runRustTool({
 
 export const RUST_ENV = ['RUSTC_BOOTSTRAP=1', 'RAYON_NUM_THREADS=1'];
 
-export async function loadRustToolchain() {
-  const [wasmModule, archive] = await Promise.all([loadModule('rustc.wasm.gz'), loadArchive('rust-sysroot.tar.gz')]);
+export async function loadRustToolchain(compiler = 'rustc.wasm.gz') {
+  const [wasmModule, archive] = await Promise.all([loadModule(compiler), loadArchive('rust-sysroot.tar.gz')]);
   const sysroot = new PreopenDirectory('/sysroot', new Map());
   for (const [name, bytes] of archive) writeFile(sysroot.dir, '/' + name, bytes, true);
   return { wasmModule, sysroot };

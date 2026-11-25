@@ -3,7 +3,7 @@ import { writeFile } from '../terminal-wasi.js';
 import { loadArchive, loadModule } from './assets.js';
 import { MAX_TOOL_BYTES } from './cargo-imports.js?v=registry-1';
 import { CargoRegistry } from './cargo-registry.js?v=1';
-import { loadRustToolchain, RUST_ENV, runRustTool } from './rustc.js?v=registry-1';
+import { loadRustToolchain, RUST_ENV, runRustTool } from './rustc.js?v=clippy-1';
 
 const PROJECT = '/workspace';
 const BUILD = '/build';
@@ -11,6 +11,7 @@ const TARGET = 'wasm32-wasip1';
 const HOST = 'wasm32-wasip1-threads';
 const CARGO = '/toolchain/bin/cargo';
 const RUSTC = '/toolchain/bin/rustc';
+const CLIPPY = 'clippy-driver.wasm.gz';
 const REGISTRY_SOURCE = '/cargo-home/registry/src/';
 const ENCODER = new TextEncoder();
 const DECODER = new TextDecoder();
@@ -146,9 +147,9 @@ function rustcOption(args, name) {
     : args[index + 1];
 }
 
-async function runCompiler(compiler, root, request, loadHostLibraries) {
+async function runCompiler(compiler, root, request, loadHostLibraries, command = [RUSTC]) {
   const versionProbe = request.args.length === 1 && request.args[0] === '-vV';
-  const args = [RUSTC, ...request.args];
+  const args = [...command, ...request.args];
   if (!versionProbe) {
     args.push('--sysroot', '/sysroot', '-Zthreads=1', '-Ccodegen-units=1');
     const target = rustcOption(request.args, '--target');
@@ -289,12 +290,34 @@ function buildScriptOutput(root, cargoMessages) {
   return { manifests: [...new Set(manifests.values())], packages };
 }
 
-export async function compileCargo(directory, manifest, source, output) {
-  const [cargoModule, compiler] = await Promise.all([loadModule('cargo.wasm.gz'), loadRustToolchain()]);
-  const root = new Directory(new Map([
-    ['workspace', directory], ['sysroot', compiler.sysroot.dir], ['build', new Directory(new Map())],
+function compilerWorkspace(directory, sysroot) {
+  return new Directory(new Map([
+    ['workspace', directory], ['sysroot', sysroot.dir], ['build', new Directory(new Map())],
     ['tmp', new Directory(new Map())], ['cargo-home', new Directory(new Map())],
   ]));
+}
+
+export async function checkRustFile(directory, source, output) {
+  const compiler = await loadRustToolchain(CLIPPY);
+  const root = compilerWorkspace(directory, compiler.sysroot);
+  const diagnostics = [];
+  const result = await runCompiler(compiler.wasmModule, root, {
+    program: RUSTC, cwd: PROJECT, env: [`CLIPPY_CONF_DIR=${PROJECT}`],
+    args: ['--edition=2021', '--target', TARGET, '-Cpanic=abort', '--emit=metadata',
+      '--error-format=json', `${PROJECT}/${source}`, '-o', `${BUILD}/program.rmeta`],
+  }, undefined, ['clippy-driver']);
+  collectDiagnostics(result.stderr, PROJECT, diagnostics);
+  const stderr = cargoTerminalOutput(output);
+  stderr.write(Uint8Array.from(result.stderr));
+  stderr.finish();
+  return { code: result.code, diagnostics };
+}
+
+export async function compileCargo(directory, manifest, source, output, { clippy = false } = {}) {
+  const [cargoModule, compiler] = await Promise.all([
+    loadModule('cargo.wasm.gz'), loadRustToolchain(clippy ? CLIPPY : undefined),
+  ]);
+  const root = compilerWorkspace(directory, compiler.sysroot);
   // Cargo resolves these absolute paths before asking the worker to launch a
   // process. The runtime only executes the bundled WebAssembly compiler.
   writeFile(root, CARGO, [], true);
@@ -319,7 +342,12 @@ export async function compileCargo(directory, manifest, source, output) {
           if (request.kind === 'registry') return await registry.begin(request);
           if (request.kind === 'registry-chunk') return registry.chunk(request);
           if (request.program === RUSTC) {
-            const result = await runCompiler(compiler.wasmModule, root, request, loadHostLibraries);
+            // Keep dependency compilation and Cargo's probes in upstream
+            // clippy-driver's rustc mode so a check loads only one compiler.
+            const lint = clippy && rustcOption(request.args, '--target') === TARGET
+              && request.env.some(entry => entry.startsWith('CARGO_PRIMARY_PACKAGE='));
+            const command = clippy ? ['clippy-driver', ...(lint ? [] : ['--rustc'])] : undefined;
+            const result = await runCompiler(compiler.wasmModule, root, request, loadHostLibraries, command);
             collectDiagnostics(result.stderr, request.cwd || PROJECT, diagnostics);
             return result;
           }
@@ -331,13 +359,16 @@ export async function compileCargo(directory, manifest, source, output) {
     return { code, stdout: stdout.take() };
   };
 
-  const metadata = await cargo(['metadata', '--no-deps', '--format-version', '1']);
-  if (metadata.code) return { code: metadata.code };
-  const project = messages(metadata.stdout).find(entry => Array.isArray(entry.packages));
-  if (!project) throw new Error('Cargo did not return workspace metadata.');
-  const { pkg, target } = packageTarget(project, path, `${PROJECT}/${source}`);
+  let selected;
+  if (!clippy) {
+    const metadata = await cargo(['metadata', '--no-deps', '--format-version', '1']);
+    if (metadata.code) return { code: metadata.code };
+    const project = messages(metadata.stdout).find(entry => Array.isArray(entry.packages));
+    if (!project) throw new Error('Cargo did not return workspace metadata.');
+    selected = packageTarget(project, path, `${PROJECT}/${source}`);
+  }
   const build = await cargo([
-    'build', '--package', pkg.name, '--bin', target.name, '--target', TARGET,
+    ...(selected ? ['build', '--package', selected.pkg.name, '--bin', selected.target.name] : ['check']), '--target', TARGET,
     '--target-dir', BUILD, '--message-format=json-render-diagnostics', '-j1',
   ]);
   let executable;
@@ -345,13 +376,14 @@ export async function compileCargo(directory, manifest, source, output) {
   for (const message of cargoMessages) {
     if (message.reason === 'compiler-message' && message.message.rendered) {
       output.write(ENCODER.encode(message.message.rendered));
-    } else if (message.reason === 'compiler-artifact' && message.target.src_path === target.src_path) {
+    } else if (selected && message.reason === 'compiler-artifact' && message.target.src_path === selected.target.src_path) {
       executable = message.executable;
     }
   }
   if (build.code) return { code: build.code, diagnostics };
+  const buildOutput = buildScriptOutput(root, cargoMessages);
+  if (clippy) return { code: 0, diagnostics, buildOutput };
   const binary = executable?.startsWith(BUILD + '/') && lookup(root, executable)?.data;
   if (!binary?.length) throw new Error('Cargo produced no WebAssembly executable.');
-  return { code: 0, binary, executable: target.name, diagnostics,
-    buildOutput: buildScriptOutput(root, cargoMessages) };
+  return { code: 0, binary, executable: selected.target.name, diagnostics, buildOutput };
 }

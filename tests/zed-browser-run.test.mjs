@@ -133,6 +133,50 @@ test('Zig and Rust snapshot saved arguments even when the project listing omits 
   }
 });
 
+test('a saved Rust file waits for the foreground compiler and uses the latest save', async t => {
+  const isolation = Object.getOwnPropertyDescriptor(globalThis, 'crossOriginIsolated');
+  Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value: true });
+  t.after(() => {
+    if (isolation) Object.defineProperty(globalThis, 'crossOriginIsolated', isolation);
+    else delete globalThis.crossOriginIsolated;
+  });
+  t.mock.timers.enable({ apis: ['setTimeout'] });
+  const cwd = '/home/web/project';
+  const workers = [];
+  const lintResult = Promise.withResolvers();
+  const lintJob = Promise.withResolvers();
+  const bridge = new BrowserRunBridge({
+    async list_browser_paths() { return '[]'; },
+    async read_browser_file(path) {
+      return path.endsWith('.rs') ? encode('fn main() {}') : undefined;
+    },
+  }, () => {
+    const worker = new EventTarget();
+    worker.terminate = () => {};
+    worker.postMessage = job => { if (job.target === 'clippy') lintJob.resolve(job); };
+    workers.push(worker);
+    return worker;
+  }, (root, result) => lintResult.resolve({ root, result }));
+  const active = await bridge.open({ cwd, command: 'browser-cc', args: [`${cwd}/main.c`, 'wasi'],
+    env: { ZED_BROWSER_SOURCE: 'int main(void) { return 0; }' } });
+  t.after(() => bridge.close(active));
+
+  bridge.scheduleRustCheck(cwd, `${cwd}/previous.rs`);
+  bridge.scheduleRustCheck(cwd, `${cwd}/saved.rs`);
+  t.mock.timers.tick(650);
+  assert.equal(workers.length, 1);
+  workers[0].dispatchEvent(new MessageEvent('message', { data: { code: 0, ranProgram: true } }));
+  assert.equal((await bridge.read(active)).ended, true);
+  t.mock.timers.tick(650);
+  const job = await lintJob.promise;
+  assert.equal(job.script, `${cwd}/saved.rs`);
+  assert.equal(decode(job.files[0][1]), 'fn main() {}');
+  const diagnostics = { diagnosticSource: 'clippy', cargoDiagnostics: [] };
+  workers[1].dispatchEvent(new MessageEvent('message', { data: diagnostics }));
+  workers[1].dispatchEvent(new MessageEvent('message', { data: { code: 0 } }));
+  assert.deepEqual(await lintResult.promise, { root: cwd, result: diagnostics });
+});
+
 test('the static Linux task offers the linked ELF under its target-specific filename', async t => {
   const isolation = Object.getOwnPropertyDescriptor(globalThis, 'crossOriginIsolated');
   Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value: true });

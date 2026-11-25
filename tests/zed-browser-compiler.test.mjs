@@ -132,6 +132,41 @@ test('browser builds reject non-string arguments before starting the toolchain',
   } }), /"args".*must be an array of strings/);
 });
 
+test('Clippy reads native project lint configuration and returns source diagnostics for a Rust file', async () => {
+  const result = await run({ command: 'browser-rust', target: 'clippy', script: 'main.rs', files: {
+    'main.rs': 'fn main() { let blocked_name = true; println!("{}", blocked_name); }',
+    '.clippy.toml': 'disallowed-names = ["blocked_name"]',
+  } });
+  assert.equal(result.code, 0, result.output);
+  assert.equal(result.ranProgram, undefined);
+  assert.ok(result.fetched.has('clippy-driver.wasm.gz'));
+  assert.equal(result.fetched.has('rustc.wasm.gz'), false);
+  assert.match(result.output, /use of a disallowed\/placeholder name `blocked_name`/);
+  assert.ok(result.cargoDiagnostics[0].items.some(item => item.code === 'clippy::disallowed_names' && item.severity === 2));
+});
+
+test('Clippy respects a Cargo library manifest and fails when the package denies a lint', async () => {
+  const result = await run({ command: 'browser-rust', target: 'clippy', script: 'src/lib.rs', files: {
+    'Cargo.toml': '[package]\nname = "test-clippy"\nversion = "0.1.0"\nedition = "2021"\n'
+      + '[dependencies]\nhelper = { path = "helper" }\n'
+      + '[lints.clippy]\nbool_comparison = "deny"\n',
+    'build.rs': 'fn main() { println!("cargo:rustc-env=CLIPPY_TEST_VALUE=enabled"); }',
+    'src/lib.rs': 'pub fn is_set(flag: bool) -> bool { helper::identity(flag) == true'
+      + ' && env!("CLIPPY_TEST_VALUE") == "enabled" }',
+    'helper/Cargo.toml': '[package]\nname = "helper"\nversion = "0.1.0"\nedition = "2021"\n',
+    'helper/src/lib.rs': 'pub fn identity(flag: bool) -> bool { flag }',
+  } });
+  assert.equal(result.code, 101, result.output);
+  assert.equal(result.ranProgram, undefined);
+  assert.ok(result.fetched.has('clippy-driver.wasm.gz'));
+  assert.equal(result.fetched.has('rustc.wasm.gz'), false);
+  assert.ok(result.fetched.has('rust-host-sysroot.tar.gz'));
+  assert.match(result.output, /equality checks against true are unnecessary/);
+  const [diagnostics] = result.cargoDiagnostics;
+  assert.equal(diagnostics.path, `${cwd}/src/lib.rs`);
+  assert.ok(diagnostics.items.some(item => item.code === 'clippy::bool_comparison' && item.severity === 1));
+});
+
 test('the browser cross-compiles and statically links C and C++ with Linux standard libraries', async context => {
   const target = 'linux-x86_64-static';
   const helper = '#include <string.h>\nint score(const char *value) { return strlen(value) * 14; }';

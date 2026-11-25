@@ -21,6 +21,7 @@ const buildOutputs = new Map();
 let buildRevision = 0;
 let filesystem;
 let settings;
+let clippyOnSave = false;
 let projectSignature;
 let toolchain;
 let initializeId;
@@ -144,6 +145,12 @@ function refreshProject() {
   }
 }
 
+function applySettings(options) {
+  clippyOnSave = options?.checkOnSave !== false
+    && (options?.check?.command ?? options?.checkOnSave?.command) === 'clippy';
+  return rustSettings(options);
+}
+
 function updateBuildOutput(packages) {
   if (!packages.length && !buildOutputs.size) return;
   buildRevision++;
@@ -195,12 +202,14 @@ async function formatDocument(request) {
 function handleLsp(message) {
   if (message.method === 'initialize') {
     initializeId = message.id;
-    settings = rustSettings(message.params.initializationOptions);
+    settings = applySettings(message.params.initializationOptions);
     message.params.initializationOptions = settings;
   } else if (message.method === 'initialized') {
     diagnostics.initialize();
   } else if (message.method === 'workspace/didChangeConfiguration') {
-    settings = rustSettings(message.params?.settings);
+    const options = message.params?.settings;
+    settings = options && typeof options === 'object' && ('check' in options || 'checkOnSave' in options)
+      ? applySettings(options) : rustSettings(options);
     message.params = { settings };
   } else if (message.method === 'textDocument/didOpen') {
     const { uri, text, version } = message.params.textDocument;
@@ -219,6 +228,9 @@ function handleLsp(message) {
     const key = fileUri(filePath(message.params.textDocument.uri));
     documents.delete(key);
     documentVersions.delete(key);
+  } else if (message.method === 'textDocument/didSave' && clippyOnSave) {
+    const path = filePath(message.params.textDocument.uri);
+    if (path?.endsWith('.rs')) postMessage({ type: 'clippy-on-save', path });
   } else if (message.method === 'textDocument/formatting') {
     return formatDocument(message);
   }

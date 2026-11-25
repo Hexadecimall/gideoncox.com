@@ -9,5 +9,6 @@
   "cargo.wasm.gz": "ea915faa8dde38ad68b779a0d88be2f715d5fd59e650288c0d2b6cdaab4fba1f",
   "rust-host-sysroot.tar.gz": "11de2a3ef8448e4b12e121148cf87e8093e7a8968c972dfd91782e34896de6fd",
   "linux-x86_64-sdk.tar.gz": "846d0b09f73cc018f6d19c547b6c9d0f2df33673de41acb090b1d1a51f294f2e",
-  "linux-x86_64-cxx.tar.gz": "445af00eb0509ca509ff9adfe6622f813bb10c43fb67ef01360c466ee712e7e8"
+  "linux-x86_64-cxx.tar.gz": "445af00eb0509ca509ff9adfe6622f813bb10c43fb67ef01360c466ee712e7e8",
+  "clippy-driver.wasm.gz": "d3f8fae87d0d6aef8db0aeba52e4d34692cd499e9bb232989b1a3bcadd528ebc"
 }

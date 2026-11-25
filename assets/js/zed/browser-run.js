@@ -8,7 +8,7 @@ const PROGRAMS = new Map([
   ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=project-libs-1',
     targets: CLANG_TARGETS }],
   ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi'] }],
-  ['browser-rust', { label: 'Rust', worker: '/editor/runtime/compiler/worker.js?v=cargo-diagnostics-3', targets: ['wasi'] }],
+  ['browser-rust', { label: 'Rust', worker: '/editor/runtime/compiler/worker.js?v=clippy-1', targets: ['wasi', 'clippy'] }],
 ]);
 const SESSION_PREFIX = 'browser-run:';
 const MAX_FILE = 2 * 1024 * 1024;
@@ -152,6 +152,7 @@ export class BrowserRunBridge {
     this.makeWorker = makeWorker;
     this.onRustBuild = onRustBuild;
     this.sessions = new Map();
+    this.pendingRustChecks = new Map();
   }
 
   accepts(options) { return PROGRAMS.has(options.command); }
@@ -174,6 +175,14 @@ export class BrowserRunBridge {
     if (!globalThis.crossOriginIsolated) throw new Error('Open the top-level Zed page to run browser tasks.');
     if (!isLanguageProject(cwd) || !projectPath(script, cwd) || typeof source !== 'string'
       || encoder.encode(source).length > MAX_FILE) throw new Error('The file is outside the browser project or too large.');
+    if (command !== 'browser-python' && this.backgroundClippy) {
+      const { id, ...check } = this.backgroundClippy;
+      const { root } = check;
+      if (!(target === 'clippy' && cwd === root) && !this.pendingRustChecks.has(root)) {
+        this.pendingRustChecks.set(root, check);
+      }
+      await this.close(id);
+    }
     if (this.sessions.size >= 3 || (command !== 'browser-python' && this.compiling)) {
       throw new Error('Finish the running browser build or close a browser task terminal first.');
     }
@@ -207,13 +216,53 @@ export class BrowserRunBridge {
     return id;
   }
 
+  scheduleRustCheck(root, path) {
+    if (typeof path !== 'string' || !path.endsWith('.rs') || !projectPath(path, root)) return;
+    this.pendingRustChecks.set(root, { root, path });
+    this.queueRustCheck();
+  }
+
+  queueRustCheck() {
+    clearTimeout(this.clippyTimer);
+    this.clippyTimer = setTimeout(() => {
+      this.clippyTimer = undefined;
+      this.runScheduledRustCheck().catch(error => console.warn('Clippy check failed.', error.message));
+    }, 650);
+  }
+
+  async runScheduledRustCheck() {
+    const pending = this.pendingRustChecks.values().next().value;
+    if (!pending || this.compiling || this.sessions.size >= 3) return;
+    const { root, path } = pending;
+    const bytes = await readProjectFile(this.zed, path).catch(() => undefined);
+    if (this.pendingRustChecks.get(root) !== pending || this.compiling || this.sessions.size >= 3) return;
+    this.pendingRustChecks.delete(root);
+    if (!bytes || bytes.length > MAX_FILE) {
+      if (this.pendingRustChecks.size) this.queueRustCheck();
+      return;
+    }
+    const id = await this.open({ cwd: root, command: 'browser-rust', args: [path, 'clippy'],
+      env: { ZED_BROWSER_SOURCE: new TextDecoder().decode(bytes) } });
+    this.backgroundClippy = { id, root, path };
+    try {
+      while (!(await this.read(id)).ended) { /* Drain output without opening a task terminal. */ }
+    } finally {
+      if (this.backgroundClippy?.id === id) this.backgroundClippy = undefined;
+    }
+  }
+
+  releaseCompiler(id) {
+    if (this.compiling === id) this.compiling = undefined;
+    if (!this.compiling && this.pendingRustChecks.size && !this.clippyTimer) this.queueRustCheck();
+  }
+
   async read(id) {
     const process = this.sessions.get(id);
     if (!process) return { data: new Uint8Array(), ended: true };
     const result = await process.read();
     if (result.ended) {
       this.sessions.delete(id);
-      if (this.compiling === id) this.compiling = undefined;
+      this.releaseCompiler(id);
     }
     return result;
   }
@@ -222,6 +271,6 @@ export class BrowserRunBridge {
   async close(id) {
     this.sessions.get(id)?.finish(130);
     this.sessions.delete(id);
-    if (this.compiling === id) this.compiling = undefined;
+    this.releaseCompiler(id);
   }
 }

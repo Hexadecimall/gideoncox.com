@@ -69,7 +69,25 @@ When the Rust language server is running, Cargo errors and warnings also appear
 in Project Diagnostics. They clear as the affected source changes or after a
 clean build.
 Standalone Rust files use rustc 1.83 and the matching WASI standard library.
-Git and private registries, procedural macros, Clippy, and build scripts
+**Run and Build → Run Clippy** checks the active Rust file or its Cargo package.
+Clippy uses `.clippy.toml` or `clippy.toml` and honors `[lints.clippy]` in Cargo
+manifests. Its warnings and errors appear in Project Diagnostics when the Rust
+language server is enabled. The driver downloads on first use.
+
+To check on save, set `check.command` to `clippy` in the Rust Analyzer
+initialization options in `settings.json`:
+
+```json
+{
+  "lsp": {
+    "rust-analyzer": {
+      "initialization_options": { "check": { "command": "clippy" } }
+    }
+  }
+}
+```
+
+Git and private registries, procedural macros, and build scripts
 that launch external tools are pending. Registry resolution uses the project's
 saved `Cargo.lock` when present. Changes to the lockfile made by Cargo remain in
 the build snapshot. The editor uses
@@ -88,6 +106,7 @@ reused through browser Cache Storage.
 - [Zig source](https://codeberg.org/ziglang/zig/src/commit/7647adab80dd088f4de3610fd245915a912eb6ad) and [Zigtools browser build](https://github.com/zigtools/playground/blob/60baeb6b2bba8686adb8557d9484688ff9106862/build.zig)
 - [Zig 0.17.0 Linux sysroot source](https://ziglang.org/download/0.17.0/zig-0.17.0.tar.xz). The source tree includes musl, libc++, libc++abi, libunwind, and their headers and licenses.
 - [WASI-hosted Rust release](https://github.com/oligamiq/rust_wasm/releases/tag/v0.2.1-release) and [corresponding Rust source](https://github.com/oligamiq/rust/tree/cf327c2068549194a29160499c2ecafa9061e46e)
+- Clippy is built from that Rust revision with the [WASI configuration lookup patch](../../../packaging/zed/clippy-browser.patch), [LLVM from the fork's pinned revision](https://github.com/YoWASP/llvm-project/tree/69bd8547e9cc1268ca41339c98b2b17d13d69be3), and WASI SDK 29. Clippy's [MIT](LICENSE-MIT-clippy) and [Apache 2.0](LICENSE-APACHE-clippy) licenses are bundled here.
 - [WASI Cargo source](https://github.com/oligamiq/cargo/tree/eb6c32a4a364d83946a36adbec3b4d2ee863a669), [filetime 0.2.27](https://crates.io/crates/filetime/0.2.27), and the [browser build patch](../../../packaging/zed/cargo-browser.patch)
 
 Build Clang and LLD with matching native LLVM 22 table generators and the WASI
@@ -100,7 +119,13 @@ python3 packaging/zed/pack-browser-compilers.py LLVM_BUILD WASI_SDK ZIG_ARTIFACT
 python3 packaging/zed/pack-browser-rustc.py rustc_opt.wasm.tar.gz wasm32-wasip1.tar.gz editor/runtime/compiler \
   --host-libraries wasm32-wasip1-threads.tar.gz --wasi-sdk WASI_SDK
 sh packaging/zed/build-browser-cargo.sh WASI_SDK SCRATCH editor/runtime/compiler
+sh packaging/zed/build-browser-clippy.sh RUST_SOURCE WASI_SDK NATIVE_LLVM_CONFIG editor/runtime/compiler
 ```
+
+For Clippy, use a fresh checkout or source archive of the pinned Rust fork with
+its Cargo, LLVM, backtrace, and stdarch submodules populated. `NATIVE_LLVM_CONFIG`
+comes from a native LLVM build of the same LLVM revision with the AArch64,
+WebAssembly, and X86 targets enabled.
 
 To prepare the static Linux target, use Zig 0.17.0 and LLVM 22's `llvm-strip`.
 Run the two commands from the same directory so the packer can resolve paths

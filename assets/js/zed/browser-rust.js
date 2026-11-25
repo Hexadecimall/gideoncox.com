@@ -4,7 +4,7 @@ const MAX_GENERATED_BYTES = 8 * 1024 * 1024;
 const MAX_BUILD_PACKAGES = 32;
 
 export class BrowserRust extends BrowserLanguageServer {
-  constructor(zed, makeWorker = () => new Worker('/editor/runtime/rust/worker.js?v=cargo-diagnostics-1', { type: 'module' })) {
+  constructor(zed, makeWorker = () => new Worker('/editor/runtime/rust/worker.js?v=clippy-1', { type: 'module' }), checkOnSave) {
     super(zed, {
       command: 'rust-analyzer', makeWorker,
       includePath: path => /\.(?:rs|toml|json|md|txt)$/.test(path),
@@ -12,20 +12,26 @@ export class BrowserRust extends BrowserLanguageServer {
     });
     this.buildOutputs = new Map();
     this.cargoChecks = new Map();
+    this.checkOnSave = checkOnSave;
   }
 
   async processOpen(options) {
     const process = await super.processOpen(options);
-    this.refreshBuildOutput(this.get(process.id));
-    this.refreshCargoDiagnostics(this.get(process.id));
+    const server = this.get(process.id);
+    server.worker.addEventListener('message', ({ data }) => {
+      if (data?.type === 'clippy-on-save' && server.exitCode === null) this.checkOnSave?.(server.root, data.path);
+    });
+    this.refreshBuildOutput(server);
+    this.refreshCargoDiagnostics(server);
     return process;
   }
 
-  publishCargo(root, { buildOutput, cargoDiagnostics }) {
+  publishCargo(root, { buildOutput, cargoDiagnostics, diagnosticSource = 'cargo' }) {
     if (buildOutput) this.publishBuild(root, buildOutput);
     if (!cargoDiagnostics) return;
-    this.cargoChecks.delete(root);
-    if (cargoDiagnostics.length) this.cargoChecks.set(root, cargoDiagnostics);
+    const key = `${diagnosticSource}:${root}`;
+    this.cargoChecks.delete(key);
+    if (cargoDiagnostics.length) this.cargoChecks.set(key, cargoDiagnostics);
     if (this.cargoChecks.size > MAX_BUILD_PACKAGES) this.cargoChecks.delete(this.cargoChecks.keys().next().value);
     for (const process of this.running.values()) this.refreshCargoDiagnostics(process);
   }
@@ -68,7 +74,13 @@ export class BrowserRust extends BrowserLanguageServer {
     const latest = new Map();
     for (const files of this.cargoChecks.values()) {
       for (const file of files) {
-        if (file.path.startsWith(process.root + '/')) latest.set(file.path, file);
+        if (!file.path.startsWith(process.root + '/')) continue;
+        const previous = latest.get(file.path);
+        if (previous?.digest === file.digest) {
+          latest.set(file.path, { ...file, items: [...previous.items, ...file.items] });
+        } else {
+          latest.set(file.path, file);
+        }
       }
     }
     process.worker.postMessage({ type: 'cargo-diagnostics', files: [...latest.values()] });
