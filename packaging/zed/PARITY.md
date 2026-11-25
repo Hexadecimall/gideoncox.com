@@ -22,6 +22,8 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Python formatting | Ruff WebAssembly worker through Zed's Format command and formatting settings | LSP document edit and formatting tests |
 | Python execution | CPython WASI worker and upstream task terminal for browser workspace files | WASI runtime and buffer snapshot tests |
 | Diagnostics | Upstream Language Servers menu and Project Diagnostics view | Browser status bar and diagnostic checks |
+| Agent | Upstream Agent Panel and Threads Sidebar, LMA WebAssembly inference, and local Qwen3 read-only project tools | Browser file reads, project search, and restored thread history |
+| Edit Prediction | Upstream inline prediction accepted with Tab, backed by browser LMA and Qwen2.5-Coder | Browser completion and saved buffer check |
 | C/C++ | clangd 21 in a WebAssembly worker, with browser project files and bundled WASI headers | Chromium language-server and browser workspace checks |
 | Browser builds | Clang and LLD compile multi-file C and C++ for WASI with standard libraries, or link a freestanding Linux x86-64 executable. Zig builds and runs WASI programs. Project build settings supply WASI arguments. | Chromium task terminal, argument forwarding, exit status and compiler-worker checks |
 | Rust | rust-analyzer in a WASI worker with a bundled standard library, Rust project graphs, and local Cargo path dependencies | Concurrent Chromium worktrees and browser workspace checks |
@@ -40,8 +42,8 @@ menu. The pending controls display a Zed notification when activated.
 - Extension installation, execution, grammars, themes and extension-provided language servers.
 - Browser LSP runners for languages beyond C/C++, Python and Rust.
 - Rust browser tooling, including Cargo, Clippy, registry packages, build scripts, and procedural macros. Native targets with standard libraries and build-system integration for browser C, C++, and Zig projects.
-- Collaboration, authentication, hosted services and AI integrations.
-- Durable workspace/session metadata; SQLite databases currently live in memory.
+- Collaboration, authentication, hosted services, and full Agent tool support.
+- Audit remaining desktop workspace and session state for browser persistence.
 - Desktop platform integrations, multiple OS windows and native file dialogs.
 - Broader keyboard, IME, accessibility, touch and browser compatibility testing.
 

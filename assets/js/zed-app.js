@@ -11,7 +11,7 @@ import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=3';
 
 const loading = document.querySelector('#loading');
-const build = 'fdb823b58982';
+const build = 'a4d5a9338d78';
 const gzip = true;
 
 async function downloadWasm() {
@@ -63,7 +63,7 @@ async function start() {
   const host = installNativeHost(terminal, new BrowserPython(zed), new BrowserClangd(zed), new BrowserRust(zed));
   installFileDialogs(zed, host);
   globalThis.zedInitialFolder = await host.restoreLocalFolder().catch(() => undefined);
-  const { BrowserLma } = await import('/editor/runtime/lma/client.js?v=wasm-simd-1');
+  const { BrowserLma } = await import('/editor/runtime/lma/client.js?v=qwen-tools-2');
   globalThis.zedLma = new BrowserLma(zed.lma_worker_event);
   await zed.default({ module_or_path: wasm });
   const deadline = performance.now() + 30000;

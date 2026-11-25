@@ -1,10 +1,19 @@
-const model = {
-  filename: 'qwen2.5-coder-0.5b-instruct-q4_k_m.gguf',
-  revision: 'ebb2015119c907b064c512bf053e945850b5875f',
-  bytes: 491400064,
+const models = {
+  coder: {
+    repository: 'Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF',
+    filename: 'qwen2.5-coder-0.5b-instruct-q4_k_m.gguf',
+    revision: 'ebb2015119c907b064c512bf053e945850b5875f',
+    bytes: 491400064,
+  },
+  agent: {
+    repository: 'unsloth/Qwen3-0.6B-GGUF',
+    filename: 'Qwen3-0.6B-Q4_K_M.gguf',
+    revision: '50968a4468ef4233ed78cd7c3de230dd1d61a56b',
+    bytes: 396705472,
+  },
 };
 
-function checkedDownload(body) {
+function checkedDownload(body, model) {
   const magic = new TextEncoder().encode('GGUF');
   let received = 0;
   return body.pipeThrough(new TransformStream({
@@ -22,9 +31,11 @@ function checkedDownload(body) {
   }));
 }
 
-export async function recommendedModel() {
+export async function recommendedModel(kind = 'coder') {
+  if (!Object.hasOwn(models, kind)) throw new Error('Unknown LMA model.');
+  const model = models[kind];
   const cache = await caches.open('zed-lma-models');
-  const url = `https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/resolve/${model.revision}/${model.filename}`;
+  const url = `https://huggingface.co/${model.repository}/resolve/${model.revision}/${model.filename}`;
   let response = await cache.match(url);
   if (!response) {
     const download = await fetch(url, {
@@ -35,7 +46,7 @@ export async function recommendedModel() {
     if (!download.ok || !download.body) {
       throw new Error(`The model download failed (${download.status}).`);
     }
-    await cache.put(url, new Response(checkedDownload(download.body), {
+    await cache.put(url, new Response(checkedDownload(download.body, model), {
       headers: { 'Content-Type': 'application/octet-stream' },
     }));
     response = await cache.match(url);
