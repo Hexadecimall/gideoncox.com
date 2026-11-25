@@ -1,5 +1,5 @@
 import { isBrowserProject } from './paths.js?v=local-folders-1';
-import { isLanguageProject, projectFiles, readProjectFile } from './browser-language-server.js?v=2';
+import { isLanguageProject, projectFiles, readProjectFile } from './browser-language-server.js?v=workspace-ready-1';
 import { joinBytes, LspFrames, lspFrame } from './lsp-stream.js';
 import { applyDocumentChanges, documentReplacement, formatPython } from './python-format.js?v=2';
 

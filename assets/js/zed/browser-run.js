@@ -1,5 +1,5 @@
 import { createStdin } from '../../../editor/runtime/python/stdin.js';
-import { isLanguageProject, projectFiles } from './browser-language-server.js?v=2';
+import { isLanguageProject, projectFiles } from './browser-language-server.js?v=workspace-ready-1';
 import { joinBytes } from './lsp-stream.js';
 
 const PROGRAMS = new Map([

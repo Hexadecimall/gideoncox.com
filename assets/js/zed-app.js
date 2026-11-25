@@ -1,11 +1,11 @@
 import { installFileDialogs } from './zed/dialogs.js?v=folder-memory-1';
 import { installNativeTerminal } from './zed/native-terminal.js?v=project-fs-1';
 import { installNativeHost } from './zed/native-host.js?v=folder-memory-1';
-import { BrowserPython } from './zed/browser-python.js?v=5';
+import { BrowserPython } from './zed/browser-python.js?v=workspace-ready-1';
 
-import { BrowserClangd } from './zed/browser-clangd.js?v=format-config-1';
-import { BrowserRust } from './zed/browser-rust.js?v=cargo-diagnostics-1';
-import { BrowserRunBridge } from './zed/browser-run.js?v=cargo-diagnostics-3';
+import { BrowserClangd } from './zed/browser-clangd.js?v=workspace-ready-1';
+import { BrowserRust } from './zed/browser-rust.js?v=workspace-ready-1';
+import { BrowserRunBridge } from './zed/browser-run.js?v=workspace-ready-1';
 import { openBrowserDatabase } from './zed/browser-database.js?v=history-1';
 import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=3';

@@ -37,7 +37,17 @@ export async function readProjectFile(zed, path) {
 export async function projectFiles(zed, root, include, running = () => true) {
   const accepts = path => projectPath(path, root) && include(path);
   const folders = globalThis.zedLocalFolders;
-  const paths = folders?.rootFor(root)
+  const local = folders?.rootFor(root);
+  if (!local && zed.workspace_ready) {
+    // Restored editors can start LSP before Zed exposes its workspace filesystem.
+    const deadline = performance.now() + 30000;
+    while (running() && !zed.workspace_ready()) {
+      if (performance.now() >= deadline) throw new Error('The workspace filesystem did not finish opening.');
+      await new Promise(resolve => setTimeout(resolve, 25));
+    }
+  }
+  if (!running()) return [];
+  const paths = local
     ? await folders.listFiles(root, accepts, MAX_PROJECT_FILES)
     : JSON.parse(await zed.list_browser_paths())
       .filter(entry => !entry.isDirectory && accepts(entry.path))
@@ -211,7 +221,7 @@ export class BrowserLanguageServer {
     const process = new BrowserLspProcess(this.zed, options.cwd, this.makeWorker(), this.command,
       this.initializeOptions, this.includePath, this.formatConfigFiles);
     this.running.set(id, process);
-    process.start().catch(error => process.close(1, error.message));
+    process.start().catch(error => process.close(1, error?.message ?? String(error)));
     return { id, pid: 0 };
   }
 

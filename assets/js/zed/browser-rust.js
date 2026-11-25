@@ -1,4 +1,4 @@
-import { BrowserLanguageServer } from './browser-language-server.js?v=format-config-1';
+import { BrowserLanguageServer } from './browser-language-server.js?v=workspace-ready-1';
 
 const MAX_GENERATED_BYTES = 8 * 1024 * 1024;
 const MAX_BUILD_PACKAGES = 32;

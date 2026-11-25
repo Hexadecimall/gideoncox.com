@@ -1,4 +1,4 @@
-import { BrowserLanguageServer } from './browser-language-server.js?v=2';
+import { BrowserLanguageServer } from './browser-language-server.js?v=workspace-ready-1';
 
 const configFiles = new Set(['.clangd', '.clang-format', '_clang-format', 'compile_commands.json', 'compile_flags.txt']);
 const flags = [

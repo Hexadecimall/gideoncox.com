@@ -99,3 +99,34 @@ test('same-language projects keep independent workers and skip unrelated assets'
   assert.equal(workers[0].stopped, true);
   assert.equal(workers[1].stopped, undefined);
 });
+
+test('restored editors wait for the workspace filesystem before initializing LSP', async context => {
+  let workspaceReady = false;
+  let snapshots = 0;
+  const zed = {
+    workspace_ready: () => workspaceReady,
+    async list_browser_paths() {
+      if (!workspaceReady) throw 'Workspace window is not ready';
+      snapshots++;
+      return '[]';
+    },
+  };
+  const worker = new EventTarget();
+  const messages = [];
+  worker.terminate = () => {};
+  worker.postMessage = message => {
+    messages.push(message);
+    if (message.type === 'start') worker.dispatchEvent(new MessageEvent('message', { data: { type: 'ready' } }));
+  };
+  const clangd = new BrowserClangd(zed, () => worker);
+  globalThis.crossOriginIsolated = true;
+  context.after(() => { clangd.close(); delete globalThis.crossOriginIsolated; });
+  const { id } = await clangd.processOpen({ command: 'clangd', cwd: '/home/web' });
+  const initialize = clangd.processWrite(id, lspFrame({ jsonrpc: '2.0', id: 1, method: 'initialize', params: {} }));
+  assert.deepEqual(messages, []);
+  workspaceReady = true;
+  await initialize;
+  assert.equal(snapshots, 1);
+  assert.equal(messages[0].type, 'start');
+  assert.equal(messages[1].message.method, 'initialize');
+});
