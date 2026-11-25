@@ -6,12 +6,13 @@ import { BrowserPython } from './zed/browser-python.js?v=workspace-ready-1';
 import { BrowserClangd } from './zed/browser-clangd.js?v=workspace-ready-1';
 import { BrowserRust } from './zed/browser-rust.js?v=quickfix-1';
 import { BrowserRunBridge } from './zed/browser-run.js?v=quickfix-1';
+import { BrowserGit } from './zed/browser-git.js?v=1';
 import { openBrowserDatabase } from './zed/browser-database.js?v=history-1';
 import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=3';
 
 const loading = document.querySelector('#loading');
-const build = 'cefe1d9504a6';
+const build = '7ca7ba1041ec';
 const gzip = true;
 
 async function downloadWasm() {
@@ -61,6 +62,7 @@ async function start() {
   }
   const rust = new BrowserRust(zed, undefined, (root, path) => builds.scheduleRustCheck(root, path));
   const builds = new BrowserRunBridge(zed, undefined, (root, result) => rust.publishCargo(root, result));
+  globalThis.zedBrowserGit = new BrowserGit();
   const terminal = installNativeTerminal(builds, zed);
   const host = installNativeHost(terminal, new BrowserPython(zed), new BrowserClangd(zed), rust);
   installFileDialogs(zed, host);
