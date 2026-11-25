@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
+import { deflateSync } from 'node:zlib';
 
 const worker = new URL('../editor/runtime/git/worker.js', import.meta.url);
 const encoder = new TextEncoder();
@@ -81,15 +82,57 @@ test('the browser Git worker can reopen a repository and preserve its real Git i
   assert.equal(details[4], identity[0]);
   assert.equal(history.metadata, null);
 
+  const commitHistory = await run(reopened.metadata, [
+    ['history', 'branch', 'main', 'date'], ['history', 'all', '', 'reverse'],
+    ['read-commit', nextSha.slice(0, -1)], ['commit-files', 'HEAD', 'false'], ['history', 'all', '', 'author'],
+  ]);
+  const [currentGraph, reversedGraph, rawCommit, changes, authorGraph] = commitHistory.results.map(bytes => decoder.decode(bytes));
+  const commitRecords = graph => {
+    const fields = graph.split('\0');
+    const records = [];
+    for (let offset = 0; offset < fields.length - 1; offset += 3) {
+      if (fields[offset] === 'C') records.push(fields.slice(offset + 1, offset + 3));
+    }
+    return records;
+  };
+  assert.deepEqual(commitRecords(currentGraph), [[nextSha.slice(0, -1), initialSha], [initialSha, '']]);
+  assert.deepEqual(commitRecords(reversedGraph), commitRecords(currentGraph).reverse());
+  assert.deepEqual(commitRecords(authorGraph), commitRecords(currentGraph));
+  assert.ok(authorGraph.split('\0').some((field, index, fields) => field === 'A' && /^\d+$/.test(fields[index + 2])));
+  assert.ok(currentGraph.includes('HEAD -> main'));
+  assert.ok(rawCommit.includes(`parent ${initialSha}\n`));
+  assert.match(rawCommit, /\n\nEdit the file/);
+  assert.equal(changes, `files\0${path}\0` + '4\0one\n4\0two\n');
+
+  const seed = decoder.decode((await run(reopened.metadata, [['read-commit', initialSha]])).results[0]);
+  const tree = seed.split('\n')[0];
+  const signatures = seed.split('\n').filter(line => /^(author|committer) /.test(line));
+  function looseCommit(parents, message) {
+    const payload = Buffer.from([tree, ...parents.map(sha => `parent ${sha}`), ...signatures, '', message, ''].join('\n'));
+    const object = Buffer.concat([Buffer.from(`commit ${payload.length}\0`), payload]);
+    const sha = createHash('sha1').update(object).digest('hex');
+    return { sha, object: [`.git/objects/${sha.slice(0, 2)}/${sha.slice(2)}`, deflateSync(object)] };
+  }
+  const side = looseCommit([initialSha], 'Independent change');
+  const merge = looseCommit([nextSha.slice(0, -1), side.sha], 'Merge two branches');
+  const merged = await run([
+    ...reopened.metadata, side.object, merge.object,
+    ['.git/refs/heads/main', encoder.encode(`${merge.sha}\n`)],
+  ], [['history', 'branch', 'main', 'date'], ['commit-files', 'HEAD', 'false']]);
+  const mergeRecords = commitRecords(decoder.decode(merged.results[0]));
+  assert.deepEqual(mergeRecords[0], [merge.sha, `${nextSha.slice(0, -1)} ${side.sha}`]);
+  assert.ok(mergeRecords.some(([sha]) => sha === side.sha));
+  assert.equal(decoder.decode(merged.results[1]), `files\0${path}\0` + '4\0two\n4\0one\n');
+
   // An existing repository can have packed refs and a detached HEAD.
   const committedSha = nextSha.slice(0, -1);
   const packed = reopened.metadata.filter(([name]) => !['.git/HEAD', '.git/refs/heads/main'].includes(name));
   packed.push(
     ['.git/HEAD', encoder.encode(`${committedSha}\n`)],
-    ['.git/packed-refs', encoder.encode(`${committedSha} refs/heads/main\n${initialSha} refs/remotes/origin/main\n`)],
+    ['.git/packed-refs', encoder.encode(`${committedSha} refs/heads/main\n${initialSha} refs/remotes/origin/main\n${initialSha} refs/tags/v1\n`)],
   );
-  const detached = await run(packed, [['branches'], ['resolve', 'refs/heads/main'], ['show', 'refs/remotes/origin/main']]);
-  const [detachedBranches, packedMain, remoteCommit] = detached.results.map(bytes => decoder.decode(bytes).split('\0'));
+  const detached = await run(packed, [['branches'], ['resolve', 'refs/heads/main'], ['show', 'refs/remotes/origin/main'], ['history', 'all', '', 'topo']]);
+  const [detachedBranches, packedMain, remoteCommit, graphRefs] = detached.results.map(bytes => decoder.decode(bytes).split('\0'));
   const names = new Map();
   for (let offset = 0; offset < detachedBranches.length - 1; offset += 7) {
     names.set(detachedBranches[offset], detachedBranches.slice(offset + 1, offset + 3));
@@ -99,6 +142,19 @@ test('the browser Git worker can reopen a repository and preserve its real Git i
   assert.deepEqual(names.get('refs/remotes/origin/main'), ['0', initialSha]);
   assert.equal(packedMain[0], committedSha);
   assert.equal(remoteCommit[0], initialSha);
+  assert.ok(graphRefs.includes('refs/tags/v1'));
+  assert.ok(graphRefs.includes('HEAD'));
+
+  const parentObject = `.git/objects/${initialSha.slice(0, 2)}/${initialSha.slice(2)}`;
+  const shallow = await run([
+    ...reopened.metadata.filter(([name]) => name !== parentObject),
+    ['.git/shallow', encoder.encode(`${committedSha}\n`)],
+  ], [
+    ['commit-files', 'HEAD', 'false'], ['commit-files', 'HEAD', 'true'], ['history', 'all', '', 'date'],
+  ]);
+  assert.equal(decoder.decode(shallow.results[0]), 'shallow\0');
+  assert.ok(decoder.decode(shallow.results[1]).includes(`${path}\0-\0` + '4\0two\n'));
+  assert.deepEqual(commitRecords(decoder.decode(shallow.results[2])), [[committedSha, '']]);
 
   const deleted = await run([...reopened.metadata, ignored, scratch], [
     ['status'], ['stage-deletion', path], ['status'], ['read-index', path],

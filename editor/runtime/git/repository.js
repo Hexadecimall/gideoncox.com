@@ -3,7 +3,7 @@ import { writeFile } from '../terminal-wasi.js';
 import WASI from '../rust/wasi/wasi.js?v=utf8-argv-1';
 
 const decoder = new TextDecoder();
-const MAX_OUTPUT = 32 * 1024 * 1024;
+export const MAX_GIT_OUTPUT = 32 * 1024 * 1024;
 
 function readlink(path) {
   const { ret } = this.path_lookup(path, 0);
@@ -44,6 +44,7 @@ const pathArguments = new Map([
 const argCounts = new Map([
   ['init', 1], ['head', 0], ['status', 0], ['read-index', 1], ['read-head', 1], ['read-tree', 2],
   ['branches', 0], ['show', 1], ['read-blob', 1], ['resolve', 1], ['diff', 1], ['diff-stat', 1],
+  ['history', 3], ['read-commit', 1], ['commit-files', 2],
   ['stage', 1], ['stage-deletion', 1], ['unstage', 1], ['commit', 3],
 ]);
 
@@ -52,7 +53,7 @@ function output() {
   let length = 0;
   const fd = new ConsoleStdout(bytes => {
     length += bytes.length;
-    if (length > MAX_OUTPUT) throw new Error('Git output exceeded the browser limit.');
+    if (length > MAX_GIT_OUTPUT) throw new Error('Git output exceeded the browser limit.');
     chunks.push(bytes.slice());
   });
   return { fd, bytes() {

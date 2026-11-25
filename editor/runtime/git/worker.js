@@ -1,4 +1,4 @@
-import { GitWasiWorktree } from './repository.js';
+import { GitWasiWorktree, MAX_GIT_OUTPUT } from './repository.js?v=history-1';
 
 let engine;
 
@@ -23,7 +23,13 @@ self.addEventListener('message', async ({ data: { id, entries, operations } }) =
     });
     const repo = new GitWasiWorktree(await engine, entries);
     const results = [];
-    for (const [operation, ...args] of operations) results.push(await repo.run(operation, ...args));
+    let outputLength = 0;
+    for (const [operation, ...args] of operations) {
+      const result = await repo.run(operation, ...args);
+      outputLength += result?.byteLength ?? 0;
+      if (outputLength > MAX_GIT_OUTPUT) throw new Error('Git output exceeded the browser limit.');
+      results.push(result);
+    }
     const metadata = operations.some(([operation]) => writesMetadata.has(operation)) ? [...repo.metadata()] : null;
     const buffers = new Set(results.filter(Boolean).map(bytes => bytes.buffer));
     for (const [, bytes] of metadata ?? []) {

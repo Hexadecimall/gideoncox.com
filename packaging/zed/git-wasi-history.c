@@ -1,0 +1,259 @@
+#include "git-wasi.h"
+
+#include <inttypes.h>
+#include <stdio.h>
+#include <string.h>
+
+static int is_history_ref(const char *name)
+{
+    return !strncmp(name, "refs/heads/", 11) || !strncmp(name, "refs/remotes/", 13) ||
+        !strncmp(name, "refs/tags/", 10);
+}
+
+static void write_oid(const git_oid *id)
+{
+    char hex[GIT_OID_HEXSZ + 1];
+    fputs(git_oid_tostr(hex, sizeof(hex), id), stdout);
+}
+
+static int history_head(git_repository *repo)
+{
+    git_reference *head = NULL;
+    int code = git_repository_head(&head, repo);
+    if (code == GIT_ENOTFOUND || code == GIT_EUNBORNBRANCH)
+        return 0;
+    if (code < 0)
+        return code;
+    git_wasi_field("R");
+    write_oid(git_reference_target(head));
+    fputc('\0', stdout);
+    if (git_reference_is_branch(head)) {
+        fputs("HEAD -> ", stdout);
+        git_wasi_field(git_reference_shorthand(head));
+    } else {
+        git_wasi_field("HEAD");
+    }
+    git_reference_free(head);
+    return 0;
+}
+
+static int history_refs(git_repository *repo, git_revwalk *walk, int all)
+{
+    git_reference_iterator *iterator = NULL;
+    git_reference *ref = NULL;
+    int code = git_reference_iterator_new(&iterator, repo);
+    if (code < 0)
+        return code;
+    while ((code = git_reference_next(&ref, iterator)) == 0) {
+        const char *name = git_reference_name(ref);
+        if (is_history_ref(name)) {
+            git_object *commit = NULL;
+            if (git_reference_peel(&commit, ref, GIT_OBJECT_COMMIT) == 0) {
+                const git_oid *id = git_object_id(commit);
+                git_wasi_field("R");
+                write_oid(id);
+                fputc('\0', stdout);
+                git_wasi_field(name);
+                if (all)
+                    code = git_revwalk_push(walk, id);
+            }
+            git_object_free(commit);
+        }
+        git_reference_free(ref);
+        if (code < 0)
+            break;
+    }
+    git_reference_iterator_free(iterator);
+    return code == GIT_ITEROVER ? 0 : code;
+}
+
+static int start_revision(git_revwalk *walk, git_repository *repo, const char *scope, const char *value)
+{
+    if (!strcmp(scope, "all")) {
+        int code = git_revwalk_push_head(walk);
+        return code == GIT_ENOTFOUND || code == GIT_EUNBORNBRANCH ? 0 : code;
+    }
+
+    git_object *commit = NULL;
+    int code;
+    if (!strcmp(scope, "branch") && strcmp(value, "HEAD")) {
+        git_reference *branch = NULL;
+        code = git_branch_lookup(&branch, repo, value, GIT_BRANCH_LOCAL);
+        if (code == GIT_ENOTFOUND)
+            code = git_branch_lookup(&branch, repo, value, GIT_BRANCH_REMOTE);
+        if (code == 0)
+            code = git_reference_peel(&commit, branch, GIT_OBJECT_COMMIT);
+        git_reference_free(branch);
+    } else {
+        code = git_revparse_single(&commit, repo, value);
+    }
+    if (code == 0)
+        code = git_revwalk_push(walk, git_object_id(commit));
+    git_object_free(commit);
+    return code;
+}
+
+int git_wasi_history(git_repository *repo, const char *scope, const char *value, const char *order)
+{
+    unsigned int flags;
+    int author_date = !strcmp(order, "author");
+    if (!strcmp(order, "date"))
+        flags = GIT_SORT_TOPOLOGICAL | GIT_SORT_TIME;
+    else if (!strcmp(order, "topo") || author_date)
+        flags = GIT_SORT_TOPOLOGICAL;
+    else if (!strcmp(order, "reverse"))
+        flags = GIT_SORT_REVERSE | GIT_SORT_TIME;
+    else {
+        fputs("Unknown Git history order.\n", stderr);
+        return 1;
+    }
+
+    git_revwalk *walk = NULL;
+    int code = git_revwalk_new(&walk, repo);
+    if (code == 0)
+        code = git_revwalk_sorting(walk, flags);
+    if (code == 0)
+        code = history_head(repo);
+    if (code == 0)
+        code = history_refs(repo, walk, !strcmp(scope, "all"));
+    if (code == 0)
+        code = start_revision(walk, repo, scope, value);
+    if (code == 0) {
+        git_oid id;
+        while ((code = git_revwalk_next(&id, walk)) == 0) {
+            git_commit *commit = NULL;
+            if ((code = git_commit_lookup(&commit, repo, &id)) < 0)
+                break;
+            if (author_date) {
+                git_wasi_field("A");
+                write_oid(&id);
+                printf("%c%" PRId64 "%c", 0, (int64_t)git_commit_author(commit)->when.time, 0);
+            }
+            git_wasi_field("C");
+            write_oid(&id);
+            fputc('\0', stdout);
+            for (unsigned int i = 0; i < git_commit_parentcount(commit); i++) {
+                if (i)
+                    fputc(' ', stdout);
+                write_oid(git_commit_parent_id(commit, i));
+            }
+            fputc('\0', stdout);
+            git_commit_free(commit);
+        }
+        if (code == GIT_ITEROVER)
+            code = 0;
+    }
+    git_revwalk_free(walk);
+    return code < 0 ? git_wasi_fail("Reading Git history") : 0;
+}
+
+int git_wasi_raw_commit(git_repository *repo, const char *revision)
+{
+    git_oid oid;
+    git_odb *database = NULL;
+    git_odb_object *object = NULL;
+    int code = git_oid_fromstr(&oid, revision);
+    if (code == 0)
+        code = git_repository_odb(&database, repo);
+    if (code == 0)
+        code = git_odb_read(&object, database, &oid);
+    if (code == GIT_ENOTFOUND) {
+        code = 2;
+    } else if (code < 0) {
+        code = git_wasi_fail("Reading the Git commit object");
+    } else if (git_odb_object_type(object) != GIT_OBJECT_COMMIT) {
+        code = 2;
+    } else {
+        const size_t size = git_odb_object_size(object);
+        code = fwrite(git_odb_object_data(object), 1, size, stdout) == size ? 0 : 1;
+    }
+    git_odb_object_free(object);
+    git_odb_free(database);
+    return code;
+}
+
+static int is_shallow_boundary(git_repository *repo, const git_oid *oid)
+{
+    if (!git_repository_is_shallow(repo))
+        return 0;
+    FILE *file = fopen("/repo/.git/shallow", "r");
+    if (!file)
+        return 0;
+    char hex[GIT_OID_HEXSZ + 1], line[GIT_OID_HEXSZ + 3];
+    git_oid_tostr(hex, sizeof(hex), oid);
+    int found = 0;
+    while (fgets(line, sizeof(line), file)) {
+        if (strcspn(line, "\r\n") == GIT_OID_HEXSZ && !memcmp(line, hex, GIT_OID_HEXSZ)) {
+            found = 1;
+            break;
+        }
+    }
+    fclose(file);
+    return found;
+}
+
+static int write_diff_file(git_repository *repo, const git_diff_file *file)
+{
+    if (!file->mode) {
+        git_wasi_field("-");
+        return 0;
+    }
+    if (file->mode == GIT_FILEMODE_COMMIT) {
+        printf("%u%cSubproject commit ", (unsigned)(GIT_OID_HEXSZ + sizeof("Subproject commit ")), 0);
+        write_oid(&file->id);
+        fputc('\n', stdout);
+        return 0;
+    }
+    git_blob *blob = NULL;
+    int code = git_blob_lookup(&blob, repo, &file->id);
+    if (code < 0)
+        return code;
+    const size_t size = git_blob_rawsize(blob);
+    printf("%zu%c", size, 0);
+    fwrite(git_blob_rawcontent(blob), 1, size, stdout);
+    git_blob_free(blob);
+    return 0;
+}
+
+int git_wasi_commit_files(git_repository *repo, const char *revision, int include_shallow)
+{
+    git_object *object = NULL, *target = NULL;
+    git_commit *parent = NULL;
+    git_tree *old_tree = NULL, *new_tree = NULL;
+    git_diff *diff = NULL;
+    git_diff_options options;
+    int code = git_revparse_single(&object, repo, revision);
+    if (code < 0 || (code = git_object_peel(&target, object, GIT_OBJECT_COMMIT)) < 0)
+        goto done;
+    git_commit *commit = (git_commit *)target;
+    int boundary = is_shallow_boundary(repo, git_commit_id(commit));
+    if (boundary && !include_shallow) {
+        git_wasi_field("shallow");
+        goto done;
+    }
+    if (!boundary && git_commit_parentcount(commit) &&
+        ((code = git_commit_parent(&parent, commit, 0)) < 0 || (code = git_commit_tree(&old_tree, parent)) < 0))
+        goto done;
+    if ((code = git_diff_options_init(&options, GIT_DIFF_OPTIONS_VERSION)) < 0 ||
+        (code = git_commit_tree(&new_tree, commit)) < 0)
+        goto done;
+    options.flags |= GIT_DIFF_INCLUDE_TYPECHANGE;
+    if ((code = git_diff_tree_to_tree(&diff, repo, old_tree, new_tree, &options)) < 0)
+        goto done;
+    git_wasi_field("files");
+    for (size_t i = 0; i < git_diff_num_deltas(diff); i++) {
+        const git_diff_delta *change = git_diff_get_delta(diff, i);
+        git_wasi_field(change->new_file.path);
+        if ((code = write_diff_file(repo, &change->old_file)) < 0 ||
+            (code = write_diff_file(repo, &change->new_file)) < 0)
+            break;
+    }
+done:
+    git_diff_free(diff);
+    git_tree_free(new_tree);
+    git_tree_free(old_tree);
+    git_commit_free(parent);
+    git_object_free(target);
+    git_object_free(object);
+    return code < 0 ? git_wasi_fail("Reading the files in the Git commit") : 0;
+}
