@@ -1,15 +1,21 @@
-import { isBrowserProject } from './browser-python.js?v=cf8d2baff46f';
+import { isBrowserProject } from './paths.js?v=local-folders-1';
 import { joinBytes, LspFrames, lspFrame } from './lsp-stream.js';
 
 const MAX_FILE = 2 * 1024 * 1024;
 const MAX_PROJECT = 16 * 1024 * 1024;
 const MAX_OUTPUT = 24 * 1024 * 1024;
 const MAX_PROJECT_FILES = 4000;
+const READ_BATCH = 16;
 const encoder = new TextEncoder();
 
+export function isLanguageProject(path) {
+  return isBrowserProject(path) || Boolean(globalThis.zedLocalFolders?.rootFor(path));
+}
+
 function projectPath(path, root) {
-  return isBrowserProject(path) && path.startsWith(root + '/') && !path.includes('\0')
-    && !path.split('/').includes('.git') && !path.startsWith('/home/web/.config/');
+  return isLanguageProject(path) && path.startsWith(root + '/') && !path.includes('\0')
+    && !path.slice(root.length + 1).split('/').some(part =>
+      !part || ['.', '..', '.git', '.config', '.venv', '__pycache__', 'target', 'node_modules'].includes(part));
 }
 
 function pathFromUri(uri, root) {
@@ -23,30 +29,44 @@ function pathFromUri(uri, root) {
   return null;
 }
 
-async function projectFiles(zed, root) {
-  const entries = JSON.parse(await zed.list_browser_paths());
+export async function readProjectFile(zed, path) {
+  const folders = globalThis.zedLocalFolders;
+  return folders?.rootFor(path) ? folders.read(path) : zed.read_browser_file(path);
+}
+
+export async function projectFiles(zed, root, include, running = () => true) {
+  const accepts = path => projectPath(path, root) && include(path);
+  const folders = globalThis.zedLocalFolders;
+  const paths = folders?.rootFor(root)
+    ? await folders.listFiles(root, accepts, MAX_PROJECT_FILES)
+    : JSON.parse(await zed.list_browser_paths())
+      .filter(entry => !entry.isDirectory && accepts(entry.path))
+      .map(entry => entry.path).slice(0, MAX_PROJECT_FILES);
   const files = [];
   let total = 0;
-  for (const { path, isDirectory } of entries) {
-    if (isDirectory || !projectPath(path, root)) continue;
-    let bytes;
-    try { bytes = await zed.read_browser_file(path); }
-    catch { continue; }
-    if (bytes.byteLength > MAX_FILE || total + bytes.byteLength > MAX_PROJECT) continue;
-    files.push([path, bytes]);
-    total += bytes.byteLength;
-    if (files.length >= MAX_PROJECT_FILES) break;
+  for (let offset = 0; offset < paths.length && running(); offset += READ_BATCH) {
+    const batch = paths.slice(offset, offset + READ_BATCH);
+    const results = await Promise.allSettled(batch.map(path => readProjectFile(zed, path)));
+    for (const [index, result] of results.entries()) {
+      if (result.status === 'rejected') continue;
+      const bytes = result.value;
+      if (bytes.byteLength > MAX_FILE || total + bytes.byteLength > MAX_PROJECT) continue;
+      files.push([batch[index], bytes]);
+      total += bytes.byteLength;
+    }
+    if (total === MAX_PROJECT) break;
   }
   return files;
 }
 
 class BrowserLspProcess {
-  constructor(zed, root, worker, command, initializeOptions) {
+  constructor(zed, root, worker, command, initializeOptions, includePath) {
     this.zed = zed;
     this.root = root;
     this.worker = worker;
     this.command = command;
     this.initializeOptions = initializeOptions;
+    this.includePath = includePath;
     this.input = new LspFrames();
     this.output = [];
     this.outputLength = 0;
@@ -80,7 +100,7 @@ class BrowserLspProcess {
   }
 
   async start() {
-    const files = await projectFiles(this.zed, this.root);
+    const files = await projectFiles(this.zed, this.root, this.includePath, () => this.exitCode === null);
     if (this.exitCode === null) this.worker.postMessage({ type: 'start', root: this.root, files });
   }
 
@@ -105,7 +125,7 @@ class BrowserLspProcess {
     if (!path) return;
     let bytes = null;
     if (!removed) {
-      try { bytes = typeof text === 'string' ? encoder.encode(text) : await this.zed.read_browser_file(path); }
+      try { bytes = typeof text === 'string' ? encoder.encode(text) : await readProjectFile(this.zed, path); }
       catch { return; }
       if (bytes.byteLength > MAX_FILE) return;
     }
@@ -154,24 +174,24 @@ class BrowserLspProcess {
 }
 
 export class BrowserLanguageServer {
-  constructor(zed, { command, makeWorker, initializeOptions }) {
+  constructor(zed, { command, makeWorker, initializeOptions, includePath }) {
     this.zed = zed;
     this.makeWorker = makeWorker;
     this.command = command;
     this.initializeOptions = initializeOptions;
+    this.includePath = includePath;
     this.prefix = `browser-${command}:`;
     this.running = new Map();
   }
 
-  accepts(options) { return options.command === this.command && isBrowserProject(options.cwd); }
+  accepts(options) { return options.command === this.command && isLanguageProject(options.cwd); }
   owns(id) { return typeof id === 'string' && id.startsWith(this.prefix); }
 
   async processOpen(options) {
     if (!this.accepts(options)) throw new Error(`Browser ${this.command} opens browser files only.`);
     if (!globalThis.crossOriginIsolated) throw new Error('Open the top-level Zed page to enable WebAssembly language tools.');
-    if (this.running.size) throw new Error(`A browser ${this.command} project is already open.`);
     const id = this.prefix + crypto.randomUUID();
-    const process = new BrowserLspProcess(this.zed, options.cwd, this.makeWorker(), this.command, this.initializeOptions);
+    const process = new BrowserLspProcess(this.zed, options.cwd, this.makeWorker(), this.command, this.initializeOptions, this.includePath);
     this.running.set(id, process);
     process.start().catch(error => process.close(1, error.message));
     return { id, pid: 0 };

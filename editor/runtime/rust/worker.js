@@ -160,7 +160,7 @@ async function start(root, files) {
   }
   for (const [path, bytes] of projectFiles) writeFile(path, bytes);
   wait_async_polyfill();
-  const memory = new WebAssembly.Memory({ initial: 4096, maximum: 16384, shared: true });
+  const memory = new WebAssembly.Memory({ initial: 1024, maximum: 16384, shared: true });
   const stderr = ConsoleStdout.lineBuffered(line => {
     if (line.includes('thread caused non-unwinding panic')) {
       postMessage({ type: 'failed', message: 'A rust-analyzer thread panicked.' });

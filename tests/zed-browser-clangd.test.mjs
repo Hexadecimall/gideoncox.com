@@ -61,3 +61,41 @@ test('clangd mirrors browser files and preserves ordinary stdio LSP', async cont
   await host.processKill(id);
   assert.equal((await host.processRead(id)).ended, true);
 });
+
+test('same-language projects keep independent workers and skip unrelated assets', async context => {
+  const roots = ['/home/web/one', '/home/web/two'];
+  const reads = [];
+  const workers = [];
+  const zed = {
+    async list_browser_paths() {
+      return JSON.stringify(roots.flatMap(root => [
+        { path: `${root}/main.cpp` }, { path: `${root}/assets/logo.png` },
+        { path: `${root}/node_modules/addon.cpp` },
+      ]));
+    },
+    async read_browser_file(path) { reads.push(path); return new Uint8Array(1); },
+  };
+  const clangd = new BrowserClangd(zed, () => {
+    const worker = new EventTarget();
+    worker.messages = [];
+    worker.postMessage = message => {
+      worker.messages.push(message);
+      if (message.type === 'start') worker.dispatchEvent(new MessageEvent('message', { data: { type: 'ready' } }));
+    };
+    worker.terminate = () => { worker.stopped = true; };
+    workers.push(worker);
+    return worker;
+  });
+  globalThis.crossOriginIsolated = true;
+  context.after(() => { clangd.close(); delete globalThis.crossOriginIsolated; });
+  const [first, second] = await Promise.all(roots.map(cwd => clangd.processOpen({ command: 'clangd', cwd })));
+  assert.notEqual(first.id, second.id);
+  await Promise.all([first, second].map(({ id }) => clangd.processWrite(id, lspFrame({
+    jsonrpc: '2.0', id: 1, method: 'initialize', params: {},
+  }))));
+  assert.deepEqual(reads.sort(), roots.map(root => `${root}/main.cpp`));
+  assert.deepEqual(workers.map(worker => worker.messages[0].root), roots);
+  await clangd.processClose(first.id);
+  assert.equal(workers[0].stopped, true);
+  assert.equal(workers[1].stopped, undefined);
+});

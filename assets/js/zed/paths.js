@@ -1,5 +1,10 @@
 export const BROWSER_ROOT = '/home/web';
 
+export function isBrowserProject(path) {
+  return typeof path === 'string' && (path === BROWSER_ROOT || path.startsWith(BROWSER_ROOT + '/'))
+    && !path.split('/').some(part => part === '..' || part === '.');
+}
+
 export function browserPath(name, directory = BROWSER_ROOT) {
   const base = directory === BROWSER_ROOT || directory.startsWith(BROWSER_ROOT + '/') ? directory : BROWSER_ROOT;
   const path = name.startsWith('/') ? name : `${base}/${name}`;

@@ -17,18 +17,24 @@ export function installFileDialogs(zed, host) {
     let dialog;
     try {
       const browserDirectory = options.directory === BROWSER_ROOT || options.directory?.startsWith(BROWSER_ROOT + '/');
-      if (host?.active && !options.browser && !(mode === 'save' && browserDirectory)) {
+      const localDirectory = host?.folders?.rootFor(options.directory);
+      if (host?.active && !options.browser && !localDirectory && !(mode === 'save' && browserDirectory)) {
         const result = await localFileDialog(host, mode, options);
         if (result !== 'browser') return result;
       }
-      const entries = JSON.parse(await zed.list_browser_paths());
+      const saveLocally = mode === 'save' && localDirectory;
+      const entries = saveLocally
+        ? await Promise.all((await host.folders.fs('read_dir', { path: options.directory })).map(async path => ({
+          path, isDirectory: (await host.folders.fs('metadata', { path }))?.is_dir,
+        })))
+        : JSON.parse(await zed.list_browser_paths());
       dialog = element('dialog', '', 'browser-file-dialog');
       const title = element('h2', mode === 'save' ? 'Save file' : options.prompt || 'Open');
       title.id = 'browser-dialog-title';
       dialog.setAttribute('aria-labelledby', title.id);
       const form = element('form');
       form.method = 'dialog';
-      const location = element('label', 'browser');
+      const location = element('label', saveLocally ? 'local folder' : 'browser');
       const paths = element('select');
       paths.setAttribute('aria-label', 'Browser files');
       paths.size = 9;
@@ -37,7 +43,8 @@ export function installFileDialogs(zed, host) {
       for (const entry of entries.sort((a, b) => a.path.localeCompare(b.path))) {
         if (entry.path === BROWSER_ROOT) continue;
         if (mode === 'save' || (entry.isDirectory ? options.directories : options.files)) {
-          paths.append(new Option(entry.path.slice(BROWSER_ROOT.length + 1) + (entry.isDirectory ? '/' : ''), entry.path));
+          const relativeTo = saveLocally ? options.directory : BROWSER_ROOT;
+          paths.append(new Option(entry.path.slice(relativeTo.length + 1) + (entry.isDirectory ? '/' : ''), entry.path));
         }
       }
       location.append(paths);
@@ -116,10 +123,22 @@ export function installFileDialogs(zed, host) {
           });
           imports.append(button, picker);
         }
+        if (mode === 'open' && options.directories && host?.folders?.available()) {
+          const choose = element('button', 'Open local folder…');
+          choose.type = 'button';
+          choose.addEventListener('click', async () => {
+            choose.disabled = true;
+            try { finish([await host.openLocalFolder()]); }
+            catch (failure) {
+              if (failure.name !== 'AbortError') error.textContent = failure.message || String(failure);
+            } finally { choose.disabled = false; }
+          });
+          imports.append(choose);
+        }
         if (mode === 'open' && options.files) importButton(false);
         if (mode === 'open' && options.directories) importButton(true);
         if (mode === 'open' && options.directories && host) {
-          const connect = element('button', host.projectRoot ? 'Reconnect local folder…' : 'Connect local folder…');
+          const connect = element('button', host.projectRoot ? 'Reconnect Ark folder…' : 'Open with Ark connector…');
           connect.type = 'button';
           connect.addEventListener('click', async () => {
             connect.disabled = true;
@@ -137,9 +156,18 @@ export function installFileDialogs(zed, host) {
           try {
             if (pendingImport) { await importFiles(pendingImport.files); return; }
             if (mode === 'save') {
-              const path = browserPath(name.value.trim(), options.directory);
-              const existing = entries.find(entry => entry.path === path);
-              if (existing?.isDirectory) throw new Error('This name is already a directory.');
+              const value = name.value.trim();
+              const path = saveLocally
+                ? (value.startsWith('/') ? value : `${options.directory}/${value}`)
+                : browserPath(value, options.directory);
+              if (saveLocally) {
+                if (host.folders.rootFor(path) !== localDirectory) throw new Error('Choose a file in this local folder.');
+                host.folders.parsed(path);
+              }
+              const existing = saveLocally
+                ? (await host.folders.fs('metadata', { path }))
+                : entries.find(entry => entry.path === path);
+              if (existing?.isDirectory || existing?.is_dir) throw new Error('This name is already a directory.');
               if (existing && overwritePath !== path) {
                 overwritePath = path; error.textContent = 'Replace this file?'; accept.textContent = 'Replace'; return;
               }

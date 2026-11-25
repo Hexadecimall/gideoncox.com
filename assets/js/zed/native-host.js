@@ -1,4 +1,5 @@
-import { isBrowserProject } from './browser-python.js?v=cf8d2baff46f';
+import { isBrowserProject } from './paths.js?v=local-folders-1';
+import { LocalFolders } from './local-folders.js';
 
 function encode(bytes) {
   let text = '';
@@ -17,6 +18,7 @@ export class NativeHostBridge {
   constructor(transport) {
     this.transport = transport;
     this.projectRoot = null;
+    this.activeRoot = null;
     this.active = false;
     this.canRunProcesses = false;
     this.nativeInfo = null;
@@ -35,10 +37,14 @@ export class NativeHostBridge {
       if (info.root === '/' || info.root === browserRoot || browserRoot.startsWith(info.root + '/') || info.root.startsWith(browserRoot + '/')) {
         throw new Error('This folder overlaps the browser workspace. Choose another folder.');
       }
+      if (info.root === '/browser-folders' || info.root.startsWith('/browser-folders/')) {
+        throw new Error('This folder overlaps a browser folder mount. Choose another folder.');
+      }
       if (this.projectRoot && this.projectRoot !== info.root) {
         throw new Error('Reload Zed before connecting a different project.');
       }
       this.projectRoot = info.root;
+      this.activeRoot = info.root;
       this.canRunProcesses = Boolean(info.processes);
       this.nativeInfo = info.native || null;
       this.active = true;
@@ -158,20 +164,49 @@ export class NativeHostBridge {
 
 export function installNativeHost(transport, ...browserServices) {
   const host = new NativeHostBridge(transport);
+  const folders = new LocalFolders();
+  globalThis.zedLocalFolders = folders;
+  host.folders = folders;
+  host.openLocalFolder = async () => {
+    const root = await folders.pick();
+    host.activeRoot = root;
+    return root;
+  };
   const processOwner = id => browserServices.find(service => service.owns(id)) ?? host;
   globalThis.zedHost = {
     // WASM uses this to check that a process service is available. Native
     // filesystem access still requires a paired, explicitly mounted root.
-    connected: () => host.active || browserServices.length > 0,
-    root: () => host.projectRoot,
+    connected: () => host.active || folders.mounts.size > 0 || browserServices.length > 0,
+    root: () => host.activeRoot,
     nativeInfo: () => host.active ? host.nativeInfo : null,
     connect: () => host.connect(),
     disconnect: () => host.disconnect(),
-    fs: (operation, args) => host.fs(operation, args),
+    fs: async (operation, args) => {
+      if (operation === 'watch') {
+        const paths = folders.drainChanges();
+        if (host.active) {
+          const native = await host.fs(operation, args).catch(error => {
+            if (!paths.length) throw error;
+            return [];
+          });
+          paths.push(...(native.paths ?? native));
+        }
+        return { paths };
+      }
+      const source = folders.rootFor(args.path ?? args.source);
+      const target = folders.rootFor(args.target);
+      if (source || target) {
+        if (operation === 'copy' && (!source || !target)) throw new Error('Copy within browser-selected folders only.');
+        return folders.fs(operation, args);
+      }
+      return host.fs(operation, args);
+    },
     processOpen: options => {
       const service = browserServices.find(service => service.accepts(options));
       if (service) return service.processOpen(options);
-      if (isBrowserProject(options.cwd)) throw new Error('This command is not available in browser projects.');
+      if (isBrowserProject(options.cwd) || folders.rootFor(options.cwd)) {
+        throw new Error('This command is not available in browser projects.');
+      }
       return host.processOpen(options);
     },
     processRead: id => processOwner(id).processRead(id),

@@ -1,10 +1,10 @@
-import { installFileDialogs } from './zed/dialogs.js?v=cf8d2baff46f';
-import { installNativeTerminal } from './zed/native-terminal.js?v=cf8d2baff46f';
-import { installNativeHost } from './zed/native-host.js?v=8cceee5a8051';
-import { BrowserPython } from './zed/browser-python.js?v=cf8d2baff46f';
+import { installFileDialogs } from './zed/dialogs.js?v=local-folders-1';
+import { installNativeTerminal } from './zed/native-terminal.js?v=local-folders-1';
+import { installNativeHost } from './zed/native-host.js?v=local-folders-1';
+import { BrowserPython } from './zed/browser-python.js?v=multi-lsp-1';
 
-import { BrowserClangd } from './zed/browser-clangd.js?v=rust-lsp-1';
-import { BrowserRust } from './zed/browser-rust.js?v=rust-lsp-1';
+import { BrowserClangd } from './zed/browser-clangd.js?v=multi-lsp-1';
+import { BrowserRust } from './zed/browser-rust.js?v=multi-lsp-1';
 import { prepareEditorIsolation } from './zed/isolation.js';
 
 const loading = document.querySelector('#loading');

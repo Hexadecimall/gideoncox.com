@@ -52,6 +52,9 @@ export class NativeTerminalBridge {
   }
 
   async open({ columns, rows, cwd, command, args, env }) {
+    if (typeof cwd === 'string' && cwd.startsWith('/browser-folders/')) {
+      throw new Error('The local connector cannot run commands in a browser-selected folder.');
+    }
     this.opening++;
     try {
       await this.ensurePaired();

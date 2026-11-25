@@ -211,6 +211,11 @@ sources for WASI and understands standalone files, local Cargo packages and
 path dependencies, and explicit `rust-project.json` graphs. See the
 [Rust runner and project limits](editor/runtime/rust/README.md).
 
+**Open Folder → Open local folder…** opens a Chromium folder picker. Saving
+edits writes through the selected folder handle. Import Folder remains available
+for browsers that lack this picker. A folder handle lasts for the current editor
+session. Folder rename and delete are unavailable through this connection.
+
 ```sh
 python3 path/to/ark_connector.py --project .
 python3 path/to/ark_connector.py --project . --allow-processes

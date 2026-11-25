@@ -1,11 +1,11 @@
-import { BROWSER_ROOT } from './paths.js';
+import { isBrowserProject } from './paths.js?v=local-folders-1';
+import { isLanguageProject, projectFiles, readProjectFile } from './browser-language-server.js?v=2';
 import { joinBytes, LspFrames, lspFrame } from './lsp-stream.js';
 
 const VENDOR = new URL('../../vendor/pyright/', import.meta.url);
 const VERSION = '1.1.299';
 const COMMAND = 'zed-browser-pyright';
 const MAX_FILE = 2 * 1024 * 1024;
-const MAX_PROJECT = 16 * 1024 * 1024;
 const MAX_OUTPUT = 24 * 1024 * 1024;
 const MAX_SESSIONS = 4;
 const textDecoder = new TextDecoder();
@@ -21,13 +21,10 @@ function loadTypeshed() {
   return stdlib;
 }
 
-export function isBrowserProject(path) {
-  return typeof path === 'string' && (path === BROWSER_ROOT || path.startsWith(BROWSER_ROOT + '/'))
-    && !path.split('/').some(part => part === '..' || part === '.');
-}
+export { isBrowserProject };
 
 function isPythonInput(path) {
-  return isBrowserProject(path) && /(?:\.py[wi]?|\/pyrightconfig\.json|\/pyproject\.toml)$/.test(path)
+  return isLanguageProject(path) && /(?:\.py[wi]?|\/pyrightconfig\.json|\/pyproject\.toml)$/.test(path)
     && !path.split('/').some(part => part === '.git' || part === '.venv' || part === '__pycache__');
 }
 
@@ -42,27 +39,12 @@ function filePath(uri) {
   return null;
 }
 
-async function projectFiles(zed) {
-  const entries = JSON.parse(await zed.list_browser_paths());
-  const files = Object.create(null);
-  let total = 0;
-  for (const { path, isDirectory } of entries) {
-    if (isDirectory || !isPythonInput(path)) continue;
-    let bytes;
-    try { bytes = await zed.read_browser_file(path); }
-    catch { continue; } // A file may have been removed after listing the root.
-    if (bytes.byteLength > MAX_FILE || total + bytes.byteLength > MAX_PROJECT) continue;
-    files[path] = textDecoder.decode(bytes);
-    total += bytes.byteLength;
-  }
-  return files;
-}
-
 class PyrightProcess {
-  constructor(zed, worker, typeshed) {
+  constructor(zed, worker, typeshed, root) {
     this.zed = zed;
     this.worker = worker;
     this.typeshed = typeshed;
+    this.root = root;
     this.input = new LspFrames();
     this.output = [];
     this.outputLength = 0;
@@ -125,10 +107,10 @@ class PyrightProcess {
 
   async updateSavedFile(uri, text) {
     const path = filePath(uri);
-    if (!path) return;
+    if (!path || !path.startsWith(this.root + '/')) return;
     if (typeof text !== 'string') {
       try {
-        const bytes = await this.zed.read_browser_file(path);
+        const bytes = await readProjectFile(this.zed, path);
         if (bytes.byteLength > MAX_FILE) return;
         text = textDecoder.decode(bytes);
       } catch { return; }
@@ -141,7 +123,10 @@ class PyrightProcess {
     for (const message of this.input.push(bytes)) {
       const { method, params } = message;
       if (method === 'initialize') {
-        const [stubs, files] = await Promise.all([this.typeshed(), projectFiles(this.zed)]);
+        const [stubs, bytes] = await Promise.all([
+          this.typeshed(), projectFiles(this.zed, this.root, isPythonInput, () => this.exitCode === null),
+        ]);
+        const files = Object.fromEntries(bytes.map(([path, source]) => [path, textDecoder.decode(source)]));
         this.rootUri = params.rootUri;
         // Each worker owns one virtual project. The pinned worker waits
         // indefinitely for named workspace folders to finish initialization.
@@ -192,13 +177,16 @@ export class BrowserPython {
   }
 
   owns(id) { return typeof id === 'string' && id.startsWith('browser-python:'); }
-  accepts(options) { return options.command === COMMAND && isBrowserProject(options.cwd); }
+  accepts(options) {
+    return (options.command === COMMAND && isBrowserProject(options.cwd))
+      || (options.command === 'pyright-langserver' && Boolean(globalThis.zedLocalFolders?.rootFor(options.cwd)));
+  }
 
   async processOpen(options) {
     if (!this.accepts(options)) throw new Error('The Python worker opens browser files only.');
     if (this.running.size >= MAX_SESSIONS) throw new Error('Too many Python projects are open.');
     const id = 'browser-python:' + crypto.randomUUID();
-    this.running.set(id, new PyrightProcess(this.zed, this.makeWorker(), this.typeshed));
+    this.running.set(id, new PyrightProcess(this.zed, this.makeWorker(), this.typeshed, options.cwd));
     return { id, pid: 0 };
   }
 
