@@ -1,5 +1,5 @@
 import { installFileDialogs } from './zed/dialogs.js?v=folder-memory-1';
-import { installNativeTerminal } from './zed/native-terminal.js?v=run-menu-1';
+import { installNativeTerminal } from './zed/native-terminal.js?v=browser-shell-2';
 import { installNativeHost } from './zed/native-host.js?v=folder-memory-1';
 import { BrowserPython } from './zed/browser-python.js?v=5';
 

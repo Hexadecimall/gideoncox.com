@@ -65,16 +65,21 @@ export class Shell {
     }
   }
   capture(source) { return this.isolated(() => this.execute(this.ark.parse(source)).out.replace(/\n+$/, '')); }
-  run(source) {
+  run(source, interrupt) {
     this.steps = 0;
     this.deadline = Date.now() + 4000;
     this.flow = null;
-    const tree = this.ark.parse(source);
-    const result = this.execute(tree);
-    this.flow = null;
-    return { ...result, cwd: this.files.request('cwd')[0] };
+    this.interrupt = interrupt;
+    try {
+      const result = this.execute(this.ark.parse(source));
+      return { ...result, cwd: this.files.request('cwd')[0], exited: this.flow?.kind === 'exit' };
+    } finally {
+      this.flow = null;
+      this.interrupt = undefined;
+    }
   }
   execute(node, input = '') {
+    if (this.interrupt && Atomics.load(this.interrupt, 0)) throw new Interrupted();
     if (!node) return empty();
     if (++this.steps > 10000 || Date.now() > this.deadline) throw new Error('Command limit reached. Ctrl+C stops a running command.');
     if (++this.depth > 64) { this.depth--; throw new Error('Shell nesting limit reached'); }
@@ -260,3 +265,5 @@ export class Shell {
     }
   }
 }
+
+export class Interrupted extends Error {}

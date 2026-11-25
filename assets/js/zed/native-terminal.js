@@ -1,3 +1,5 @@
+import { BrowserShellBridge } from './browser-shell.js?v=2';
+
 const ENDPOINT = 'http://127.0.0.1:8770';
 const INPUT_CHUNK = 32768;
 
@@ -172,19 +174,34 @@ function pair(purpose = 'terminal') {
   });
 }
 
-export function installNativeTerminal(browser = null) {
-  const bridge = new NativeTerminalBridge(pair);
-  const route = id => browser?.owns(id) ? browser : bridge;
-  globalThis.zedNativeTerminal = {
-    open: options => (browser?.accepts(options) ? browser : bridge).open(options),
+export function terminalTransport(bridge, browser, shell) {
+  const route = id => browser?.owns(id) ? browser : shell.owns(id) ? shell : bridge;
+  return {
+    open: options => {
+      if (browser?.accepts(options)) return browser.open(options);
+      if (BrowserShellBridge.accepts(options)) return shell.open(options);
+      if (options.command === 'ark-connector') {
+        const { cwd } = options;
+        const browserCwd = BrowserShellBridge.accepts({ cwd });
+        return bridge.open({ ...options, cwd: browserCwd ? null : cwd, command: null, args: [] });
+      }
+      return bridge.open(options);
+    },
     read: id => route(id).read(id),
     write: (id, data) => route(id).write(id, data),
     resize: (id, size) => route(id).resize?.(id, size),
     close: id => route(id).close(id),
   };
+}
+
+export function installNativeTerminal(browser = null) {
+  const bridge = new NativeTerminalBridge(pair);
+  const shell = new BrowserShellBridge();
+  globalThis.zedNativeTerminal = terminalTransport(bridge, browser, shell);
   window.addEventListener('pagehide', () => {
     for (const id of [...bridge.sessions.keys()]) bridge.close(id, true);
     for (const id of browser?.sessions.keys() ?? []) browser.close(id);
+    for (const id of shell.sessions.keys()) shell.close(id);
   });
   return bridge;
 }

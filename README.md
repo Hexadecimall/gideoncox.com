@@ -192,10 +192,16 @@ Bubble wrap supports clicking, dragging, touch, and keyboard activation. Sound i
 
 The browser build runs Zed's upstream Rust workspace and editor through GPUI Web. It includes panes, tabs, project and outline panels, the command palette, Vim mode, and all 22 bundled syntax configurations. Files saved in the browser persist separately from session metadata. Clearing site data removes browser files.
 
-Zed's terminal opens a real Ark PTY through the optional local connector. Start
-the connector from the project folder and choose **Open with Ark connector…**
-in Zed's Open Folder dialog. Add `--allow-processes` to run installed C/C++ and
-Rust language servers and project tasks.
+**View → New Terminal** opens Browser Ark for browser projects. Shell commands
+run locally in a WebAssembly worker. The terminal shares its saved shell files
+with `/terminal/` and uses a separate filesystem from the editor project.
+
+To run programs on the computer, start the local Ark connector and choose
+**Open with Ark connector…** in Zed's Open Folder dialog. The editor opens a
+native Ark PTY for the connected project. Add `--allow-processes` to use
+installed language servers and project tasks. To open a native terminal without
+connecting a project, set `"terminal": { "shell": { "program": "ark-connector" } }`
+in Zed settings. Set `shell` back to `"system"` to use the project's default.
 
 Python completion, hover, signature help, navigation, and diagnostics run in a
 local Pyright browser worker. Import a folder or save a `.py` file in the browser

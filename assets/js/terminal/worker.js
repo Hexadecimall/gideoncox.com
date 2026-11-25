@@ -1,4 +1,4 @@
-import { Shell } from './shell.js';
+import { Interrupted, Shell } from './shell.js?v=pty-1';
 
 let shell;
 let database;
@@ -57,10 +57,16 @@ async function handle(message) {
     let changed = false;
     if (message.type === 'init') value = { cwd: shell.env.PWD, warning: storageWarning };
     else if (message.type === 'run') {
-      try { value = shell.run(message.source); }
+      try {
+        const interrupt = message.interrupt && new Int32Array(message.interrupt);
+        value = shell.run(message.source, interrupt);
+      }
       catch (error) {
         if (error.incomplete) return { value: { incomplete: true }, changed: false };
-        value = { out: '', err: `${error.message}\n`, code: 1, actions: [], cwd: shell.files.request('cwd')[0] };
+        const interrupted = error instanceof Interrupted;
+        const code = interrupted ? 130 : 1;
+        shell.status = code;
+        value = { out: '', err: interrupted ? '' : `${error.message}\n`, code, actions: [], cwd: shell.files.request('cwd')[0] };
       }
       changed = true;
     } else if (message.type === 'files') {
