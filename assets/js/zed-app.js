@@ -1,5 +1,5 @@
 import { installFileDialogs } from './zed/dialogs.js?v=folder-memory-1';
-import { installNativeTerminal } from './zed/native-terminal.js?v=browser-shell-2';
+import { installNativeTerminal } from './zed/native-terminal.js?v=project-fs-1';
 import { installNativeHost } from './zed/native-host.js?v=folder-memory-1';
 import { BrowserPython } from './zed/browser-python.js?v=5';
 
@@ -11,7 +11,7 @@ import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=3';
 
 const loading = document.querySelector('#loading');
-const build = 'ed71e6b075e2';
+const build = '58602003e278';
 const gzip = true;
 
 async function downloadWasm() {
@@ -60,7 +60,7 @@ async function start() {
     notifyDatabase('Zed could not open browser storage for its history.');
   }
   const rust = new BrowserRust(zed);
-  const terminal = installNativeTerminal(new BrowserRunBridge(zed, undefined, (root, snapshot) => rust.publishBuild(root, snapshot)));
+  const terminal = installNativeTerminal(new BrowserRunBridge(zed, undefined, (root, snapshot) => rust.publishBuild(root, snapshot)), zed);
   const host = installNativeHost(terminal, new BrowserPython(zed), new BrowserClangd(zed), rust);
   installFileDialogs(zed, host);
   globalThis.zedInitialFolder = await host.restoreLocalFolder().catch(() => undefined);

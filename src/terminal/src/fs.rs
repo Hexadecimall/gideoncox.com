@@ -1,5 +1,7 @@
 use std::collections::BTreeMap;
 
+use crate::project;
+
 pub const HOME: &str = "/home/web";
 const MAX_FILE: usize = 512 * 1024;
 const MAX_TOTAL: usize = 4 * 1024 * 1024;
@@ -8,6 +10,7 @@ const MAX_TOTAL: usize = 4 * 1024 * 1024;
 pub struct FileSystem {
     pub entries: BTreeMap<String, Option<String>>,
     pub cwd: String,
+    root: Option<String>,
 }
 
 impl FileSystem {
@@ -22,7 +25,22 @@ impl FileSystem {
         Self {
             entries,
             cwd: HOME.into(),
+            root: None,
         }
+    }
+
+    #[cfg(target_arch = "wasm32")]
+    pub fn mount(&mut self, root: &str, cwd: &str) -> Result<(), String> {
+        let mut mounted = Self::new();
+        mounted.root = Some(mounted.path(root)?);
+        mounted.cwd = mounted.root.clone().unwrap();
+        mounted.chdir(cwd)?;
+        *self = mounted;
+        Ok(())
+    }
+
+    pub fn home(&self) -> &str {
+        self.root.as_deref().unwrap_or(HOME)
     }
 
     pub fn path(&self, value: &str) -> Result<String, String> {
@@ -44,15 +62,53 @@ impl FileSystem {
                 _ => parts.push(part),
             }
         }
-        Ok(format!("/{}", parts.join("/")))
+        let path = format!("/{}", parts.join("/"));
+        if let Some(root) = &self.root {
+            if path != *root && !path.strip_prefix(root.as_str()).is_some_and(|suffix| suffix.starts_with('/')) {
+                return Err("path is outside the open project".into());
+            }
+        }
+        Ok(path)
     }
 
     pub fn directory(&self, path: &str) -> bool {
         matches!(self.entries.get(path), Some(None))
     }
 
+    pub fn metadata(&self, value: &str) -> Result<Option<(bool, usize)>, String> {
+        let path = self.path(value)?;
+        if self.root.is_some() {
+            let fields = project::call("metadata", &[&path])?;
+            return match fields.as_slice() {
+                [] => Ok(None),
+                [kind, length] => Ok(Some((kind == "d", length.parse().map_err(|_| "invalid file size")?))),
+                _ => Err("invalid project file metadata".into()),
+            };
+        }
+        Ok(self.entries.get(&path).map(|value| (value.is_none(), value.as_ref().map_or(0, String::len))))
+    }
+
+    pub fn chdir(&mut self, value: &str) -> Result<(), String> {
+        let path = self.path(value)?;
+        if !self.metadata(&path)?.is_some_and(|(directory, _)| directory) {
+            return Err("not a directory".into());
+        }
+        self.cwd = path;
+        Ok(())
+    }
+
+    pub fn paths(&self, pattern: Option<&str>) -> Result<Vec<String>, String> {
+        if let Some(root) = &self.root {
+            return project::call("paths", &[pattern.unwrap_or(root)]);
+        }
+        Ok(self.entries.keys().cloned().collect())
+    }
+
     pub fn read(&self, value: &str) -> Result<String, String> {
         let path = self.path(value)?;
+        if self.root.is_some() {
+            return project::call("read", &[&path])?.into_iter().next().ok_or_else(|| "no file contents".into());
+        }
         match self.entries.get(&path) {
             Some(Some(text)) => Ok(text.clone()),
             Some(None) => Err(format!("{value}: is a directory")),
@@ -62,6 +118,9 @@ impl FileSystem {
 
     pub fn write(&mut self, value: &str, text: &str, append: bool) -> Result<(), String> {
         let path = self.path(value)?;
+        if self.root.is_some() {
+            return project::call(if append { "append" } else { "write" }, &[&path, text]).map(|_| ());
+        }
         if self.directory(&path) {
             return Err(format!("{value}: is a directory"));
         }
@@ -97,6 +156,9 @@ impl FileSystem {
 
     pub fn mkdir(&mut self, value: &str, recursive: bool) -> Result<(), String> {
         let path = self.path(value)?;
+        if self.root.is_some() {
+            return project::call("mkdir", &[&path, if recursive { "1" } else { "0" }]).map(|_| ());
+        }
         if self.directory(&path) && recursive {
             return Ok(());
         }
@@ -118,6 +180,10 @@ impl FileSystem {
 
     pub fn list(&self, value: &str, all: bool) -> Result<Vec<(String, bool)>, String> {
         let path = self.path(value)?;
+        if self.root.is_some() {
+            let fields = project::call("list", &[&path, if all { "1" } else { "0" }])?;
+            return Ok(fields.chunks_exact(2).map(|entry| (entry[0].clone(), entry[1] == "d")).collect());
+        }
         if !self.directory(&path) {
             return Err(format!("{value}: not a directory"));
         }
@@ -146,6 +212,12 @@ impl FileSystem {
         directory_only: bool,
     ) -> Result<(), String> {
         let path = self.path(value)?;
+        if self.root.is_some() {
+            if self.cwd == path || self.cwd.starts_with(&format!("{path}/")) || self.root.as_deref() == Some(&path) {
+                return Err(format!("{value}: directory is in use"));
+            }
+            return project::call("remove", &[&path, if recursive { "1" } else { "0" }, if directory_only { "1" } else { "0" }]).map(|_| ());
+        }
         if !self.entries.contains_key(&path) {
             return Err(format!("{value}: no such file"));
         }
@@ -179,6 +251,15 @@ impl FileSystem {
     ) -> Result<(), String> {
         let source = self.path(from)?;
         let mut dest = self.path(to)?;
+        if self.root.is_some() {
+            let fields = project::call(if moving { "move" } else { "copy" }, &[&source, &dest, if recursive { "1" } else { "0" }])?;
+            if let Some(target) = fields.first().filter(|_| moving) {
+                if self.cwd == source || self.cwd.starts_with(&format!("{source}/")) {
+                    self.cwd = format!("{target}{}", &self.cwd[source.len()..]);
+                }
+            }
+            return Ok(());
+        }
         if !self.entries.contains_key(&source) {
             return Err(format!("{from}: no such file"));
         }

@@ -1,4 +1,4 @@
-import { request, interrupt } from './terminal/client.js';
+import { request, interrupt } from './terminal/client.js?v=project-fs-1';
 import { createDisplay } from './terminal/display.js';
 import { LineBuffer } from './terminal/line-buffer.js';
 

@@ -26,11 +26,11 @@ Web, including the upstream title bar, project panel, panes, tabs and editor.
 The browser port adapts filesystem IO, scheduling, settings, parsing, dialogs
 and dependency selection. The embedding page provides zedBrowserDialogs; its
 implementation is in assets/js/zed/ in the website repository.
-Zed's actual TerminalPanel and terminal_view use Alacritty's parser/grid with
-an optional authenticated local PTY bridge, zedNativeTerminal. Its JavaScript
-transport and pairing dialog are in assets/js/zed/native-terminal.js, and the
-local connector is connector/ark_connector.py in the website repository.
-Terminal sessions require user pairing and are not restored automatically.
+Zed's TerminalPanel and terminal_view use Alacritty's parser and grid. Browser
+Ark runs in a WebAssembly worker and uses Zed's saved project files. The
+terminal_project module bridges file operations through Zed's filesystem.
+For native execution, zedNativeTerminal also supports the authenticated local
+PTY connector in connector/ark_connector.py. Native sessions require pairing.
 An opt-in zedHost bridge mounts a selected local project, supplies binary process
 pipes, and runs installed clangd/rust-analyzer through Zed's upstream LSP client.
 The site provides an in-browser Pyright process for Python worktrees stored in
@@ -52,7 +52,7 @@ host toolchain for build dependencies. From this directory:
 
     cargo +1.98.1 fetch --locked --target wasm32-unknown-unknown
     cargo +1.98.1 install wasm-bindgen-cli --version 0.2.120 --locked --root tools
-    sh build.sh
+    sh build.sh --features threads-sidebar-web
 
 Output is written to pkg/. The project-local Cargo configuration pins release
 optimization to level 3, fat LTO and one codegen unit. Browser builds use a

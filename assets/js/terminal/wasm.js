@@ -28,7 +28,22 @@ export function unpack(bytes) {
 }
 
 export class Files {
-  constructor(module) { this.api = new WebAssembly.Instance(module).exports; }
+  constructor(module, requestProject) {
+    let response;
+    this.api = new WebAssembly.Instance(module, {
+      ark_project: {
+        request: (pointer, length) => {
+          const input = new Uint8Array(this.api.memory.buffer, pointer, length);
+          response = requestProject?.(unpack(input));
+          return response?.length ?? 0;
+        },
+        response: pointer => {
+          new Uint8Array(this.api.memory.buffer, pointer, response.length).set(response);
+          response = undefined;
+        },
+      },
+    }).exports;
+  }
   call(name, values = []) {
     const bytes = pack(values);
     const pointer = this.api.runtime_input(bytes.length);
@@ -46,6 +61,10 @@ export class Files {
     return { out, err, code: Number(code), cwd, action };
   }
   snapshot() { return this.call('runtime_snapshot'); }
+  mount(root, cwd) {
+    const [code, error] = this.call('runtime_mount', [root, cwd]);
+    if (code !== '0') throw new Error(error);
+  }
   restore(values) {
     const [code, error] = this.call('runtime_restore', values);
     if (code !== '0') throw new Error(error);

@@ -15,7 +15,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Startup cache | Versioned WebAssembly download in Cache Storage, with a network fallback | Cache tests and Chromium reload checks |
 | Vim | Upstream modes, keymap and status, enabled by `vim_mode` in Zed settings | WASM build and module validation |
 | Syntax | All 22 bundled upstream syntax configurations, Tree-sitter grammars and queries | WASM build and module validation |
-| Terminal | Upstream TerminalPanel, terminal_view and Alacritty grid; authenticated local Ark PTYs | Connector PTY and JavaScript transport tests |
+| Terminal | Upstream TerminalPanel, terminal_view and Alacritty grid. Browser Ark uses Zed's saved project filesystem, and `edit` opens files in Zed. Authenticated native Ark PTYs remain available. | Browser Ark IPC and connector PTY tests |
 | Local projects | Explicitly paired project mount; native reads, atomic writes, directory operations and polling file changes | Connector filesystem tests; integrated browser check pending |
 | Language servers | Installed clangd and rust-analyzer through upstream LSP; binary pipes, stdin EOF and exit status | Real clangd diagnostics through connector; integrated browser check pending |
 | Python | Pyright in a browser worker with project source snapshots and standard library stubs | Browser completion, hover, go-to-definition and diagnostics that clear after an edit. Worker tests include cross-file definitions, signature help and rename. |

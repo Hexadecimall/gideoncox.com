@@ -1,4 +1,4 @@
-use crate::fs::{name, FileSystem, HOME};
+use crate::fs::{name, FileSystem};
 
 pub struct Reply {
     pub out: String,
@@ -46,11 +46,8 @@ fn execute(fs: &mut FileSystem, args: &[String], input: &str) -> Result<Reply, S
         }
         "pwd" => out = format!("{}\n", fs.cwd),
         "cd" => {
-            let path = fs.path(a.first().map(String::as_str).unwrap_or(HOME))?;
-            if !fs.directory(&path) {
-                return Err("cd: not a directory".into());
-            }
-            fs.cwd = path;
+            let path = a.first().map(String::as_str).unwrap_or(fs.home()).to_owned();
+            fs.chdir(&path).map_err(|error| format!("cd: {error}"))?;
         }
         "ls" => {
             let all = a.iter().any(|s| s.starts_with('-') && s.contains('a'));
@@ -67,7 +64,7 @@ fn execute(fs: &mut FileSystem, args: &[String], input: &str) -> Result<Reply, S
                         out += &format!(
                             "{} {:>7} ",
                             if dir { "d" } else { "-" },
-                            fs.entries[&p].as_ref().map_or(0, String::len)
+                            fs.metadata(&p)?.map_or(0, |(_, size)| size)
                         );
                     }
                     out += name(&p);
@@ -87,7 +84,7 @@ fn execute(fs: &mut FileSystem, args: &[String], input: &str) -> Result<Reply, S
         "touch" => {
             required(a, "touch path")?;
             for p in a {
-                if !fs.entries.contains_key(&fs.path(p)?) {
+                if fs.metadata(p)?.is_none() {
                     fs.write(p, "", false)?;
                 }
             }
@@ -301,10 +298,11 @@ fn execute(fs: &mut FileSystem, args: &[String], input: &str) -> Result<Reply, S
         "edit" => {
             required(a, "edit path")?;
             let path = fs.path(&a[0])?;
-            if !fs.entries.contains_key(&path) {
-                fs.write(&path, "", false)?;
+            match fs.metadata(&path)? {
+                None => fs.write(&path, "", false)?,
+                Some((true, _)) => return Err(format!("{path}: is a directory")),
+                Some((false, _)) => {}
             }
-            fs.read(&path)?;
             return Ok(Reply {
                 action: format!("edit:{path}"),
                 ..Reply::ok(out)
@@ -393,11 +391,11 @@ fn test(fs: &FileSystem, a: &[String]) -> Result<bool, String> {
         ["-n", x] => Ok(!x.is_empty()),
         ["-z", x] => Ok(x.is_empty()),
         [flag @ ("-e" | "-f" | "-d"), x] => {
-            let p = fs.path(x)?;
+            let file = fs.metadata(x)?;
             Ok(match *flag {
-                "-d" => fs.directory(&p),
-                "-f" => matches!(fs.entries.get(&p), Some(Some(_))),
-                _ => fs.entries.contains_key(&p),
+                "-d" => file.is_some_and(|(directory, _)| directory),
+                "-f" => file.is_some_and(|(directory, _)| !directory),
+                _ => file.is_some(),
             })
         }
         [x, "=", y] | [x, "==", y] => Ok(x == y),

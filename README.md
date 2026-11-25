@@ -56,7 +56,7 @@ Requires Python 3 and Ark on macOS/Linux, or inside WSL on Windows. A Chromebook
 
 **Browser files** runs without a connector. Both modes use xterm.js, with selectable text, scrollback, saved display preferences, and an on-screen row for Escape, Tab, Control-C, arrow keys, and Enter. Browser input supports history, completion, cursor editing, and multiline shell commands. Ark's C++ lexer, parser, and expander compile to WebAssembly; Rust supplies the filesystem and commands, and a worker executes the parsed shell tree. It supports variables, quoting, arithmetic expansion, command substitution, pipes, redirects, functions, `if`, word-list `for`, and `while`. It does not launch native executables, background jobs, or C-style `for` loops. `grep` matches literal text. Workspace limits are 2,000 entries, 512 KiB per text file, and 4 MiB total file contents.
 
-Browser files are stored in IndexedDB. Clearing site data removes them. Copy important contents before clearing storage. If persistent storage is unavailable, the terminal reports that files are temporary. Zed uses a separate browser file store; its files are not currently shared with Ark.
+The standalone Ark page stores its browser files in IndexedDB. Clearing site data removes them. If persistent storage is unavailable, the terminal reports that files are temporary. Its file store is separate from Zed’s projects.
 
 ## Customization
 
@@ -193,8 +193,9 @@ Bubble wrap supports clicking, dragging, touch, and keyboard activation. Sound i
 The browser build runs Zed's upstream Rust workspace and editor through GPUI Web. It includes panes, tabs, project and outline panels, the command palette, Vim mode, and all 22 bundled syntax configurations. Files saved in the browser persist separately from session metadata. Clearing site data removes browser files.
 
 **View → New Terminal** opens Browser Ark for browser projects. Shell commands
-run locally in a WebAssembly worker. The terminal shares its saved shell files
-with `/terminal/` and uses a separate filesystem from the editor project.
+run locally in a WebAssembly worker and use the saved project files. The `edit`
+command opens a file in Zed. Terminal writes check for unsaved editor changes.
+Browser-selected folders remain restricted to the folder granted to Zed.
 
 To run programs on the computer, start the local Ark connector and choose
 **Open with Ark connector…** in Zed's Open Folder dialog. The editor opens a

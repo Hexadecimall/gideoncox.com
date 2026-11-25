@@ -1,4 +1,5 @@
-import { BrowserShellBridge } from './browser-shell.js?v=2';
+import { BrowserShellBridge } from './browser-shell.js?v=project-fs-1';
+import { BrowserTerminalProject } from './terminal-project.js?v=1';
 
 const ENDPOINT = 'http://127.0.0.1:8770';
 const INPUT_CHUNK = 32768;
@@ -194,9 +195,9 @@ export function terminalTransport(bridge, browser, shell) {
   };
 }
 
-export function installNativeTerminal(browser = null) {
+export function installNativeTerminal(browser = null, zed = null) {
   const bridge = new NativeTerminalBridge(pair);
-  const shell = new BrowserShellBridge();
+  const shell = new BrowserShellBridge(undefined, zed && new BrowserTerminalProject(zed));
   globalThis.zedNativeTerminal = terminalTransport(bridge, browser, shell);
   window.addEventListener('pagehide', () => {
     for (const id of [...bridge.sessions.keys()]) bridge.close(id, true);

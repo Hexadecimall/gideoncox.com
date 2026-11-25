@@ -1,7 +1,10 @@
-import { Interrupted, Shell } from './shell.js?v=pty-1';
+import { Interrupted, Shell } from './shell.js?v=project-fs-1';
+import { projectChannel } from './project-ipc.js?v=1';
+import { pack } from './wasm.js?v=project-fs-1';
 
 let shell;
 let database;
+let localProject = false;
 let storageWarning = '';
 const mutations = new Set(['write', 'append', 'mkdir', 'remove', 'rename']);
 
@@ -25,13 +28,31 @@ function savedFiles(write) {
   });
 }
 
-const ready = (async () => {
-  const modules = await Promise.all(['ark-core', 'terminal'].map(async name => {
-    const response = await fetch(new URL(`../../wasm/${name}.wasm`, import.meta.url));
-    if (!response.ok) throw new Error(`Could not load ${name}`);
-    return WebAssembly.compile(await response.arrayBuffer());
-  }));
-  shell = new Shell(...modules);
+const modules = Promise.all(['ark-core.wasm', 'terminal.wasm?v=project-fs-1'].map(async file => {
+  const response = await fetch(new URL(`../../wasm/${file}`, import.meta.url));
+  if (!response.ok) throw new Error(`Could not load ${file.split('?')[0]}`);
+  return WebAssembly.compile(await response.arrayBuffer());
+}));
+
+async function initialize(mount) {
+  const loaded = await modules;
+  localProject = Boolean(mount);
+  if (mount) {
+    const channel = projectChannel(mount.buffer);
+    let unavailable = false;
+    shell = new Shell(...loaded, ([operation, ...args]) => {
+      if (unavailable) return pack(['1', 'Reopen the terminal to reconnect to project files.']);
+      channel.begin();
+      self.postMessage({ type: 'project-fs', operation, args });
+      const response = channel.wait();
+      unavailable = !response;
+      return response ?? pack(['1', 'The project filesystem did not respond.']);
+    });
+    shell.files.mount(mount.root, mount.cwd);
+    shell.env.HOME = mount.root;
+    return;
+  }
+  shell = new Shell(...loaded);
   try {
     database = await openDatabase();
     const snapshot = await savedFiles();
@@ -40,10 +61,11 @@ const ready = (async () => {
     database?.close(); database = null;
     storageWarning = `Files are temporary: ${error.message || 'browser storage unavailable'}`;
   }
-})();
+}
 
 async function handle(message) {
-  await ready;
+  if (message.type === 'init' && !shell) await initialize(message.mount);
+  if (!shell) throw new Error('The terminal has not started.');
   // Browser locks keep another tab from saving a stale copy of the workspace.
   const transaction = async () => {
     const cwd = shell.files.request('cwd')[0];
@@ -84,7 +106,7 @@ async function handle(message) {
       value = shell.glob(prefix + '*');
       if (message.command) value = [...new Set([...builtins.filter(name => name.startsWith(prefix)), ...value])].sort();
     } else throw new Error('Unknown terminal request');
-    if (changed) {
+    if (changed && !localProject) {
       try { await savedFiles(shell.files.snapshot()); }
       catch (error) {
         if (message.type === 'files') throw new Error(`Could not save files: ${error.message}`);
@@ -93,7 +115,7 @@ async function handle(message) {
     }
     return { value, changed };
   };
-  return navigator.locks ? navigator.locks.request('ark-workspace-files', transaction) : transaction();
+  return !localProject && navigator.locks ? navigator.locks.request('ark-workspace-files', transaction) : transaction();
 }
 
 // Serializing requests also serializes IndexedDB transactions and editor saves.

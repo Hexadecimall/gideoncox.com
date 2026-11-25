@@ -3,7 +3,9 @@ import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Shell } from '../assets/js/terminal/shell.js';
 import { BrowserShellBridge } from '../assets/js/zed/browser-shell.js';
+import { BrowserTerminalProject } from '../assets/js/zed/terminal-project.js';
 import { terminalTransport } from '../assets/js/zed/native-terminal.js';
+import { WorkerHost } from './fixtures/zed-worker-host.mjs';
 
 const encode = new TextEncoder();
 const decode = new TextDecoder();
@@ -73,4 +75,57 @@ test('Browser Ark runs the WASM shell with line editing, quoted text, pipes, and
   assert.equal(commands.at(-1), 'exit 7');
   assert.equal(exit.exitCode, 7);
   assert.equal(shell.sessions.size, 0);
+});
+
+test('the Ark worker reads and updates the live Zed project, expands globs, and opens a file', { timeout: 8000 }, async t => {
+  const cwd = '/home/web/project';
+  const path = `${cwd}/notes.txt`;
+  const files = new Map([[cwd, null], [path, 'editor text\n']]);
+  const opened = [];
+  const project = new BrowserTerminalProject({
+    async terminal_project_fs(root, operation, json) {
+      assert.equal(root, '/home/web');
+      const [path, value] = JSON.parse(json);
+      let result = [];
+      switch (operation) {
+        case 'metadata':
+          if (files.has(path)) result = files.get(path) === null ? ['d', '0'] : ['f', String(files.get(path).length)];
+          break;
+        case 'list':
+          for (const [child, content] of files) {
+            if (child.startsWith(path + '/') && !child.slice(path.length + 1).includes('/')) {
+              result.push(child, content === null ? 'd' : 'f');
+            }
+          }
+          break;
+        case 'read': result = [files.get(path)]; break;
+        case 'write': files.set(path, value); break;
+        case 'append': files.set(path, (files.get(path) ?? '') + value); break;
+        default: assert.fail(`Unexpected operation ${operation}`);
+      }
+      return JSON.stringify(result);
+    },
+    async open_file(path) { opened.push(path); },
+  });
+  const worker = new URL('./fixtures/zed-terminal-project-worker.mjs', import.meta.url);
+  const shell = new BrowserShellBridge(() => new WorkerHost(worker), project);
+  const id = await shell.open({ cwd, columns: 80 });
+  t.after(() => shell.close(id));
+
+  async function run(command, expected) {
+    shell.write(id, encode.encode(`${command}\recho done\r`));
+    let output = '';
+    while (!output.includes('\r\ndone\r\n')) output += decode.decode((await shell.read(id)).data);
+    assert.match(output, expected);
+  }
+
+  await run('cat *.txt', /\r\neditor text\r\n/);
+  await run('echo shell text >> notes.txt', /done/);
+  assert.equal(files.get(path), 'editor text\nshell text\n');
+  await run('edit notes.txt', /done/);
+  assert.deepEqual(opened, [path]);
+  await run('echo outside > ../../outside.txt', /path is outside the open project/);
+  assert.equal(files.size, 2);
+  const browserRoot = '/home/web';
+  await assert.rejects(project.fs(browserRoot, 'read', [`${browserRoot}-outside/notes.txt`]), /outside/);
 });

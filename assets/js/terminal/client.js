@@ -12,7 +12,7 @@ export function request(type, args = {}) {
 }
 function start() {
   stopped = false;
-  worker = new Worker(new URL('./worker.js', import.meta.url), { type: 'module' });
+  worker = new Worker(new URL('./worker.js?v=project-fs-1', import.meta.url), { type: 'module' });
   worker.onmessage = ({ data }) => {
     const task = pending.get(data.id);
     if (!task) return;

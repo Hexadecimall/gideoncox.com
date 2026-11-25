@@ -2,7 +2,7 @@ import { LineBuffer } from '../terminal/line-buffer.js';
 import { joinBytes } from './lsp-stream.js';
 import { isBrowserProject } from './paths.js';
 
-const WORKER = '/editor/runtime/ark/worker.js?v=1';
+const WORKER = '/editor/runtime/ark/worker.js?v=2';
 const SESSION_PREFIX = 'browser-shell:';
 const LINE_LIMIT = 16_384;
 const encoder = new TextEncoder();
@@ -22,9 +22,11 @@ function columns(text) {
 }
 
 class BrowserShellProcess {
-  constructor(worker, size) {
+  constructor(worker, size, project, mount) {
     this.worker = worker;
     this.size = size;
+    this.project = project;
+    this.mount = mount;
     this.line = new LineBuffer();
     this.decoder = new TextDecoder();
     this.output = [];
@@ -38,6 +40,10 @@ class BrowserShellProcess {
     this.exitCode = null;
     this.interrupt = typeof SharedArrayBuffer === 'function' ? new Int32Array(new SharedArrayBuffer(4)) : null;
     worker.addEventListener('message', ({ data }) => {
+      if (data.type === 'project-fs' && this.mount) {
+        this.project.reply(this.mount, data.operation, data.args, () => this.exitCode === null);
+        return;
+      }
       const request = this.requests.get(data.id);
       if (!request) return;
       this.requests.delete(data.id);
@@ -61,9 +67,10 @@ class BrowserShellProcess {
   }
 
   async start() {
-    const { cwd, warning } = await this.request('init');
+    const { cwd, warning } = await this.request('init', { mount: this.mount });
     this.cwd = cwd;
     this.append('\x1b]2;Browser Ark\x07\x1b[?2004h');
+    if (this.project && !this.mount) this.append('Project files require browser isolation.\r\n');
     if (warning) this.append(lineEndings(warning + '\n'));
     this.render();
   }
@@ -100,7 +107,9 @@ class BrowserShellProcess {
 
   prompt() {
     if (this.continuation) return '> ';
-    return 'ark:' + plain(this.cwd.replace(/^\/home\/web(?=\/|$)/, '~')).replace(/\s/g, ' ') + ' $ ';
+    const home = this.mount?.root ?? '/home/web';
+    const abbreviation = this.cwd === home || this.cwd.startsWith(home + '/') ? '~' + this.cwd.slice(home.length) : this.cwd;
+    return 'ark:' + plain(abbreviation).replace(/\s/g, ' ') + ' $ ';
   }
 
   render() {
@@ -144,7 +153,10 @@ class BrowserShellProcess {
       this.cwd = result.cwd;
       for (const action of result.actions) {
         if (action === 'clear') this.append('\x1b[2J\x1b[H');
-        if (action.startsWith('edit:')) this.append('Open an editor file from Zed’s project panel.\r\n');
+        if (action.startsWith('edit:') && this.mount) {
+          try { await this.project.open(this.mount, action.slice(5)); }
+          catch (error) { this.append(lineEndings(`${error?.message ?? error}\n`)); }
+        }
       }
       this.append(lineEndings(result.out));
       if (result.err) this.append(`\x1b[31m${lineEndings(result.err)}\x1b[0m`);
@@ -245,8 +257,9 @@ class BrowserShellProcess {
 }
 
 export class BrowserShellBridge {
-  constructor(makeWorker = () => new Worker(WORKER, { type: 'module' })) {
+  constructor(makeWorker = () => new Worker(WORKER, { type: 'module' }), project) {
     this.makeWorker = makeWorker;
+    this.project = project;
     this.sessions = new Map();
   }
 
@@ -259,7 +272,8 @@ export class BrowserShellBridge {
 
   async open(options) {
     const id = SESSION_PREFIX + crypto.randomUUID();
-    const process = new BrowserShellProcess(this.makeWorker(), options);
+    const mount = typeof SharedArrayBuffer === 'function' ? this.project?.mount(options.cwd) : undefined;
+    const process = new BrowserShellProcess(this.makeWorker(), options, this.project, mount);
     this.sessions.set(id, process);
     try { await process.start(); }
     catch (error) { this.close(id); throw error; }

@@ -1,4 +1,4 @@
-import { Ark, Files } from './wasm.js';
+import { Ark, Files } from './wasm.js?v=project-fs-1';
 
 const empty = (code = 0) => ({ out: '', err: '', code, actions: [] });
 const append = (target, source) => {
@@ -28,8 +28,8 @@ export function patternMatch(pattern, value) {
 }
 
 export class Shell {
-  constructor(arkModule, rustModule) {
-    this.files = new Files(rustModule);
+  constructor(arkModule, rustModule, requestProject) {
+    this.files = new Files(rustModule, requestProject);
     this.env = { HOME: '/home/web', USER: 'web', PWD: '/home/web', SHELL: 'ark', TERM: 'dumb' };
     this.args = []; 
     this.functions = new Map();
@@ -46,7 +46,7 @@ export class Shell {
     const absolute = this.files.request('resolve', pattern)[0];
     const parts = absolute.split('/');
     const cwd = this.files.request('cwd')[0];
-    return this.files.request('paths').filter(path => {
+    return this.files.request('paths', absolute).filter(path => {
       if (!patternMatch(absolute, path)) return false;
       return path.split('/').every((part, index) => !part.startsWith('.') || parts[index]?.startsWith('.'));
     }).map(path => pattern.startsWith('/') ? path : path.startsWith(cwd + '/') ? path.slice(cwd.length + 1) : path);

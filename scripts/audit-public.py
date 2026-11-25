@@ -58,8 +58,8 @@ def inspect_data(data, label, *, path_examples=False):
         # Preserve separators between printable strings in compiled artifacts.
         text = re.sub(r'[^\x20-\x7e\n]', '\x00', data.decode('latin1'))
         if label.replace('\\', '/') == 'assets/wasm/terminal.wasm':
-            # Rust's string pool joins virtual /home and /home/web with a quote.
-            text = text.replace("/home/home/web'\x00", "/home/web'\x00")
+            # Rust's string pool joins the virtual /home and /home/web paths.
+            text = re.sub(r"/home/home/web['_]\x00", "/home/web\x00", text)
     failures = []
     for number, line in enumerate(text.splitlines(), 1):
         categories = [category for category, pattern in PATTERNS.items() if pattern.search(line)]

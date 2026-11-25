@@ -2,6 +2,7 @@
 //! all path resolution and file mutations stay inside this module.
 mod commands;
 mod fs;
+mod project;
 
 use fs::{name, FileSystem, HOME};
 use std::cell::RefCell;
@@ -61,15 +62,17 @@ fn input() -> Result<Vec<String>, String> {
     INPUT.with(|b| decode(&b.borrow()))
 }
 fn output(values: Vec<String>) {
-    OUTPUT.with(|cell| {
-        let mut bytes = cell.borrow_mut();
-        bytes.clear();
-        bytes.extend_from_slice(&(values.len() as u32).to_le_bytes());
-        for value in values {
-            bytes.extend_from_slice(&(value.len() as u32).to_le_bytes());
-            bytes.extend_from_slice(value.as_bytes());
-        }
-    });
+    OUTPUT.with(|cell| *cell.borrow_mut() = encode(&values));
+}
+
+fn encode(values: &[String]) -> Vec<u8> {
+    let mut bytes = Vec::new();
+    bytes.extend_from_slice(&(values.len() as u32).to_le_bytes());
+    for value in values {
+        bytes.extend_from_slice(&(value.len() as u32).to_le_bytes());
+        bytes.extend_from_slice(value.as_bytes());
+    }
+    bytes
 }
 
 #[no_mangle]
@@ -124,7 +127,7 @@ fn file_request(files: &mut FileSystem, values: &[String]) -> Result<Vec<String>
         }
         "rename" => {
             let dest = files.path(arg(2)?)?;
-            if files.entries.contains_key(&dest) {
+            if files.metadata(&dest)?.is_some() {
                 return Err("destination already exists".into());
             }
             files.copy(arg(1)?, &dest, true, true)?;
@@ -135,19 +138,28 @@ fn file_request(files: &mut FileSystem, values: &[String]) -> Result<Vec<String>
             .into_iter()
             .flat_map(|(p, d)| vec![name(&p).into(), p, if d { "1" } else { "0" }.into()])
             .collect()),
-        "paths" => Ok(files.entries.keys().cloned().collect()),
+        "paths" => files.paths(values.get(1).map(String::as_str)),
         "cwd" => Ok(vec![files.cwd.clone()]),
         "resolve" => Ok(vec![files.path(arg(1)?)?]),
         "chdir" => {
-            let path = files.path(arg(1)?)?;
-            if !files.directory(&path) {
-                return Err("not a directory".into());
-            }
-            files.cwd = path;
+            files.chdir(arg(1)?)?;
             Ok(vec![])
         }
         _ => Err("unknown file operation".into()),
     }
+}
+
+#[cfg(target_arch = "wasm32")]
+#[no_mangle]
+pub extern "C" fn runtime_mount() {
+    let result = input().and_then(|values| {
+        let [root, cwd] = values.as_slice() else { return Err("invalid project mount".into()); };
+        FILES.with(|cell| cell.borrow_mut().mount(root, cwd))
+    });
+    output(match result {
+        Ok(()) => vec!["0".into()],
+        Err(error) => vec!["1".into(), error],
+    });
 }
 #[no_mangle]
 pub extern "C" fn runtime_files() {
