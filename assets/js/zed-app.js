@@ -10,7 +10,7 @@ import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=1';
 
 const loading = document.querySelector('#loading');
-const build = 'b31bbba777ae';
+const build = '7b1ab30df598';
 
 async function downloadWasm() {
   const download = await editorWasmResponse(build);

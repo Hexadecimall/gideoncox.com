@@ -9,6 +9,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | --- | --- | --- |
 | Workspace | Upstream Workspace/MultiWorkspace, project and outline panels, panes, tabs, command palette, search and settings | WASM build and browser workspace checks |
 | Documents | Browser filesystem with persisted documents and import/export dialogs | Browser file round trips |
+| Clipboard | Upstream editor Copy, Cut and Paste. Standard shortcuts use the browser paste event, and Edit → Paste uses the browser clipboard API. | Browser clipboard round trips |
 | Device folders | Chromium folder picker and direct file reads and writes through the selected handle. Zed remembers the most recent folder and checks its permission on reopen. | Chromium folder-handle and reload checks |
 | Settings and trust | Browser-backed `settings.json`, native settings UI and remembered project trust choices | Workspace reload checks |
 | Startup cache | Versioned WebAssembly download in Cache Storage, with a network fallback | Cache tests and Chromium reload checks |
@@ -23,6 +24,11 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | C/C++ | clangd 21 in a WebAssembly worker, with browser project files and bundled WASI headers | Chromium language-server and browser workspace checks |
 | Rust | rust-analyzer in a WASI worker with a bundled standard library, Rust project graphs, and local Cargo path dependencies | Concurrent Chromium worktrees and browser workspace checks |
 | Tasks | Upstream task picker and task terminal; native command, arguments, environment, working directory and completion status | Real task PTY exit/output tests; integrated browser check pending |
+
+The browser uses the desktop status layout for Language Servers, Project Diagnostics
+and Edit Prediction. Threads Sidebar uses Zed's left-side toggle. Agent, Git and
+Collaboration controls are on the left, and Extensions is in the title-bar user
+menu. The pending controls display a Zed notification when activated.
 
 ## Remaining work
 
