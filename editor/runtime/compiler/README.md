@@ -1,8 +1,9 @@
 # Browser builds in Zed
 
-Focus a C, C++, or Zig source file. In the status bar, open **Run and Build** and
+Open a C, C++, or Zig source file. In the status bar, open **Run and Build** and
 select **Build and Run WebAssembly**. Output, compiler errors, and exit status
 appear in Zed's task terminal. Ctrl-C stops the task and Ctrl-D closes stdin.
+The menu continues to target the active editor while the task terminal is focused.
 
 Clang and LLD compile C17 and C++20 with the WASI SDK standard libraries. The
 default build links source files from the active project, skipping conventional
