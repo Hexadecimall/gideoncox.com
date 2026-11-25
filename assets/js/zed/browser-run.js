@@ -1,11 +1,12 @@
 import { createStdin } from '../../../editor/runtime/python/stdin.js';
-import { isLanguageProject, projectFiles } from './browser-language-server.js?v=workspace-ready-1';
+import { BUILD_CONFIG, CLANG_TARGETS, parseBuildConfig, clangLibraryPaths } from '../../../editor/runtime/compiler/build-settings.js?v=1';
+import { MAX_PROJECT, isLanguageProject, projectFiles, readProjectFile } from './browser-language-server.js?v=project-libs-1';
 import { joinBytes } from './lsp-stream.js';
 
 const PROGRAMS = new Map([
   ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=2', targets: ['python'] }],
-  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=linux-static-2',
-    targets: ['wasi', 'linux-x86_64', 'linux-x86_64-static'] }],
+  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=project-libs-1',
+    targets: CLANG_TARGETS }],
   ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi'] }],
   ['browser-rust', { label: 'Rust', worker: '/editor/runtime/compiler/worker.js?v=cargo-diagnostics-3', targets: ['wasi'] }],
 ]);
@@ -19,9 +20,30 @@ function projectPath(path, root) {
     && !path.slice(root.length + 1).split('/').some(part => !part || part === '.' || part === '..');
 }
 
-async function readProject(zed, root, script, source, running) {
-  const files = await projectFiles(zed, root, path => path !== script, running);
-  return [[script, encoder.encode(source)], ...files];
+async function readProject(zed, { cwd: root, script, source, command, target }, running) {
+  const inputs = new Map([[script, encoder.encode(source)]]);
+  let reserved = inputs.get(script).byteLength;
+  if (command === 'browser-cc') {
+    const configPath = `${root}/${BUILD_CONFIG}`;
+    const config = await readProjectFile(zed, configPath).catch(() => undefined);
+    if (config) {
+      if (config.byteLength > MAX_FILE) throw new Error(`${BUILD_CONFIG} exceeds the 2 MB limit.`);
+      inputs.set(configPath, config);
+      reserved += config.byteLength;
+    }
+    const libraries = new Set(clangLibraryPaths(parseBuildConfig(config), target));
+    for (const path of libraries) {
+      if (!running()) return [];
+      const absolute = `${root}/${path}`;
+      const bytes = await readProjectFile(zed, absolute).catch(() => undefined);
+      if (!bytes) throw new Error(`Could not read library ${path} in the project.`);
+      reserved += bytes.byteLength;
+      if (reserved > MAX_PROJECT) throw new Error(`Library ${path} exceeds the 16 MB project snapshot budget.`);
+      inputs.set(absolute, bytes);
+    }
+  }
+  const files = await projectFiles(zed, root, path => !inputs.has(path), running, reserved);
+  return [...inputs, ...files];
 }
 
 /** Binary terminal transport backed by a sandboxed WASI worker. */
@@ -173,7 +195,7 @@ export class BrowserRunBridge {
     this.sessions.set(id, process);
     process.append(encoder.encode(`Starting ${program.label}…\r\n`));
     const running = () => process.exitCode === null;
-    readProject(this.zed, cwd, script, source, running).then(files => {
+    readProject(this.zed, { cwd, script, source, command, target }, running).then(files => {
       if (running()) process.worker.postMessage({
         cwd, script, files, command, target, programArgs, stdin: process.stdin.buffer,
       });

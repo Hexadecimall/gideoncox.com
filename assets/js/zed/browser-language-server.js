@@ -2,7 +2,7 @@ import { isBrowserProject } from './paths.js?v=local-folders-1';
 import { joinBytes, LspFrames, lspFrame } from './lsp-stream.js';
 
 const MAX_FILE = 2 * 1024 * 1024;
-const MAX_PROJECT = 16 * 1024 * 1024;
+export const MAX_PROJECT = 16 * 1024 * 1024;
 const MAX_OUTPUT = 24 * 1024 * 1024;
 const MAX_PROJECT_FILES = 4000;
 const READ_BATCH = 16;
@@ -34,7 +34,7 @@ export async function readProjectFile(zed, path) {
   return folders?.rootFor(path) ? folders.read(path) : zed.read_browser_file(path);
 }
 
-export async function projectFiles(zed, root, include, running = () => true) {
+export async function projectFiles(zed, root, include, running = () => true, reservedBytes = 0) {
   const accepts = path => projectPath(path, root) && include(path);
   const folders = globalThis.zedLocalFolders;
   const local = folders?.rootFor(root);
@@ -46,14 +46,14 @@ export async function projectFiles(zed, root, include, running = () => true) {
       await new Promise(resolve => setTimeout(resolve, 25));
     }
   }
-  if (!running()) return [];
+  if (!running() || reservedBytes >= MAX_PROJECT) return [];
   const paths = local
     ? await folders.listFiles(root, accepts, MAX_PROJECT_FILES)
     : JSON.parse(await zed.list_browser_paths())
       .filter(entry => !entry.isDirectory && accepts(entry.path))
       .map(entry => entry.path).slice(0, MAX_PROJECT_FILES);
   const files = [];
-  let total = 0;
+  let total = reservedBytes;
   for (let offset = 0; offset < paths.length && running(); offset += READ_BATCH) {
     const batch = paths.slice(offset, offset + READ_BATCH);
     const results = await Promise.allSettled(batch.map(path => readProjectFile(zed, path)));

@@ -2,6 +2,7 @@ import { ConsoleStdout, File, OpenFile, PreopenDirectory, wasi as errno } from '
 import WASI from '../rust/wasi/wasi.js?v=utf8-argv-1';
 import { TerminalOutput, TerminalStdin, writeFile } from '../terminal-wasi.js';
 import { loadArchive, loadModule } from './assets.js';
+import { BUILD_CONFIG, parseBuildConfig, isProjectRelativePath, clangLibraryPaths } from './build-settings.js?v=1';
 
 const CC_OUTPUT = '/.zed-compiler';
 const SOURCE = /\.(?:c|C|cc|cpp|cxx|c\+\+|CPP)$/;
@@ -14,7 +15,6 @@ const LINUX_CXX_HEADERS = [
   '/linux/libcxx/include', '/linux/libcxxabi/include', ...LINUX_HEADERS, '/linux/libunwind/include',
 ];
 const encoder = new TextEncoder();
-const decoder = new TextDecoder();
 const linuxStartup = encoder.encode(`
 extern int main(void);
 __attribute__((weak,noreturn)) void _start(void) {
@@ -60,35 +60,24 @@ function projectDirectory(cwd, files) {
 }
 
 function readSettings({ cwd, files, programArgs }) {
-  const path = '.zed/browser-build.json';
-  const file = files.find(([name]) => name === `${cwd}/${path}`);
-  const contents = file ? decoder.decode(file[1]).trim() : '';
-  let settings;
-  try {
-    settings = contents ? JSON.parse(contents) : {};
-  } catch {
-    throw new Error(`${path} must contain valid JSON.`);
-  }
-  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
-    throw new Error(`${path} must contain a JSON object.`);
-  }
+  const file = files.find(([name]) => name === `${cwd}/${BUILD_CONFIG}`);
+  const settings = parseBuildConfig(file?.[1]);
   if (programArgs !== undefined) settings.args = programArgs;
   if (settings.args !== undefined && (!Array.isArray(settings.args)
     || settings.args.some(arg => typeof arg !== 'string' || arg.includes('\0')))) {
-    throw new Error(`"args" in ${path} must be an array of strings without NUL characters.`);
+    throw new Error(`"args" in ${BUILD_CONFIG} must be an array of strings without NUL characters.`);
   }
   return settings;
 }
 
-function clangSettings({ cwd, script, files }, settings) {
+function clangSettings({ cwd, script, files, target }, settings) {
   for (const name of ['sources', 'includeDirectories']) {
     if (settings[name] !== undefined && !Array.isArray(settings[name])) {
       throw new Error(`"${name}" in .zed/browser-build.json must be an array of paths.`);
     }
   }
   const absolute = path => {
-    if (typeof path !== 'string' || path.includes('\0')
-      || path.split('/').some(part => !part || part === '.' || part === '..')) {
+    if (!isProjectRelativePath(path)) {
       throw new Error('Use project-relative paths in .zed/browser-build.json.');
     }
     return `${cwd}/${path}`;
@@ -98,18 +87,25 @@ function clangSettings({ cwd, script, files }, settings) {
       && !relative(cwd, path).split('/').some(part => SKIP_SOURCES.has(part))),
   ];
   const includes = settings.includeDirectories?.map(absolute) ?? [];
-  if (!sources.length || sources.some(path => !SOURCE.test(path) || !files.some(([file]) => file === path))) {
+  const libraries = clangLibraryPaths(settings, target).map(absolute);
+  const filePaths = new Set(files.map(([name]) => name));
+  if (!sources.length || sources.some(path => !SOURCE.test(path) || !filePaths.has(path))) {
     throw new Error('The sources in .zed/browser-build.json must name existing C or C++ files.');
   }
-  return { sources: [...new Set(sources)], includes: [cwd, ...new Set(includes), `${cwd}/include`] };
+  const missing = libraries.find(path => !filePaths.has(path));
+  if (missing) throw new Error(`Library not found in the project: ${relative(cwd, missing)}.`);
+  if (settings.linkCxx !== undefined && typeof settings.linkCxx !== 'boolean') {
+    throw new Error(`"linkCxx" in ${BUILD_CONFIG} must be true or false.`);
+  }
+  return { sources: [...new Set(sources)], includes: [cwd, ...new Set(includes), `${cwd}/include`], libraries };
 }
 
 async function clangBuild(job, settings, output) {
   const freestanding = job.target === 'linux-x86_64';
   const linuxStatic = job.target === 'linux-x86_64-static';
   const isNative = freestanding || linuxStatic;
-  const { sources, includes } = clangSettings(job, settings);
-  const usesCpp = sources.some(source => !source.endsWith('.c'));
+  const { sources, includes, libraries } = clangSettings(job, settings);
+  const usesCpp = settings.linkCxx || sources.some(source => !source.endsWith('.c'));
   const sdkName = linuxStatic ? 'linux-x86_64-sdk.tar.gz' : 'wasi-sdk.tar.gz';
   const [clang, linker, sdk, cxx] = await Promise.all([
     loadModule('clang.wasm.gz'), loadModule('lld.wasm.gz'),
@@ -160,14 +156,14 @@ async function clangBuild(job, settings, output) {
   const binary = `${CC_OUTPUT}/${isNative ? 'program.elf' : 'program.wasm'}`;
   let link;
   if (freestanding) {
-    link = ['ld.lld', '-m', 'elf_x86_64', '-static', '--gc-sections', '-e', '_start', ...objects];
+    link = ['ld.lld', '-m', 'elf_x86_64', '-static', '--gc-sections', '-e', '_start', ...objects, ...libraries];
   } else if (linuxStatic) {
     const cxxRuntime = usesCpp ? ['/linux/lib/libc++.a', '/linux/lib/libc++abi.a', '/linux/lib/libunwind.a'] : [];
     link = ['ld.lld', '-m', 'elf_x86_64', '-static', '--gc-sections', '--eh-frame-hdr',
-      '/linux/lib/crt1.o', ...objects, '--start-group', ...cxxRuntime,
+      '/linux/lib/crt1.o', ...objects, ...libraries, '--start-group', ...cxxRuntime,
       '/linux/lib/libc.a', '/linux/lib/libzigc.a', '/linux/lib/libcompiler_rt.a', '--end-group'];
   } else {
-    link = ['wasm-ld', '-z', 'stack-size=1048576', '/wasi/lib/crt1-command.o', ...objects,
+    link = ['wasm-ld', '-z', 'stack-size=1048576', '/wasi/lib/crt1-command.o', ...objects, ...libraries,
       ...(usesCpp ? ['/wasi/lib/libc++.a', '/wasi/lib/libc++abi.a'] : []),
       '/wasi/lib/libm.a', '/wasi/lib/libc.a', '/wasi/lib/libclang_rt.builtins.a'];
   }

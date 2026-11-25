@@ -15,9 +15,19 @@ or additional header directories, put an explicit source list in
 {
   "sources": ["src/main.cpp", "src/math.cpp"],
   "includeDirectories": ["src/headers"],
+  "libraries": {
+    "wasi": ["lib/wasi/libmath.a"],
+    "linux-x86_64-static": ["lib/linux/libmath.a"]
+  },
   "args": ["convert", "--name", "two words"]
 }
 ```
+
+`libraries` takes project-relative static archives (`.a`) and object files
+(`.o`) built for the selected target. Use `linux-x86_64` for the freestanding
+target. List each library before its dependencies. Use `"linkCxx": true` when
+a C entry point needs the C++ standard library through a linked dependency.
+Explicit dependencies count toward the 16 MB project snapshot budget.
 
 `args` supplies command-line arguments to the WASI program, one string per
 argument. C, C++, Zig, and Rust support this field. A file with only `args` keeps the

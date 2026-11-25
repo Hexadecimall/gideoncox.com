@@ -140,3 +140,40 @@ test('the static Linux task offers the linked ELF under its target-specific file
   t.mock.timers.tick(30000);
   assert.equal((await bridge.read(id)).exitCode, 0);
 });
+
+test('requested C libraries are included before optional files and may exceed the per-file snapshot limit', async t => {
+  const isolation = Object.getOwnPropertyDescriptor(globalThis, 'crossOriginIsolated');
+  Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value: true });
+  t.after(() => {
+    if (isolation) Object.defineProperty(globalThis, 'crossOriginIsolated', isolation);
+    else delete globalThis.crossOriginIsolated;
+  });
+  const cwd = '/home/web/project';
+  const script = `${cwd}/main.c`;
+  const config = `${cwd}/.zed/browser-build.json`;
+  const library = `${cwd}/vendor/libanswer.a`;
+  const bytes = new Uint8Array(3 * 1024 * 1024);
+  const reads = [];
+  const zed = {
+    async list_browser_paths() { return JSON.stringify([{ path: config }, { path: library }]); },
+    async read_browser_file(path) {
+      reads.push(path);
+      if (path === config) return encode(JSON.stringify({ libraries: { wasi: ['vendor/libanswer.a'] } }));
+      if (path === library) return bytes;
+      throw new Error('Unexpected file request');
+    },
+  };
+  const worker = new EventTarget();
+  worker.terminate = () => {};
+  const posted = new Promise(resolve => { worker.postMessage = resolve; });
+  const bridge = new BrowserRunBridge(zed, () => worker);
+  const id = await bridge.open({
+    cwd, command: 'browser-cc', args: [script, 'wasi'],
+    env: { ZED_BROWSER_SOURCE: 'int main(void) { return 0; }' },
+  });
+  t.after(() => bridge.close(id));
+  const { files } = await posted;
+  assert.deepEqual(reads, [config, library]);
+  assert.deepEqual(files.map(([path]) => path), [script, config, library]);
+  assert.equal(files[2][1], bytes);
+});

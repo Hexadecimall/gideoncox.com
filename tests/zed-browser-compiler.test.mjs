@@ -56,7 +56,9 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files, pro
   await import(`${worker.href}?run=${++job}`);
   handler.dispatchEvent(new MessageEvent('message', { data: {
     cwd, command, target, script: `${cwd}/${script}`, programArgs,
-    files: Object.entries(files).map(([name, contents]) => [`${cwd}/${name}`, encoder.encode(contents)]),
+    files: Object.entries(files).map(([name, contents]) => [
+      `${cwd}/${name}`, typeof contents === 'string' ? encoder.encode(contents) : contents,
+    ]),
   } }));
   return result;
 }
@@ -194,6 +196,28 @@ int main(int argc, char **argv) {
       assert.equal(result.stdout, expected);
     }
   }
+});
+
+test('C builds link only the project archives selected for their target', async () => {
+  // Archive containing a WASI object compiled from int library_answer(void) { return 42; }.
+  const archive = Buffer.from(
+    'ITxhcmNoPgovICAgICAgICAgICAgICAgMCAgICAgICAgICAgMCAgICAgMCAgICAgMCAgICAgICAyNCAgICAgICAgYAoAAAABAAAAXGxpYnJhcnlfYW5zd2VyAABhbnN3ZXIuby8gICAgICAgMCAgICAgICAgICAgMCAgICAgMCAgICAgNjQ0ICAgICAzMTYgICAgICAgYAoAYXNtAQAAAAGFgICAAAFgAAF/ApiAgIAAAQNlbnYPX19saW5lYXJfbWVtb3J5AgAAA4KAgIAAAQAKhoCAgAABBABBKgsAooCAgAAHbGlua2luZwIIk4CAgAABAAQADmxpYnJhcnlfYW5zd2VyAK+AgIAACXByb2R1Y2VycwEMcHJvY2Vzc2VkLWJ5AQ5Ib21lYnJldyBjbGFuZwYyMi4xLjgAlIGAgAAPdGFyZ2V0X2ZlYXR1cmVzCCsLYnVsay1tZW1vcnkrD2J1bGstbWVtb3J5LW9wdCsWY2FsbC1pbmRpcmVjdC1vdmVybG9uZysKbXVsdGl2YWx1ZSsPbXV0YWJsZS1nbG9iYWxzKxNub250cmFwcGluZy1mcHRvaW50Kw9yZWZlcmVuY2UtdHlwZXMrCHNpZ24tZXh0',
+    'base64',
+  );
+  const files = {
+    'main.c': '#include <stdio.h>\nint library_answer(void);\n'
+      + 'int main(void) { printf("%d\\n", library_answer()); return 7; }',
+    'lib/libanswer.a': archive,
+    '.zed/browser-build.json': JSON.stringify({
+      libraries: { wasi: ['lib/libanswer.a'], 'linux-x86_64-static': ['native/libanswer.a'] },
+    }),
+  };
+  const result = await run({ script: 'main.c', files });
+  assert.equal(result.code, 7, result.output);
+  assert.equal(result.ranProgram, true);
+  assert.match(result.output, /\b42\r\n/);
+  await assert.rejects(run({ target: 'linux-x86_64-static', script: 'main.c', files }),
+    /Library not found in the project: native\/libanswer\.a/);
 });
 
 test('standalone Rust still builds with the bundled rustc', async () => {
