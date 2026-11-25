@@ -37,8 +37,8 @@ compiler and standard library to build WASI executables.
 
 The Rust browser task compiles a crate from its active entry file with rustc
 1.83 and the matching WASI standard library. Rust `mod` files are resolved from
-the same project snapshot. Cargo, crates.io dependencies, and rustfmt remain
-pending.
+the same project snapshot. Cargo builds and crates.io dependencies remain
+pending. The editor uses [rustfmt](../rust/README.md) for formatting.
 
 Builds run in a browser worker with a temporary project snapshot. The active
 buffer's unsaved text is included. Save changes in other buffers before a run.

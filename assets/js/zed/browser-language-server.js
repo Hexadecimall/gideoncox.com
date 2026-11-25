@@ -60,13 +60,14 @@ export async function projectFiles(zed, root, include, running = () => true) {
 }
 
 class BrowserLspProcess {
-  constructor(zed, root, worker, command, initializeOptions, includePath) {
+  constructor(zed, root, worker, command, initializeOptions, includePath, formatConfigFiles) {
     this.zed = zed;
     this.root = root;
     this.worker = worker;
     this.command = command;
     this.initializeOptions = initializeOptions;
     this.includePath = includePath;
+    this.formatConfigFiles = formatConfigFiles;
     this.input = new LspFrames();
     this.output = [];
     this.outputLength = 0;
@@ -132,6 +133,19 @@ class BrowserLspProcess {
     if (this.exitCode === null) this.worker.postMessage({ type: 'file', path, bytes });
   }
 
+  async readFormatConfig(uri) {
+    const path = pathFromUri(uri, this.root);
+    if (!path) return [];
+    const paths = [];
+    for (let directory = path.slice(0, path.lastIndexOf('/')); ; directory = directory.slice(0, directory.lastIndexOf('/'))) {
+      for (const name of this.formatConfigFiles) paths.push(`${directory}/${name}`);
+      if (directory === this.root) break;
+    }
+    const results = await Promise.allSettled(paths.map(path => readProjectFile(this.zed, path)));
+    return results.flatMap((result, index) => result.status === 'fulfilled' && result.value.byteLength <= MAX_FILE
+      ? [[paths[index], result.value]] : []);
+  }
+
   write(bytes) {
     const data = new Uint8Array(bytes).slice();
     this.writeQueue = this.writeQueue.then(async () => {
@@ -152,6 +166,8 @@ class BrowserLspProcess {
           await this.syncFile(params?.textDocument?.uri, params?.text);
         } else if (method === 'workspace/didChangeWatchedFiles') {
           for (const { uri, type } of params?.changes ?? []) await this.syncFile(uri, undefined, type === 3);
+        } else if (method === 'textDocument/formatting' && this.formatConfigFiles) {
+          message.formatFiles = await this.readFormatConfig(params?.textDocument?.uri);
         } else if (method === 'exit') {
           this.close();
           return;
@@ -174,12 +190,13 @@ class BrowserLspProcess {
 }
 
 export class BrowserLanguageServer {
-  constructor(zed, { command, makeWorker, initializeOptions, includePath }) {
+  constructor(zed, { command, makeWorker, initializeOptions, includePath, formatConfigFiles }) {
     this.zed = zed;
     this.makeWorker = makeWorker;
     this.command = command;
     this.initializeOptions = initializeOptions;
     this.includePath = includePath;
+    this.formatConfigFiles = formatConfigFiles;
     this.prefix = `browser-${command}:`;
     this.running = new Map();
   }
@@ -191,7 +208,8 @@ export class BrowserLanguageServer {
     if (!this.accepts(options)) throw new Error(`Browser ${this.command} opens browser files only.`);
     if (!globalThis.crossOriginIsolated) throw new Error('Open the top-level Zed page to enable WebAssembly language tools.');
     const id = this.prefix + crypto.randomUUID();
-    const process = new BrowserLspProcess(this.zed, options.cwd, this.makeWorker(), this.command, this.initializeOptions, this.includePath);
+    const process = new BrowserLspProcess(this.zed, options.cwd, this.makeWorker(), this.command,
+      this.initializeOptions, this.includePath, this.formatConfigFiles);
     this.running.set(id, process);
     process.start().catch(error => process.close(1, error.message));
     return { id, pid: 0 };

@@ -31,28 +31,4 @@ export function formatPython(text, options) {
   });
 }
 
-function offset(text, { line, character }) {
-  let index = 0;
-  for (let count = 0; count < line; count++) {
-    const lineEnd = text.indexOf('\n', index);
-    if (lineEnd === -1) return text.length;
-    index = lineEnd + 1;
-  }
-  const nextLine = text.indexOf('\n', index);
-  return Math.min(index + character, nextLine < 0 ? text.length : nextLine);
-}
-
-export function applyDocumentChanges(text, changes) {
-  for (const { range, text: replacement } of changes) {
-    text = range ? text.slice(0, offset(text, range.start)) + replacement
-      + text.slice(offset(text, range.end)) : replacement;
-  }
-  return text;
-}
-
-export function documentReplacement(text, formatted) {
-  if (text === formatted) return [];
-  const lines = text.split('\n');
-  const end = { line: lines.length - 1, character: lines.at(-1).length };
-  return [{ range: { start: { line: 0, character: 0 }, end }, newText: formatted }];
-}
+export { applyDocumentChanges, documentReplacement } from './lsp-stream.js?v=document-edits-1';

@@ -1,11 +1,14 @@
 import { Directory, Fd, File, OpenFile, PreopenDirectory, ConsoleStdout } from './wasi/index.js';
 import { WASIFarm, wait_async_polyfill } from './wasi-threads.js';
 import { browserRustProject, SYSROOT } from './project.js';
-import { LspFrames, lspFrame } from '/assets/js/zed/lsp-stream.js';
+import { LspFrames, applyDocumentChanges, documentReplacement, lspFrame } from '/assets/js/zed/lsp-stream.js?v=document-edits-1';
+import { createRustfmt, rustfmtConfig } from './rustfmt/format.js?v=1';
 
 const TARGET = 'wasm32-wasip1';
 const encoder = new TextEncoder();
 const input = [];
+const documents = new Map();
+const formatRust = createRustfmt();
 let waiting;
 let rootPath;
 let projectFiles;
@@ -14,6 +17,7 @@ let filesystem;
 let settings;
 let projectSignature;
 let toolchain;
+let initializeId;
 
 function readStdin(length) {
   if (!length) return [];
@@ -65,6 +69,9 @@ class Output extends Fd {
         const result = message.params.items.map(item => item.section === 'rust-analyzer' ? settings : null);
         send({ jsonrpc: '2.0', id: message.id, result });
       } else {
+        if (message.id === initializeId && message.result?.capabilities) {
+          message.result.capabilities.documentFormattingProvider = true;
+        }
         postMessage({ type: 'lsp', message });
       }
     }
@@ -123,13 +130,43 @@ function refreshProject() {
   }
 }
 
+async function formatDocument(request) {
+  const { uri } = request.params.textDocument;
+  const text = documents.get(uri);
+  const reply = response => postMessage({ type: 'lsp', message: { jsonrpc: '2.0', id: request.id, ...response } });
+  if (text === undefined) { reply({ result: null }); return; }
+  try {
+    const path = decodeURIComponent(new URL(uri).pathname);
+    const files = request.formatFiles ? new Map(request.formatFiles) : projectFiles;
+    const config = rustfmtConfig(files, rootPath, path, request.params.options);
+    const formatted = await formatRust(text, config);
+    if (documents.get(uri) !== text) {
+      reply({ error: { code: -32801, message: 'The document changed during formatting.' } });
+    } else reply({ result: documentReplacement(text, formatted) });
+  } catch (error) {
+    reply({ error: { code: -32603, message: error.message } });
+  }
+}
+
 function handleLsp(message) {
   if (message.method === 'initialize') {
+    initializeId = message.id;
     settings = rustSettings(message.params.initializationOptions);
     message.params.initializationOptions = settings;
   } else if (message.method === 'workspace/didChangeConfiguration') {
     settings = rustSettings(message.params?.settings);
     message.params = { settings };
+  } else if (message.method === 'textDocument/didOpen') {
+    const { uri, text } = message.params.textDocument;
+    documents.set(uri, text);
+  } else if (message.method === 'textDocument/didChange') {
+    const { uri } = message.params.textDocument;
+    const text = documents.get(uri);
+    if (text !== undefined) documents.set(uri, applyDocumentChanges(text, message.params.contentChanges));
+  } else if (message.method === 'textDocument/didClose') {
+    documents.delete(message.params.textDocument.uri);
+  } else if (message.method === 'textDocument/formatting') {
+    return formatDocument(message);
   }
   send(message);
 }
@@ -195,7 +232,7 @@ async function start(root, files) {
 addEventListener('message', async ({ data }) => {
   try {
     if (data.type === 'start') await start(data.root, data.files);
-    else if (data.type === 'lsp') handleLsp(data.message);
+    else if (data.type === 'lsp') await handleLsp(data.message);
     else if (data.type === 'file') {
       const wasPresent = projectFiles.has(data.path);
       if (data.bytes === null) projectFiles.delete(data.path);
