@@ -182,7 +182,7 @@ async function zigBuild(job, settings, output) {
 async function rustBuild(job, settings, output) {
   const project = projectDirectory(job.cwd, job.files);
   const source = relative(job.cwd, job.script);
-  const { compileCargo, findCargoManifest } = await import('./cargo.js?v=1');
+  const { compileCargo, findCargoManifest } = await import('./cargo.js?v=2');
   const manifest = findCargoManifest(project.dir, source);
   if (manifest) {
     print(output, `Building ${manifest} with Cargo`);

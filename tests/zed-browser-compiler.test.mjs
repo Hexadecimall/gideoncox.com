@@ -14,9 +14,11 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files, pro
   globalThis.Worker = WorkerHost;
   globalThis.addEventListener = handler.addEventListener.bind(handler);
   globalThis.removeEventListener = handler.removeEventListener.bind(handler);
+  const fetched = new Set();
   globalThis.fetch = async location => {
     const asset = new URL(location);
     asset.search = '';
+    fetched.add(asset.pathname.split('/').pop());
     return new Response(await readFile(asset));
   };
   const stdout = new TextDecoder();
@@ -28,7 +30,7 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files, pro
       if (message.artifact) artifact = message.artifact;
       if (message.error) reject(new Error(message.error));
       if (message.code !== undefined) {
-        resolve({ code: message.code, ranProgram: message.ranProgram, output: output + stdout.decode(), artifact });
+        resolve({ code: message.code, ranProgram: message.ranProgram, output: output + stdout.decode(), artifact, fetched });
       }
     };
   });
@@ -137,6 +139,7 @@ test('Cargo builds the selected Rust binary with a workspace path dependency', a
   assert.equal(cargo.code, 23, cargo.output);
   assert.equal(cargo.ranProgram, true);
   assert.match(cargo.output, /local Rust crate: two words/);
+  assert.equal(cargo.fetched.has('rust-host-sysroot.tar.gz'), false);
 
   const broken = await run({
     command: 'browser-rust', script: 'app/src/bin/other.rs',
@@ -145,4 +148,34 @@ test('Cargo builds the selected Rust binary with a workspace path dependency', a
   assert.notEqual(broken.code, 0);
   assert.equal(broken.ranProgram, undefined);
   assert.match(broken.output, /cannot find function `missing`/);
+});
+
+test('Cargo runs build.rs with a writable OUT_DIR and applies its directives', async () => {
+  const cargo = await run({ command: 'browser-rust', script: 'src/main.rs', files: {
+    'Cargo.toml': '[package]\nname = "generated"\nversion = "0.1.0"\nedition = "2021"\n'
+      + '[build-dependencies]\ngenerator = { path = "generator" }\n',
+    'generator/Cargo.toml': '[package]\nname = "generator"\nversion = "0.1.0"\nedition = "2021"\n',
+    'generator/src/lib.rs': `pub fn rust_source(message: &str) -> String {
+        format!("const MESSAGE: &str = {message:?};")
+    }`,
+    'message.txt': 'built in the browser',
+    'build.rs': `fn main() {
+        assert_eq!(std::env::current_dir().unwrap(),
+            std::path::Path::new(env!("CARGO_MANIFEST_DIR")));
+        let message = std::fs::read_to_string("message.txt").unwrap();
+        let out = std::path::PathBuf::from(std::env::var_os("OUT_DIR").unwrap());
+        std::fs::write(out.join("generated.rs"), generator::rust_source(&message)).unwrap();
+        println!("cargo:rerun-if-changed=message.txt");
+        println!("cargo:rustc-env=BUILD_CHANNEL=browser");
+    }`,
+    'src/main.rs': `
+        include!(concat!(env!("OUT_DIR"), "/generated.rs"));
+        fn main() {
+            println!("{MESSAGE} on {}", env!("BUILD_CHANNEL"));
+        }`,
+  } });
+  assert.equal(cargo.code, 0, cargo.output);
+  assert.equal(cargo.ranProgram, true);
+  assert.match(cargo.output, /built in the browser on browser/);
+  assert.equal(cargo.fetched.has('rust-host-sysroot.tar.gz'), true);
 });

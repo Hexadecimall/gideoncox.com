@@ -5,7 +5,7 @@ import { BrowserPython } from './zed/browser-python.js?v=5';
 
 import { BrowserClangd } from './zed/browser-clangd.js?v=format-config-1';
 import { BrowserRust } from './zed/browser-rust.js?v=rustfmt-1';
-import { BrowserRunBridge } from './zed/browser-run.js?v=cargo-1';
+import { BrowserRunBridge } from './zed/browser-run.js?v=cargo-2';
 import { openBrowserDatabase } from './zed/browser-database.js?v=history-1';
 import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=3';

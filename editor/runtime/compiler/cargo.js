@@ -1,11 +1,12 @@
 import { Directory, OpenDirectory, PreopenDirectory, wasi } from '../rust/wasi/index.js';
 import { writeFile } from '../terminal-wasi.js';
-import { loadModule } from './assets.js';
+import { loadArchive, loadModule } from './assets.js';
 import { MAX_TOOL_BYTES } from './cargo-imports.js?v=1';
 import { loadRustToolchain, RUST_ENV, runRustTool } from './rustc.js?v=cargo-1';
 
 const PROJECT = '/workspace';
 const BUILD = '/build';
+const HOST = 'wasm32-wasip1-threads';
 const CARGO = '/toolchain/bin/cargo';
 const RUSTC = '/toolchain/bin/rustc';
 const ENCODER = new TextEncoder();
@@ -86,12 +87,13 @@ function capture(limit = MAX_TOOL_BYTES) {
   };
 }
 
-function rustEnvironment(entries, cwd) {
-  const env = new Map([...CARGO_ENV, ...entries, ...RUST_ENV].map(pair => [pair.split('=', 1)[0], pair]));
+function processEnvironment(entries, cwd, compiler) {
+  const values = [...CARGO_ENV, ...entries, ...(compiler ? RUST_ENV : [])];
+  const env = new Map(values.map(pair => [pair.split('=', 1)[0], pair]));
   env.set('PWD', `PWD=${cwd}`);
   // The WASI port uses in-process LLD. Its std::env::split_paths panics
   // when the driver tries to read a native linker search path.
-  env.delete('PATH');
+  if (compiler) env.delete('PATH');
   return [...env.values()];
 }
 
@@ -99,25 +101,20 @@ function failure(message, code = 1) {
   return { code, stdout: [], stderr: Array.from(ENCODER.encode(message + '\n')) };
 }
 
-async function runCompiler(wasmModule, root, request) {
-  if (request.program !== RUSTC) {
-    return failure(`Cargo subprocess ${request.program} is unavailable in this browser build.`, 127);
-  }
+async function runProcess(wasmModule, root, request, args, versionProbe = false) {
   const cwd = request.cwd || PROJECT;
   const directory = lookup(root, cwd);
   if (!(directory instanceof Directory) || (cwd !== PROJECT && !cwd.startsWith(PROJECT + '/'))) {
-    return failure('Rust compiler working directory is outside the project.');
+    return failure('Cargo subprocess working directory is outside the project.');
   }
 
-  const versionProbe = request.args.length === 1 && request.args[0] === '-vV';
-  const args = [RUSTC, ...request.args];
-  if (!versionProbe) args.push('--sysroot', '/sysroot', '-Zthreads=1', '-Ccodegen-units=1');
   const out = capture();
   const err = capture();
   let code;
   try {
     code = await runRustTool({
-      wasmModule, args, env: rustEnvironment(request.env, cwd), stdin: request.stdin,
+      wasmModule, args, env: processEnvironment(request.env, cwd, request.program === RUSTC),
+      stdin: request.stdin,
       directories: [mount('.', directory), ...[PROJECT, BUILD, '/sysroot', '/tmp', '/cargo-home']
         .map(name => mount(name, lookup(root, name)))],
       stdout: out.write, stderr: err.write,
@@ -135,6 +132,48 @@ async function runCompiler(wasmModule, root, request) {
     code = 1;
   }
   return { code, stdout: Array.from(out.take()), stderr: Array.from(err.take()) };
+}
+
+function rustcOption(args, name) {
+  const index = args.indexOf(name);
+  const prefix = name + '=';
+  return index === -1
+    ? args.find(arg => arg.startsWith(prefix))?.slice(prefix.length)
+    : args[index + 1];
+}
+
+async function runCompiler(compiler, root, request, loadHostLibraries) {
+  const versionProbe = request.args.length === 1 && request.args[0] === '-vV';
+  const args = [RUSTC, ...request.args];
+  if (!versionProbe) {
+    args.push('--sysroot', '/sysroot', '-Zthreads=1', '-Ccodegen-units=1');
+    const target = rustcOption(request.args, '--target');
+    if ((!target || target === HOST) && rustcOption(request.args, '--emit')) {
+      await loadHostLibraries();
+      args.push('-Clinker=wasm-ld', '-Clinker-flavor=wasm-ld');
+      if (rustcOption(request.args, '--crate-type') === 'bin') {
+        args.push('-Clink-arg=--wrap=__main_void',
+          `-Clink-arg=/sysroot/lib/rustlib/${HOST}/lib/self-contained/cargo-build-start.o`);
+      }
+    }
+  }
+  return runProcess(compiler, root, request, args, versionProbe);
+}
+
+async function runBuildScript(root, request) {
+  const path = request.program;
+  const name = path.slice(BUILD.length + 1);
+  // Cargo's build-script aliases can omit the .wasm suffix. Resolve either
+  // spelling only inside the compiler's temporary build tree.
+  if (!path.startsWith(BUILD + '/') || !/^[^/]+\/build\/[^/]+\/build[-_]script[-_][^/]+$/.test(name)) {
+    return failure(`Cargo subprocess ${path} is unavailable in this browser build.`, 127);
+  }
+  const binary = (lookup(root, path) ?? lookup(root, path + '.wasm'))?.data;
+  if (!binary?.length || binary.length > 16 * 1024 * 1024) {
+    return failure(`Cargo build script executable is missing or exceeds 16 MB: ${path}`, 126);
+  }
+  const module = await WebAssembly.compile(binary);
+  return runProcess(module, root, request, [path, ...request.args]);
 }
 
 function packageTarget(metadata, manifest, source) {
@@ -171,6 +210,10 @@ export async function compileCargo(directory, manifest, source, output) {
   writeFile(root, CARGO, [], true);
   writeFile(root, RUSTC, [], true);
   const path = `${PROJECT}/${manifest}`;
+  let hostLibraries;
+  const loadHostLibraries = () => hostLibraries ??= loadArchive('rust-host-sysroot.tar.gz').then(archive => {
+    for (const [name, bytes] of archive) writeFile(compiler.sysroot.dir, '/' + name, bytes, true);
+  });
 
   const cargo = async args => {
     const stdout = capture(2 * MAX_TOOL_BYTES);
@@ -179,7 +222,10 @@ export async function compileCargo(directory, manifest, source, output) {
       directories: [mount('.', directory), mount('/', root)], stdout: stdout.write,
       stderr: bytes => output.write(bytes),
       spawn: async request => {
-        try { return await runCompiler(compiler.wasmModule, root, request); }
+        try {
+          if (request.program === RUSTC) return await runCompiler(compiler.wasmModule, root, request, loadHostLibraries);
+          return await runBuildScript(root, request);
+        }
         catch (error) { return failure(error.message); }
       },
     });

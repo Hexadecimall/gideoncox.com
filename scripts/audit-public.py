@@ -25,10 +25,12 @@ ZIG_PATH_EXAMPLES = {
     'lib/std/zig/WindowsSdk.zig': 'e3d9e2d5c44f47df7e994ecdd6819a109cd6db2b4475fd587afd1ffc81dd4539',
 }
 RUSTC_BROWSER_SHA = 'b699239bd312046d1b33a0f6e20700cac18c8f45f0414bae2e6915fc7488ebdb'
-# The pinned libstd embeds path examples from its public documentation.
+# These pinned libstd builds embed the same path examples from their documentation.
 RUST_PATH_EXAMPLES = {
     'lib/rustlib/wasm32-wasip1/lib/libstd-915de2a49f0ab168.rlib':
         '11d1e7e7961ee8b9806e73d56939176ae3263bdf16d98c745fcdb54e8147d03c',
+    'lib/rustlib/wasm32-wasip1-threads/lib/libstd-9d7bbafe636fd70f.rlib':
+        '42467bbe01dc25ae49a8b8d9f367e122f22b5b1a3b28cf25b400dd674210ec48',
 }
 PATTERNS = {
     'native Windows path': re.compile(r'(?<!\w)[A-Za-z]:[\\/]+[\w][\w. -]{2,}[\\/]+[\w.-]'),
@@ -83,6 +85,7 @@ def audit(root):
                 examples = {
                     'editor/runtime/compiler/zig-sdk.tar.gz': ZIG_PATH_EXAMPLES,
                     'editor/runtime/compiler/rust-sysroot.tar.gz': RUST_PATH_EXAMPLES,
+                    'editor/runtime/compiler/rust-host-sysroot.tar.gz': RUST_PATH_EXAMPLES,
                 }.get(relative.as_posix(), {})
                 with tarfile.open(path) as archive:
                     for member in archive:

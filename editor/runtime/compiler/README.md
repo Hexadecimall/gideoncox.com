@@ -42,10 +42,15 @@ compiler and standard library to build WASI executables.
 
 The Rust browser task uses Cargo when the active file belongs to a package
 with a `Cargo.toml`. It runs offline with workspace packages and local
-`path` dependencies. Open the entry file to choose among multiple binaries.
+`path` dependencies. Rust build scripts run in the crate directory with
+writable `OUT_DIR` and receive Cargo's environment. Script-generated files
+and directives are available to the crate. The WASI host libraries download
+on demand for build scripts and their build dependencies. Open the entry
+file to choose among multiple binaries.
 Standalone Rust files use rustc 1.83 and the matching WASI standard library.
-Registry and Git dependencies, build scripts, procedural macros, and Clippy
-are pending. The editor uses [rustfmt](../rust/README.md) for formatting.
+Registry and Git dependencies, procedural macros, Clippy, and build scripts
+that launch external tools are pending. The editor uses
+[rustfmt](../rust/README.md) for formatting.
 
 Builds run in a browser worker with a temporary project snapshot. The active
 buffer's unsaved text is included. Save changes in other buffers before a run.
@@ -68,6 +73,7 @@ browser build. Extract its archive into `ZIG_ARTIFACTS/sdk` before packaging.
 ```sh
 packaging/zed/build-browser-llvm.sh LLVM_SOURCE WASI_SDK NATIVE_LLVM_BIN LLVM_BUILD
 python3 packaging/zed/pack-browser-compilers.py LLVM_BUILD WASI_SDK ZIG_ARTIFACTS editor/runtime/compiler
-python3 packaging/zed/pack-browser-rustc.py rustc_opt.wasm.tar.gz wasm32-wasip1.tar.gz editor/runtime/compiler
+python3 packaging/zed/pack-browser-rustc.py rustc_opt.wasm.tar.gz wasm32-wasip1.tar.gz editor/runtime/compiler \
+  --host-libraries wasm32-wasip1-threads.tar.gz --wasi-sdk WASI_SDK
 sh packaging/zed/build-browser-cargo.sh WASI_SDK SCRATCH editor/runtime/compiler
 ```
