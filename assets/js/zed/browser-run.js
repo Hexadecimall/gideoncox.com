@@ -4,8 +4,8 @@ import { joinBytes } from './lsp-stream.js';
 
 const PROGRAMS = new Map([
   ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=2', targets: ['python'] }],
-  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=1', targets: ['wasi', 'linux-x86_64'] }],
-  ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=1', targets: ['wasi'] }],
+  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=2', targets: ['wasi', 'linux-x86_64'] }],
+  ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=2', targets: ['wasi'] }],
 ]);
 const SESSION_PREFIX = 'browser-run:';
 const MAX_FILE = 2 * 1024 * 1024;
@@ -24,7 +24,7 @@ async function readProject(zed, root, script, source, running) {
 
 /** Binary terminal transport backed by a sandboxed WASI worker. */
 class BrowserTaskProcess {
-  constructor(worker, label, onArtifact) {
+  constructor(worker, label, target, onArtifact) {
     this.worker = worker;
     this.stdin = createStdin();
     this.decoder = new TextDecoder();
@@ -38,7 +38,11 @@ class BrowserTaskProcess {
         try { onArtifact(data.artifact); }
         catch (error) { this.fail(error.message); }
       }
-      else if (typeof data.code === 'number') this.finish(data.code);
+      else if (typeof data.code === 'number') {
+        // Zed includes the numeric status in its task summary only on failure.
+        if (target === 'wasi' && data.code === 0) this.append(encoder.encode('\r\nExit code: 0\r\n'));
+        this.finish(data.code);
+      }
       else if (typeof data.error === 'string') this.fail(data.error);
     });
     worker.addEventListener('error', event => {
@@ -136,7 +140,7 @@ export class BrowserRunBridge {
       throw new Error('Finish the running browser build or close a browser task terminal first.');
     }
     const id = SESSION_PREFIX + crypto.randomUUID();
-    const process = new BrowserTaskProcess(this.makeWorker(program.worker), program.label, data => {
+    const process = new BrowserTaskProcess(this.makeWorker(program.worker), program.label, target, data => {
       if (target !== 'linux-x86_64') throw new Error('Unexpected browser build artifact.');
       const stem = script.split('/').pop().replace(/\.[^.]+$/, '').replace(/[^\w.-]/g, '_');
       const link = document.createElement('a');

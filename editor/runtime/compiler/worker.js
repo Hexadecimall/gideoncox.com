@@ -1,4 +1,5 @@
-import { WASI, ConsoleStdout, File, OpenFile, PreopenDirectory, wasi as errno } from '../rust/wasi/index.js';
+import { ConsoleStdout, File, OpenFile, PreopenDirectory, wasi as errno } from '../rust/wasi/index.js';
+import WASI from '../rust/wasi/wasi.js?v=utf8-argv-1';
 import { TerminalOutput, TerminalStdin, writeFile } from '../terminal-wasi.js';
 import { loadArchive, loadModule } from './assets.js';
 
@@ -44,33 +45,53 @@ function projectDirectory(cwd, files) {
   return project;
 }
 
-function buildSettings({ cwd, script, files }) {
-  const configured = files.find(([path]) => path === `${cwd}/.zed/browser-build.json`);
-  if (!configured) {
-    return {
-      sources: [script, ...files.map(([path]) => path).filter(path => path !== script && SOURCE.test(path)
-        && !relative(cwd, path).split('/').some(part => SKIP_SOURCES.has(part)))],
-      includes: [cwd, `${cwd}/include`],
-    };
+function readSettings({ cwd, files }) {
+  const path = '.zed/browser-build.json';
+  const file = files.find(([name]) => name === `${cwd}/${path}`);
+  if (!file) return {};
+  let settings;
+  try {
+    settings = JSON.parse(decoder.decode(file[1]));
+  } catch {
+    throw new Error(`${path} must contain valid JSON.`);
   }
-  const settings = JSON.parse(decoder.decode(configured[1]));
+  if (!settings || typeof settings !== 'object' || Array.isArray(settings)) {
+    throw new Error(`${path} must contain a JSON object.`);
+  }
+  if (settings.args !== undefined && (!Array.isArray(settings.args)
+    || settings.args.some(arg => typeof arg !== 'string' || arg.includes('\0')))) {
+    throw new Error(`"args" in ${path} must be an array of strings without NUL characters.`);
+  }
+  return settings;
+}
+
+function clangSettings({ cwd, script, files }, settings) {
+  for (const name of ['sources', 'includeDirectories']) {
+    if (settings[name] !== undefined && !Array.isArray(settings[name])) {
+      throw new Error(`"${name}" in .zed/browser-build.json must be an array of paths.`);
+    }
+  }
   const absolute = path => {
-    if (typeof path !== 'string' || path.split('/').some(part => !part || part === '.' || part === '..')) {
+    if (typeof path !== 'string' || path.includes('\0')
+      || path.split('/').some(part => !part || part === '.' || part === '..')) {
       throw new Error('Use project-relative paths in .zed/browser-build.json.');
     }
     return `${cwd}/${path}`;
   };
-  const sources = settings.sources?.map(absolute);
+  const sources = settings.sources?.map(absolute) ?? [
+    script, ...files.map(([path]) => path).filter(path => path !== script && SOURCE.test(path)
+      && !relative(cwd, path).split('/').some(part => SKIP_SOURCES.has(part))),
+  ];
   const includes = settings.includeDirectories?.map(absolute) ?? [];
-  if (!sources?.length || sources.some(path => !SOURCE.test(path) || !files.some(([file]) => file === path))) {
+  if (!sources.length || sources.some(path => !SOURCE.test(path) || !files.some(([file]) => file === path))) {
     throw new Error('The sources in .zed/browser-build.json must name existing C or C++ files.');
   }
   return { sources: [...new Set(sources)], includes: [cwd, ...new Set(includes), `${cwd}/include`] };
 }
 
-async function clangBuild(job, output) {
+async function clangBuild(job, settings, output) {
   const isNative = job.target === 'linux-x86_64';
-  const { sources, includes } = buildSettings(job);
+  const { sources, includes } = clangSettings(job, settings);
   const [clang, linker, sdk] = await Promise.all([
     loadModule('clang.wasm.gz'), loadModule('lld.wasm.gz'),
     isNative ? null : loadArchive('wasi-sdk.tar.gz'),
@@ -128,11 +149,11 @@ async function clangBuild(job, output) {
     return 0;
   }
   print(output, 'Running WebAssembly');
-  return runTool(await WebAssembly.compile(data), [relative(job.cwd, job.script)],
+  return runTool(await WebAssembly.compile(data), [relative(job.cwd, job.script), ...(settings.args ?? [])],
     [projectDirectory(job.cwd, job.files)], output, job.stdin);
 }
 
-async function zigBuild(job, output) {
+async function zigBuild(job, settings, output) {
   const [compiler, sdk] = await Promise.all([loadModule('zig.wasm.gz'), loadArchive('zig-sdk.tar.gz')]);
   const project = projectDirectory(job.cwd, job.files);
   const lib = new PreopenDirectory('/lib', new Map());
@@ -149,13 +170,15 @@ async function zigBuild(job, output) {
   const data = project.dir.contents.get('.zed-output.wasm')?.data;
   if (!data?.length) throw new Error('Zig produced no executable.');
   print(output, 'Running WebAssembly');
-  return runTool(await WebAssembly.compile(data), [source], [project], output, job.stdin);
+  return runTool(await WebAssembly.compile(data), [source, ...(settings.args ?? [])], [project], output, job.stdin);
 }
 
 self.addEventListener('message', async ({ data: job }) => {
   const output = new TerminalOutput();
   try {
-    const code = job.command === 'browser-zig' ? await zigBuild(job, output) : await clangBuild(job, output);
+    const settings = readSettings(job);
+    const code = job.command === 'browser-zig'
+      ? await zigBuild(job, settings, output) : await clangBuild(job, settings, output);
     output.flush();
     postMessage({ code });
   } catch (error) {

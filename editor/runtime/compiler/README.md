@@ -14,9 +14,15 @@ or additional header directories, put an explicit source list in
 ```json
 {
   "sources": ["src/main.cpp", "src/math.cpp"],
-  "includeDirectories": ["src/headers"]
+  "includeDirectories": ["src/headers"],
+  "args": ["convert", "--name", "two words"]
 }
 ```
+
+`args` supplies command-line arguments to the WASI program, one string per
+argument. C, C++, and Zig support this field. A file with only `args` keeps the
+default build inputs. Program output and its numeric exit code appear in the
+task terminal, including exit code 0.
 
 **Cross-Compile → Linux x86-64 (Freestanding)** downloads a statically linked
 ELF executable. It supports `int main(void)` or a project-provided `_start`.

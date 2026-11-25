@@ -44,11 +44,21 @@ test('the shipped browser toolchains compile, link, report diagnostics, and run'
   assert.match(c.output, /C: 42/);
 
   const cpp = await run({ script: 'main.cpp', files: {
-    'main.cpp': '#include <iostream>\n#include <vector>\nint twice(int);\nint main() { std::vector<int> v{21}; std::cout << twice(v.at(0)) << "\\n"; }',
+    '.zed/browser-build.json': JSON.stringify({ args: ['--mode', 'two words', '', '雪'] }),
+    'main.cpp': `#include <iostream>
+#include <vector>
+int twice(int);
+int main(int argc, char **argv) {
+    std::vector<int> v{21};
+    std::cout << twice(v.at(0)) << "\\n";
+    for (int i = 0; i < argc; ++i) std::cout << '[' << argv[i] << "]\\n";
+    return 23;
+}`,
     'math_test.cpp': 'int twice(int value) { return value * 2; }',
   } });
-  assert.equal(cpp.code, 0, cpp.output);
+  assert.equal(cpp.code, 23, cpp.output);
   assert.match(cpp.output, /\r\n42\r\n/);
+  assert.match(cpp.output, /\[main\.cpp\]\r\n\[--mode\]\r\n\[two words\]\r\n\[\]\r\n\[雪\]\r\n/);
 
   const broken = await run({ script: 'broken.c', files: {
     'broken.c': 'int main(void) { return missing_name; }',
@@ -57,7 +67,12 @@ test('the shipped browser toolchains compile, link, report diagnostics, and run'
   assert.match(broken.output, /broken\.c:1:25: error: use of undeclared identifier 'missing_name'/);
 
   const zig = await run({ command: 'browser-zig', script: 'main.zig', files: {
-    'main.zig': 'const std = @import("std");\npub fn main(init: std.process.Init) !void { try std.Io.File.stdout().writeStreamingAll(init.io, "Zig 42\\n"); }',
+    '.zed/browser-build.json': JSON.stringify({ args: ['Zig 42\n'] }),
+    'main.zig': `const std = @import("std");
+pub fn main(init: std.process.Init) !void {
+    const args = try init.minimal.args.toSlice(init.arena.allocator());
+    try std.Io.File.stdout().writeStreamingAll(init.io, args[1]);
+}`,
   } });
   assert.equal(zig.code, 0, zig.output);
   assert.match(zig.output, /Zig 42/);
@@ -73,4 +88,11 @@ test('the shipped browser toolchains compile, link, report diagnostics, and run'
   assert.equal(elf.getUint16(16, true), 2); // ET_EXEC
   assert.equal(elf.getUint16(18, true), 62); // EM_X86_64
   assert.notEqual(elf.getBigUint64(24, true), 0n);
+});
+
+test('browser builds reject non-string arguments before starting the toolchain', async () => {
+  await assert.rejects(run({ script: 'invalid-args.c', files: {
+    'invalid-args.c': 'int main(void) { return 0; }',
+    '.zed/browser-build.json': '{"args":["--count",3]}',
+  } }), /"args".*must be an array of strings/);
 });
