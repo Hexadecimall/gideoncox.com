@@ -210,7 +210,7 @@
 }
 
 .menu-children > a { min-height: 44px; display: flex; align-items: center; }
-@media (max-width: 600px) {
+@media (max-width: 600px), (pointer: coarse) {
   .menu-toggle { min-width: 44px; min-height: 44px; justify-content: center; }
   .site-menu { padding-bottom: env(safe-area-inset-bottom); overscroll-behavior: contain; }
 }

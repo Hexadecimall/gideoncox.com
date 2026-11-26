@@ -2,8 +2,24 @@ import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=3';
 
 const loading = document.querySelector('#loading');
-const build = 'ae5d64013500';
+const build = '4e2d464939a4';
 const gzip = true;
+
+function fitVisualViewport() {
+  const viewport = window.visualViewport;
+  if (window.top !== window || !viewport) return;
+
+  function resize() {
+    if (viewport.scale === 1 && viewport.height > 0) {
+      document.documentElement.style.setProperty('--editor-height', `${Math.round(viewport.height)}px`);
+      document.documentElement.style.setProperty('--editor-top', `${Math.round(viewport.offsetTop)}px`);
+    }
+  }
+
+  viewport.addEventListener('resize', resize);
+  viewport.addEventListener('scroll', resize);
+  resize();
+}
 
 async function downloadWasm() {
   const download = await editorWasmResponse(build, { gzip });
@@ -43,6 +59,7 @@ async function prepareRuntime(notifyDatabase) {
 
 async function start() {
   if (await prepareEditorIsolation().catch(() => false)) return;
+  fitVisualViewport();
   let databaseNotice;
   let readyZed;
   const notifyDatabase = message => {
