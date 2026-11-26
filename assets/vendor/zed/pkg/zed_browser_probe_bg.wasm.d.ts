@@ -63,7 +63,7 @@ export const __wasm_bindgen_func_elem_54493_2: (a: number, b: number, c: number)
 export const __wasm_bindgen_func_elem_54493_3: (a: number, b: number, c: number) => void;
 export const __wasm_bindgen_func_elem_54493_4: (a: number, b: number, c: number) => void;
 export const __wasm_bindgen_func_elem_54493_5: (a: number, b: number, c: number) => void;
-export const __wasm_bindgen_func_elem_124245: (a: number, b: number, c: number) => void;
+export const __wasm_bindgen_func_elem_124254: (a: number, b: number, c: number) => void;
 export const __wasm_bindgen_func_elem_52416: (a: number, b: number) => void;
 export const __wbindgen_export: (a: number, b: number) => number;
 export const __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
