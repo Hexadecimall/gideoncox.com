@@ -13,6 +13,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Device folders | Chromium folder picker and direct file reads and writes through the selected handle. Zed remembers the most recent folder and checks its permission on reopen. External changes reach the worktree through the browser observer or bounded metadata polling. | Folder-handle and reload checks, plus browser verification of external edits, new files, Git refresh, and unsaved-buffer protection through the polling path |
 | Settings and trust | Upstream Settings editor with search, user and project scopes, editable `settings.json`, keymap editing, bundled defaults and remembered project trust | Browser Settings and reload checks |
 | Startup cache | Versioned WebAssembly download in Cache Storage, with a network fallback | Cache tests and Chromium reload checks |
+| Extensions | Upstream Extensions tab, catalog, search, filters, version picker, and theme selector. Theme packages use browser storage and can be installed or removed from the gallery. | Chromium catalog search, theme install and selection, reload, and removal |
 | Vim | Upstream modes, keymap and status, enabled by `vim_mode` in Zed settings | WASM build and module validation |
 | Syntax | All 22 bundled upstream syntax configurations, Tree-sitter grammars and queries | WASM build and module validation |
 | Terminal | Upstream TerminalPanel, terminal_view and Alacritty grid. Browser Ark uses Zed's saved project filesystem, and `edit` opens files in Zed. Authenticated native Ark PTYs remain available. | Browser Ark IPC and connector PTY tests |
@@ -45,7 +46,7 @@ menu. The pending controls display a Zed notification when activated.
 
 - File history across complex merges, branch changes, staging individual diff hunks, remote fetch, pull and push, GitHub authentication and hosted actions, and Git writes in folders opened from disk.
 - Native debugger sessions and debugger UI.
-- Extension installation, execution, grammars, themes and extension-provided language servers.
+- Icon themes, snippets, developer extensions, extension execution, grammars, and extension-provided language servers.
 - Browser LSP runners for languages beyond C/C++, Python and Rust.
 - Rust browser tooling for Git and private registry dependencies, build scripts that launch external tools, and procedural macros. Additional native targets and build-system integration for browser C, C++, and Zig projects.
 - Collaboration, authentication, hosted services, and full Agent tool support. Browser LMA supports read-only project tools.
