@@ -1,6 +1,5 @@
 import { QwenToolStream, qwenToolPrompt } from './qwen-tools.js?v=3';
 
-const MAX_MODEL_BYTES = 512 * 1024 * 1024;
 const MODEL_CONTEXT_TOKENS = 8192;
 const OUTPUT_BYTES = 4096;
 const MODEL_PATH = '/model';
@@ -13,8 +12,8 @@ let modelKind;
 let request;
 
 async function loadModel(file, kind) {
-  if (!(file instanceof Blob) || file.size < 24 || file.size > MAX_MODEL_BYTES) {
-    throw new Error('Choose a GGUF model up to 512 MB.');
+  if (!(file instanceof Blob) || file.size < 24) {
+    throw new Error('Choose a valid GGUF model.');
   }
   const magic = new TextDecoder().decode(await file.slice(0, 4).arrayBuffer());
   if (magic !== 'GGUF') throw new Error('This file is not a GGUF model.');
@@ -34,7 +33,9 @@ async function loadModel(file, kind) {
     const result = runtime.ccall('lma_load', 'number', ['string', 'number', 'boolean'], [
       `${MODEL_PATH}/weights.gguf`, MODEL_CONTEXT_TOKENS, kind === 'agent',
     ]);
-    if (result !== 0) throw new Error('LMA could not load this GGUF model.');
+    if (result !== 0) {
+      throw new Error('LMA could not load this GGUF model. Check model compatibility and available browser memory.');
+    }
     loaded = true;
   } finally {
     runtime.FS.unmount(MODEL_PATH);

@@ -19,7 +19,7 @@ async function prepareDatabase(notify) {
 
 async function prepareLma(zed) {
   try {
-    const { BrowserLma } = await import('/editor/runtime/lma/client.js?v=library-1');
+    const { BrowserLma } = await import('/editor/runtime/lma/client.js?v=model-size-2');
     if (typeof zed.lma_worker_event === 'function') {
       globalThis.zedLma = new BrowserLma(zed.lma_worker_event);
     }

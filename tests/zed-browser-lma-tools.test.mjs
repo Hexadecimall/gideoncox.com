@@ -199,20 +199,62 @@ test('Hub search, revision-pinned install, listing, and removal use the browser 
       return Response.json({ sha: revision, siblings: [
         { rfilename: 'Tiny.gguf', size: gguf.length },
         { rfilename: 'mmproj-Tiny.gguf', size: gguf.length },
-        { rfilename: 'Too-Large.gguf', size: 600_000_000 },
+        { rfilename: 'Large.gguf', size: 600_000_000 },
+        { rfilename: 'Split-00001-of-00002.gguf', size: 600_000_000 },
+        { rfilename: 'Unknown-size.gguf' },
       ] });
     }
     assert.equal(url.pathname, `/${repository}/resolve/${revision}/Tiny.gguf`);
     return new Response(gguf);
   });
   assert.deepEqual(await searchModels('tiny'), [repository]);
-  const [model, extra] = await modelFiles(repository);
+  const [model, large, extra] = await modelFiles(repository);
   assert.equal(extra, undefined);
   assert.equal(model.name, 'Tiny.gguf');
+  assert.equal(large.name, 'Large.gguf');
+  assert.equal(large.bytes, 600_000_000);
   await installModel(model);
   assert.deepEqual((await installedModels()).map(({ id }) => id), [model.id]);
   await deleteModel(model.id);
   assert.deepEqual(await installedModels(), []);
+});
+
+test('installing a large GGUF streams verified bytes into browser storage', async t => {
+  const repository = 'example/Large-GGUF';
+  const revision = '2'.repeat(40);
+  const filename = 'Large.gguf';
+  const id = `https://huggingface.co/${repository}/resolve/${revision}/${filename}`;
+  const chunk = new Uint8Array(1024 * 1024);
+  chunk.set(new TextEncoder().encode('GGUF'));
+  const blocks = 513;
+  const bytes = blocks * chunk.length;
+  let sent = 0;
+  let saved = 0;
+  let installed;
+  const cache = {
+    async match() { return installed; },
+    async put(url, response) {
+      assert.equal(url, id);
+      for await (const part of response.body) saved += part.byteLength;
+      installed = new Response(null, { headers: response.headers });
+    },
+  };
+  Object.defineProperty(globalThis, 'caches', { configurable: true, value: { open: async () => cache } });
+  t.after(() => delete globalThis.caches);
+  t.mock.method(globalThis, 'fetch', async url => {
+    assert.equal(url, id);
+    return new Response(new ReadableStream({
+      pull(controller) {
+        if (sent === blocks) controller.close();
+        else {
+          controller.enqueue(chunk);
+          sent++;
+        }
+      },
+    }));
+  });
+  await installModel({ id, repository, revision, filename, bytes });
+  assert.equal(saved, bytes);
 });
 
 test('desktop LMA only connects to loopback and streams the selected model', async t => {

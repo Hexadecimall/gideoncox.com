@@ -1,6 +1,6 @@
 import {
   deleteModel, hasCachedModel, installedModels, installModel, modelFiles, recommendedModel, searchModels,
-} from './model-cache.js?v=library-1';
+} from './model-cache.js?v=model-size-2';
 import { DesktopLma } from './desktop.js?v=library-1';
 
 const MAX_QUEUED = 8;

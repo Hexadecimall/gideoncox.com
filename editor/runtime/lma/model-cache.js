@@ -15,7 +15,6 @@ const models = {
 
 const CACHE_NAME = 'zed-lma-models';
 const HUB = 'https://huggingface.co';
-const MAX_MODEL_BYTES = 512 * 1024 * 1024;
 const REPOSITORY = /^[\w.-]+\/[\w.-]+$/;
 const METADATA_HEADER = 'X-Zed-Lma-Model';
 
@@ -79,7 +78,7 @@ export async function modelFiles(repository) {
     .filter(file => typeof file.rfilename === 'string' && file.rfilename.length <= 256 &&
       /\.gguf$/i.test(file.rfilename) && !/(?:mmproj|projector|\d{5}-of-\d{5})/i.test(file.rfilename) &&
       file.rfilename.split('/').every(part => part && part !== '.' && part !== '..') &&
-      Number.isSafeInteger(file.size) && file.size >= 24 && file.size <= MAX_MODEL_BYTES)
+      Number.isSafeInteger(file.size) && file.size >= 24)
     .map(file => ({ repository, revision: result.sha, filename: file.rfilename, bytes: file.size }))
     .map(model => {
       const preset = Object.keys(models).find(id => modelUrl(models[id]) === modelUrl(model));
@@ -159,7 +158,7 @@ async function cacheModel(id, model, download) {
 
 export async function installModel(candidate) {
   if (!candidate || !REPOSITORY.test(candidate.repository) ||
-    !Number.isSafeInteger(candidate.bytes) || candidate.bytes < 24 || candidate.bytes > MAX_MODEL_BYTES) {
+    !Number.isSafeInteger(candidate.bytes) || candidate.bytes < 24) {
     throw new Error('Select a supported GGUF file.');
   }
   if (cacheKey(candidate.id) !== modelUrl(candidate)) throw new Error('The model file has changed.');
