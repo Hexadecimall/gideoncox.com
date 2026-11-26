@@ -1,16 +1,16 @@
 # Browser LMA in Zed
 
-Open **Settings → AI → LLM Providers**, click **Configure**, and find LMA. Choose **Download or Load Qwen3 for Agent**, then select the model in the Agent Panel. If AI is disabled, enable it in Settings.
+Open **Settings → AI → LLM Providers**, click **Configure**, and find LMA. If AI is disabled, enable it in Settings.
 
 Use **Find Models** to search Hugging Face or enter an exact `owner/repository`. Select a repository, then install a GGUF file. **Installed Models** lists browser downloads with their sizes and lets you activate or remove them. The browser can install single-file GGUFs up to 512 MB. Compatibility depends on the model architecture. **Generation Settings** saves the output limit and temperature in `language_models.lma` in `settings.json`.
 
 ## Browser models
 
-The 397 MB Qwen3 model has an 8,192-token context. Its available project tools are file reads, directory listings, text search, and path search. Zed’s Agent profile, workspace trust, and permissions apply. Project data and inference stay in the browser.
+For Agent chat with project tools, search for `unsloth/Qwen3-0.6B-GGUF`, install `Qwen3-0.6B-Q4_K_M.gguf`, then click **Use** under **Installed Models** and select the model in the Agent Panel. This 397 MB model has an 8,192-token context and supports file reads, directory listings, text search, and path search. Zed’s Agent profile, workspace trust, and permissions apply. Project data and inference stay in the browser.
 
-For inline predictions, choose **Download or Load Qwen2.5-Coder**, then **Use for Edit Prediction**. This 398 MB base model is configured through Zed’s existing Edit Prediction settings. **Choose GGUF Model…** loads a compatible local file up to 512 MB for Agent chat.
+For inline predictions, search for `lmstudio-community/Qwen2.5-Coder-0.5B-GGUF` and install `Qwen2.5-Coder-0.5B-Q4_K_M.gguf`. Click **Use** under **Installed Models**, then **Use for Edit Prediction**. This 398 MB base model is configured through Zed’s existing Edit Prediction settings. **Choose GGUF Model…** loads a compatible local file up to 512 MB for Agent chat.
 
-LMA keeps one model in memory at a time. Preset models stay in browser storage and reload on demand after a refresh or two minutes of inactivity. Selecting a GGUF from disk applies to the current session.
+LMA keeps one model in memory at a time. Installed models stay in browser storage and reload on demand after a refresh or two minutes of inactivity. Selecting a GGUF from disk applies to the current session.
 
 The Edit Prediction button writes these fields to `settings.json`.
 
