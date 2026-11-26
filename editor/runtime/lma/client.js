@@ -1,6 +1,6 @@
 import {
   deleteModel, hasCachedModel, installedModels, installModel, modelFiles, recommendedModel, searchModels,
-} from './model-cache.js?v=model-download-3';
+} from './model-cache.js?v=model-download-4';
 import { DesktopLma } from './desktop.js?v=library-1';
 import { downloadWarning, memoryWarning } from './resource-warning.js?v=1';
 

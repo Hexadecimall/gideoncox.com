@@ -1,3 +1,5 @@
+import { readModelBody, removeModelBody, saveModelBody } from './model-storage.js?v=1';
+
 const models = {
   coder: {
     repository: 'lmstudio-community/Qwen2.5-Coder-0.5B-GGUF',
@@ -142,10 +144,10 @@ export async function deleteModel(id) {
   await withModelLock(url, async () => {
     const manifest = await (await cache.match(url + SHARD_MANIFEST))?.json();
     if (manifest) {
+      for (const part of manifest.parts) await removeModelBody(cache, modelUrl({ ...manifest, ...part }));
       await cache.delete(url + SHARD_MANIFEST);
-      for (const part of manifest.parts) await cache.delete(modelUrl({ ...manifest, ...part }));
     } else {
-      await cache.delete(url);
+      await removeModelBody(cache, url);
     }
   });
 }
@@ -177,18 +179,18 @@ async function downloadModel(cache, url, model, metadata) {
   const remote = await fetch(url, {
     credentials: 'omit',
     referrerPolicy: 'no-referrer',
+    cache: 'no-store',
   });
   if (!remote.ok || !remote.body) {
     throw new Error(`The model download failed (${remote.status}).`);
   }
+  const body = checkedDownload(remote.body, model);
   try {
-    await cache.put(url, new Response(checkedDownload(remote.body, model), {
-      headers: {
-        'Content-Type': 'application/octet-stream',
-        ...(metadata && { [METADATA_HEADER]: encodeURIComponent(JSON.stringify(metadata)) }),
-      },
-    }));
+    const headers = new Headers({ 'Content-Type': 'application/octet-stream' });
+    if (metadata) headers.set(METADATA_HEADER, encodeURIComponent(JSON.stringify(metadata)));
+    await saveModelBody(cache, url, body, headers);
   } catch (error) {
+    body.cancel().catch(() => {});
     if (error.name === 'QuotaExceededError') {
       const size = Math.ceil(model.bytes / 1_000_000);
       throw new Error(`Browser storage needs ${size} MB to save this file. You can also choose a downloaded GGUF.`);
@@ -200,11 +202,12 @@ async function downloadModel(cache, url, model, metadata) {
 async function cacheModel(id, model, download) {
   const cache = await caches.open(CACHE_NAME);
   const url = cacheKey(id);
-  let response = await cache.match(url);
-  if (!response && download && model) {
+  const response = await (download && model ? withModelLock(url, async () => {
+    const cached = await cache.match(url);
+    if (cached) return cached;
     await downloadModel(cache, url, model, entry(id, model));
-    response = await cache.match(url);
-  }
+    return cache.match(url);
+  }) : cache.match(url));
   if (!response && (!download || !model)) throw new Error('This model is no longer installed. Install it again in Settings.');
   if (!response) throw new Error('The downloaded model could not be read from browser storage.');
   return response;
@@ -239,7 +242,7 @@ export async function installModel(candidate) {
         }
         await cache.put(url + SHARD_MANIFEST, Response.json(candidate));
       } catch (error) {
-        await Promise.allSettled(written.map(key => cache.delete(key)));
+        await Promise.allSettled(written.map(key => removeModelBody(cache, key)));
         throw error;
       }
     });
@@ -257,7 +260,7 @@ export async function recommendedModel(id = 'coder', { download = true } = {}) {
     for (const part of manifest.parts) {
       const response = await cache.match(modelUrl({ ...manifest, ...part }));
       if (!response) throw new Error('A GGUF part is missing. Install the model again in Settings.');
-      files.push(new File([await response.blob()], part.filename.split('/').at(-1)));
+      files.push(new File([await readModelBody(response)], part.filename.split('/').at(-1)));
     }
     return files;
   }
@@ -265,5 +268,5 @@ export async function recommendedModel(id = 'coder', { download = true } = {}) {
   const model = Object.hasOwn(models, id) ? models[id] : undefined;
   const response = await cacheModel(id, model, download);
   const filename = model?.filename ?? decodeURIComponent(new URL(id).pathname.split('/').at(-1));
-  return new File([await response.blob()], filename, { type: 'application/octet-stream' });
+  return new File([await readModelBody(response)], filename, { type: 'application/octet-stream' });
 }

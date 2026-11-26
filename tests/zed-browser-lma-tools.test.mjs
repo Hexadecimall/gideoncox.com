@@ -258,6 +258,88 @@ test('installing a large GGUF streams verified bytes into browser storage', asyn
   assert.equal(saved, bytes);
 });
 
+test('large GGUFs warn and stream into file storage without buffering a Cache API body', async t => {
+  const repository = 'example/Large-GGUF';
+  const revision = '4'.repeat(40);
+  const filename = 'Large.gguf';
+  const id = `https://huggingface.co/${repository}/resolve/${revision}/${filename}`;
+  const chunk = new Uint8Array(4 * 1024 * 1024);
+  chunk.set(new TextEncoder().encode('GGUF'));
+  const blocks = 1025;
+  const candidate = { id, repository, revision, filename, bytes: blocks * chunk.length };
+  const entries = new Map();
+  const files = new Map();
+  const events = [];
+  let sent = 0;
+  let length = 0;
+  let saved = 0;
+  const directory = {
+    async getFileHandle(name) {
+      return {
+        async createWritable() {
+          return new WritableStream({
+            write(part) { length += part.byteLength; },
+            close() { saved = length; files.set(name, new File(['GGUF'], name)); },
+          });
+        },
+        async getFile() { return files.get(name); },
+      };
+    },
+    async removeEntry(name) { files.delete(name); },
+  };
+  const cache = {
+    async put(url, response) {
+      assert.equal(response.body, null, 'Only metadata goes in Cache Storage');
+      entries.set(url, response);
+    },
+    async match(url) { return entries.get(url.url ?? url)?.clone(); },
+    async keys() { return [...entries.keys()].map(url => new Request(url)); },
+    async delete(url) { return entries.delete(url); },
+  };
+  const navigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
+    storage: {
+      async getDirectory() { return { async getDirectoryHandle() { return directory; } }; },
+      async estimate() { return { usage: 100, quota: 101 }; },
+    },
+  } });
+  Object.defineProperty(globalThis, 'caches', { configurable: true, value: { open: async () => cache } });
+  t.after(() => {
+    if (navigator) Object.defineProperty(globalThis, 'navigator', navigator);
+    else delete globalThis.navigator;
+    delete globalThis.caches;
+  });
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(url, id);
+    assert.equal(options.signal, undefined);
+    assert.equal(options.cache, 'no-store');
+    events.push('download');
+    return new Response(new ReadableStream({
+      pull(controller) {
+        if (sent++ === blocks) controller.close();
+        else controller.enqueue(chunk);
+      },
+    }));
+  });
+  const client = new BrowserLma(() => {}, undefined, message => events.push(message));
+  assert.equal((await client.manage('install', candidate))[0].bytes, candidate.bytes);
+  assert.match(events[0], /available storage/);
+  assert.match(events[0], /4 GiB/);
+  assert.deepEqual(events.slice(1), ['download']);
+  assert.equal(saved, candidate.bytes);
+  const file = await recommendedModel(id, { download: false });
+  assert.equal(file.name, filename);
+  assert.equal(await file.text(), 'GGUF');
+  await deleteModel(id);
+  assert.equal(entries.size, 0);
+  assert.equal(files.size, 0);
+
+  sent = blocks - 1;
+  await assert.rejects(installModel(candidate), /ended before it was complete/);
+  assert.equal(entries.size, 0);
+  assert.equal(files.size, 0);
+});
+
 test('a split model installs every shard despite an insufficient-storage estimate', async t => {
   const repository = 'example/Split-GGUF';
   const revision = '3'.repeat(40);
