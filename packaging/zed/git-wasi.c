@@ -293,6 +293,47 @@ static int stage(git_repository *repo, const char *path, int deleted)
     return code < 0 ? git_wasi_fail("Staging the file") : 0;
 }
 
+static int stage_content(git_repository *repo, const char *path, int executable)
+{
+    git_index *index = NULL;
+    git_writestream *stream = NULL;
+    git_index_entry entry = {0};
+    entry.path = path;
+    entry.mode = executable ? GIT_FILEMODE_BLOB_EXECUTABLE : GIT_FILEMODE_BLOB;
+
+    int code = git_repository_index(&index, repo);
+    if (code == 0)
+        code = git_blob_create_from_stream(&stream, repo, path);
+    while (code == 0) {
+        char buffer[8192];
+        size_t size = fread(buffer, 1, sizeof(buffer), stdin);
+        if (!size)
+            break;
+        code = stream->write(stream, buffer, size);
+    }
+    if (code == 0 && ferror(stdin)) {
+        fputs("Could not read the staged content.\n", stderr);
+        code = 1;
+    }
+    if (code == 0) {
+        code = git_blob_create_from_stream_commit(&entry.id, stream);
+        stream = NULL;
+    }
+    if (code == 0) {
+        code = git_index_conflict_remove(index, path);
+        if (code == GIT_ENOTFOUND)
+            code = 0;
+    }
+    if (code == 0)
+        code = git_index_add(index, &entry);
+    if (code == 0)
+        code = git_index_write(index);
+    if (stream)
+        stream->free(stream);
+    git_index_free(index);
+    return code < 0 ? git_wasi_fail("Staging selected changes") : code;
+}
+
 static int unstage(git_repository *repo, const char *path)
 {
     git_index *index = NULL;
@@ -401,11 +442,34 @@ int main(int argc, char **argv)
         code = read_branch(repo);
     } else if (!strcmp(argv[1], "branches") && argc == 2) {
         code = list_branches(repo);
+    } else if (!strcmp(argv[1], "switch-branch") && argc == 3) {
+        code = git_wasi_switch_branch(repo, argv[2]);
+    } else if (!strcmp(argv[1], "create-branch") && argc == 4) {
+        code = git_wasi_create_branch(repo, argv[2], argv[3]);
+    } else if (!strcmp(argv[1], "rename-branch") && argc == 4) {
+        code = git_wasi_rename_branch(repo, argv[2], argv[3]);
+    } else if (!strcmp(argv[1], "delete-branch") && argc == 5) {
+        code = git_wasi_delete_branch(repo, argv[2], !strcmp(argv[3], "true"), !strcmp(argv[4], "true"));
     } else if (!strcmp(argv[1], "show") && argc == 3) {
         code = show_commit(repo, argv[2]);
     } else if (!strcmp(argv[1], "history") && argc == 5 &&
         (!strcmp(argv[2], "all") || !strcmp(argv[2], "branch") || !strcmp(argv[2], "revision"))) {
         code = git_wasi_history(repo, argv[2], argv[3], argv[4]);
+    } else if (!strcmp(argv[1], "search-commits") && argc == 6 &&
+        (!strcmp(argv[2], "all") || !strcmp(argv[2], "branch") || !strcmp(argv[2], "revision")) &&
+        (!strcmp(argv[4], "hash") || !strcmp(argv[4], "ignore-case") || !strcmp(argv[4], "literal"))) {
+        code = git_wasi_search(repo, argv[2], argv[3], argv[4], argv[5]);
+    } else if (!strcmp(argv[1], "blame-revision") && argc == 4) {
+        code = git_wasi_blame(repo, argv[2], argv[3], 0);
+    } else if (!strcmp(argv[1], "blame-buffer") && argc == 4) {
+        char *end;
+        unsigned long length = strtoul(argv[3], &end, 10);
+        if (end == argv[3] || *end || length > 16 * 1024 * 1024) {
+            fputs("Invalid Git blame input size.\n", stderr);
+            code = 1;
+        } else {
+            code = git_wasi_blame(repo, argv[2], NULL, length);
+        }
     } else if (!strcmp(argv[1], "read-commit") && argc == 3) {
         code = git_wasi_raw_commit(repo, argv[2]);
     } else if (!strcmp(argv[1], "commit-files") && argc == 4) {
@@ -425,6 +489,9 @@ int main(int argc, char **argv)
         code = resolve(repo, argv[2]);
     } else if (!strcmp(argv[1], "stage") && argc == 3) {
         code = stage(repo, argv[2], 0);
+    } else if (!strcmp(argv[1], "set-index-text") && argc == 4 &&
+        (!strcmp(argv[3], "true") || !strcmp(argv[3], "false"))) {
+        code = stage_content(repo, argv[2], !strcmp(argv[3], "true"));
     } else if (!strcmp(argv[1], "stage-deletion") && argc == 3) {
         code = stage(repo, argv[2], 1);
     } else if (!strcmp(argv[1], "unstage") && argc == 3) {

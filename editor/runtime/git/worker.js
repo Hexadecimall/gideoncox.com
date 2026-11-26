@@ -1,4 +1,4 @@
-import { GitWasiWorktree, MAX_GIT_OUTPUT } from './repository.js?v=history-1';
+import { GitWasiWorktree, MAX_GIT_OUTPUT } from './repository.js?v=git-worktree-1';
 
 let engine;
 
@@ -13,29 +13,42 @@ async function loadEngine() {
   return WebAssembly.compileStreaming(new Response(stream, { headers: { 'Content-Type': 'application/wasm' } }));
 }
 
-const writesMetadata = new Set(['init', 'stage', 'stage-deletion', 'unstage', 'commit']);
+const writesWorktree = new Set(['create-branch', 'switch-branch']);
+const writesMetadata = new Set([
+  'init', 'stage', 'set-index-text', 'stage-deletion', 'unstage', 'commit', 'rename-branch', 'delete-branch', ...writesWorktree,
+]);
 
-self.addEventListener('message', async ({ data: { id, entries, operations } }) => {
+const MAX_GIT_INPUT = 16 * 1024 * 1024;
+
+self.addEventListener('message', async ({ data: { id, entries, operations, input = null } }) => {
   try {
     engine ??= loadEngine().catch(error => {
       engine = undefined;
       throw error;
     });
-    const repo = new GitWasiWorktree(await engine, entries);
+    const inputOperation = operations.find(([operation]) => operation === 'set-index-text' || operation === 'blame-buffer');
+    const validInput = inputOperation
+      ? operations.length === 1 && input instanceof Uint8Array && input.byteLength <= MAX_GIT_INPUT
+        && (inputOperation[0] !== 'blame-buffer' || inputOperation[2] === String(input.byteLength))
+      : input === null;
+    if (!validInput) throw new Error('Invalid Git file content.');
+    const checkout = operations.some(([operation]) => writesWorktree.has(operation));
+    const repo = new GitWasiWorktree(await engine, entries, checkout);
     const results = [];
     let outputLength = 0;
     for (const [operation, ...args] of operations) {
-      const result = await repo.run(operation, ...args);
+      const result = await repo.run(operation, args, input);
       outputLength += result?.byteLength ?? 0;
       if (outputLength > MAX_GIT_OUTPUT) throw new Error('Git output exceeded the browser limit.');
       results.push(result);
     }
     const metadata = operations.some(([operation]) => writesMetadata.has(operation)) ? [...repo.metadata()] : null;
+    const worktree = checkout ? repo.worktreeChanges(entries) : null;
     const buffers = new Set(results.filter(Boolean).map(bytes => bytes.buffer));
-    for (const [, bytes] of metadata ?? []) {
+    for (const [, bytes] of [...(metadata ?? []), ...(worktree?.changed ?? [])]) {
       if (bytes) buffers.add(bytes.buffer);
     }
-    postMessage({ id, results, metadata }, [...buffers]);
+    postMessage({ id, results, metadata, worktree }, [...buffers]);
   } catch (error) {
     postMessage({ id, error: error instanceof Error ? error.message : String(error) });
   }

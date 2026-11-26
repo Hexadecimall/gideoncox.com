@@ -11,7 +11,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Documents | Browser filesystem with persisted documents and import/export dialogs | Browser file round trips |
 | Clipboard | Upstream editor Copy, Cut and Paste. Standard shortcuts use the browser paste event, and Edit → Paste uses the browser clipboard API. | Browser clipboard round trips |
 | Device folders | Chromium folder picker and direct file reads and writes through the selected handle. Zed remembers the most recent folder and checks its permission on reopen. | Chromium folder-handle and reload checks |
-| Settings and trust | Browser-backed `settings.json`, native settings UI, bundled read-only defaults and remembered project trust choices | Workspace reload and settings file checks |
+| Settings and trust | Upstream Settings editor with search, user and project scopes, editable `settings.json`, keymap editing, bundled defaults and remembered project trust | Browser Settings and reload checks |
 | Startup cache | Versioned WebAssembly download in Cache Storage, with a network fallback | Cache tests and Chromium reload checks |
 | Vim | Upstream modes, keymap and status, enabled by `vim_mode` in Zed settings | WASM build and module validation |
 | Syntax | All 22 bundled upstream syntax configurations, Tree-sitter grammars and queries | WASM build and module validation |
@@ -22,8 +22,8 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Python formatting | Ruff WebAssembly worker through Zed's Format command and formatting settings | LSP document edit and formatting tests |
 | Python execution | CPython WASI worker and upstream task terminal for browser workspace files | WASI runtime and buffer snapshot tests |
 | Diagnostics | Upstream Language Servers menu and Project Diagnostics view | Browser status bar and diagnostic checks |
-| Agent | Upstream Agent Panel and Threads Sidebar, LMA WebAssembly inference, and local Qwen3 read-only project tools | Browser file reads, project search, and restored thread history |
-| Edit Prediction | Upstream inline prediction accepted with Tab, backed by browser LMA and Qwen2.5-Coder | Browser completion and saved buffer check |
+| Agent | Upstream Agent Panel, Threads Sidebar, and LLM provider settings | Browser Settings navigation and workspace checks |
+| Edit Prediction | Upstream inline prediction controls and provider settings | Browser status bar and Settings navigation |
 | C/C++ | clangd 21 in a WebAssembly worker, with browser project files and bundled WASI headers | Chromium language-server and browser workspace checks |
 | Browser builds | Clang and LLD compile multi-file C and C++ for WASI and static Linux x86-64 with standard libraries. A freestanding Linux target is also available. Zig builds and runs WASI programs. Project build settings supply WASI arguments. | Chromium task terminal, argument forwarding, exit status and compiler-worker checks |
 | Rust | rust-analyzer in a WASI worker with a bundled standard library, local Cargo path dependencies, and generated source from successful builds | Concurrent worktrees and browser diagnostics on generated Rust source |
@@ -45,7 +45,7 @@ menu. The pending controls display a Zed notification when activated.
 - Extension installation, execution, grammars, themes and extension-provided language servers.
 - Browser LSP runners for languages beyond C/C++, Python and Rust.
 - Rust browser tooling for Git and private registry dependencies, build scripts that launch external tools, and procedural macros. Additional native targets and build-system integration for browser C, C++, and Zig projects.
-- Collaboration, authentication, hosted services, and full Agent tool support.
+- Collaboration, authentication, hosted services, browser LMA integration, and full Agent tool support.
 - Audit remaining desktop workspace and session state for browser persistence.
 - Desktop platform integrations, multiple OS windows and native file dialogs.
 - Broader keyboard, IME, accessibility, touch and browser compatibility testing.

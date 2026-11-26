@@ -1,4 +1,4 @@
-import { installFileDialogs } from './zed/dialogs.js?v=folder-memory-1';
+import { installFileDialogs } from './zed/dialogs.js?v=workspace-controls-1';
 import { installNativeTerminal } from './zed/native-terminal.js?v=project-fs-1';
 import { installNativeHost } from './zed/native-host.js?v=folder-memory-1';
 import { BrowserPython } from './zed/browser-python.js?v=workspace-ready-1';
@@ -6,13 +6,13 @@ import { BrowserPython } from './zed/browser-python.js?v=workspace-ready-1';
 import { BrowserClangd } from './zed/browser-clangd.js?v=workspace-ready-1';
 import { BrowserRust } from './zed/browser-rust.js?v=quickfix-1';
 import { BrowserRunBridge } from './zed/browser-run.js?v=quickfix-1';
-import { BrowserGit } from './zed/browser-git.js?v=history-1';
+import { BrowserGit } from './zed/browser-git.js?v=git-worktree-1';
 import { openBrowserDatabase } from './zed/browser-database.js?v=history-1';
 import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=3';
 
 const loading = document.querySelector('#loading');
-const build = 'ff333478866f';
+const build = '4e24c43b707e';
 const gzip = true;
 
 async function downloadWasm() {
@@ -67,8 +67,6 @@ async function start() {
   const host = installNativeHost(terminal, new BrowserPython(zed), new BrowserClangd(zed), rust);
   installFileDialogs(zed, host);
   globalThis.zedInitialFolder = await host.restoreLocalFolder().catch(() => undefined);
-  const { BrowserLma } = await import('/editor/runtime/lma/client.js?v=qwen-tools-2');
-  globalThis.zedLma = new BrowserLma(zed.lma_worker_event);
   await zed.default({ module_or_path: wasm });
   const deadline = performance.now() + 30000;
   while (!zed.workspace_ready()) {

@@ -1,8 +1,13 @@
 #include "git-wasi.h"
 
 #include <inttypes.h>
+#include <locale.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <strings.h>
+#include <wchar.h>
+#include <wctype.h>
 
 static int is_history_ref(const char *name)
 {
@@ -37,7 +42,7 @@ static int history_head(git_repository *repo)
     return 0;
 }
 
-static int history_refs(git_repository *repo, git_revwalk *walk, int all)
+static int history_refs(git_repository *repo, git_revwalk *walk, int all, int decorate)
 {
     git_reference_iterator *iterator = NULL;
     git_reference *ref = NULL;
@@ -50,10 +55,12 @@ static int history_refs(git_repository *repo, git_revwalk *walk, int all)
             git_object *commit = NULL;
             if (git_reference_peel(&commit, ref, GIT_OBJECT_COMMIT) == 0) {
                 const git_oid *id = git_object_id(commit);
-                git_wasi_field("R");
-                write_oid(id);
-                fputc('\0', stdout);
-                git_wasi_field(name);
+                if (decorate) {
+                    git_wasi_field("R");
+                    write_oid(id);
+                    fputc('\0', stdout);
+                    git_wasi_field(name);
+                }
                 if (all)
                     code = git_revwalk_push(walk, id);
             }
@@ -115,7 +122,7 @@ int git_wasi_history(git_repository *repo, const char *scope, const char *value,
     if (code == 0)
         code = history_head(repo);
     if (code == 0)
-        code = history_refs(repo, walk, !strcmp(scope, "all"));
+        code = history_refs(repo, walk, !strcmp(scope, "all"), 1);
     if (code == 0)
         code = start_revision(walk, repo, scope, value);
     if (code == 0) {
@@ -145,6 +152,85 @@ int git_wasi_history(git_repository *repo, const char *scope, const char *value,
     }
     git_revwalk_free(walk);
     return code < 0 ? git_wasi_fail("Reading Git history") : 0;
+}
+
+static int fold_message(const char *text, wchar_t **folded)
+{
+    const size_t length = strlen(text) + 1;
+    wchar_t *value = calloc(length, sizeof(*value));
+    if (!value)
+        return -1;
+
+    mbstate_t state = {0};
+    if (mbsrtowcs(value, &text, length, &state) == (size_t)-1) {
+        free(value);
+        *folded = NULL;
+        return 0;
+    }
+    for (wchar_t *character = value; *character; character++)
+        *character = towlower((wint_t)*character);
+    *folded = value;
+    return 0;
+}
+
+int git_wasi_search(git_repository *repo, const char *scope, const char *value, const char *mode, const char *query)
+{
+    const int hash_search = !strcmp(mode, "hash");
+    const int ignore_case = !strcmp(mode, "ignore-case");
+    const size_t query_length = strlen(query);
+    wchar_t *folded_query = NULL;
+    if (ignore_case) {
+        setlocale(LC_CTYPE, "C.UTF-8");
+        if (fold_message(query, &folded_query) < 0) {
+            fputs("Could not allocate Git search memory.\n", stderr);
+            return 1;
+        }
+    }
+
+    git_revwalk *walk = NULL;
+    int code = git_revwalk_new(&walk, repo);
+    if (code == 0)
+        code = git_revwalk_sorting(walk, GIT_SORT_TIME);
+    if (code == 0 && !strcmp(scope, "all"))
+        code = history_refs(repo, walk, 1, 0);
+    if (code == 0)
+        code = start_revision(walk, repo, scope, value);
+    if (code == 0) {
+        git_oid id;
+        while ((code = git_revwalk_next(&id, walk)) == 0) {
+            if (hash_search) {
+                char hex[GIT_OID_HEXSZ + 1];
+                if (query_length <= GIT_OID_HEXSZ &&
+                    !strncasecmp(git_oid_tostr(hex, sizeof(hex), &id), query, query_length))
+                    git_wasi_field(hex);
+                continue;
+            }
+
+            git_commit *commit = NULL;
+            if ((code = git_commit_lookup(&commit, repo, &id)) < 0)
+                break;
+            const char *message = git_commit_message_raw(commit);
+            wchar_t *folded_message = NULL;
+            if (folded_query && fold_message(message, &folded_message) < 0) {
+                git_commit_free(commit);
+                free(folded_query);
+                git_revwalk_free(walk);
+                fputs("Could not allocate Git search memory.\n", stderr);
+                return 1;
+            }
+            if (folded_message ? wcsstr(folded_message, folded_query) != NULL : strstr(message, query) != NULL) {
+                write_oid(&id);
+                fputc('\0', stdout);
+            }
+            free(folded_message);
+            git_commit_free(commit);
+        }
+        if (code == GIT_ITEROVER)
+            code = 0;
+    }
+    git_revwalk_free(walk);
+    free(folded_query);
+    return code < 0 ? git_wasi_fail("Searching Git history") : 0;
 }
 
 int git_wasi_raw_commit(git_repository *repo, const char *revision)

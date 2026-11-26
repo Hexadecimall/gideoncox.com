@@ -199,8 +199,45 @@ export function installFileDialogs(zed, host) {
       active = false;
     }
   }
+  async function pickDevicePath(directory) {
+    if (directory && host?.folders?.available()) {
+      try { return await host.openLocalFolder(); }
+      catch (error) {
+        if (error.name === 'AbortError') return null;
+        throw error;
+      }
+    }
+
+    const selected = await new Promise(resolve => {
+      const picker = element('input');
+      picker.type = 'file';
+      picker.hidden = true;
+      if (directory) picker.setAttribute('webkitdirectory', '');
+      const finish = files => { picker.remove(); resolve(files); };
+      picker.addEventListener('cancel', () => finish([]), { once: true });
+      picker.addEventListener('change', () => finish([...picker.files]), { once: true });
+      document.body.append(picker);
+      picker.click();
+    });
+    if (!selected.length) return null;
+
+    const destinations = importPaths(selected);
+    const root = directory
+      ? BROWSER_ROOT + '/' + destinations[0].slice(BROWSER_ROOT.length + 1).split('/')[0]
+      : destinations[0];
+    const existing = JSON.parse(await zed.list_browser_paths());
+    if (existing.some(entry => entry.path === root || entry.path.startsWith(root + '/'))) {
+      throw new Error('This path already exists. Select it from the project picker.');
+    }
+    for (const [index, file] of selected.entries()) {
+      await zed.write_browser_file(destinations[index], new Uint8Array(await file.arrayBuffer()));
+    }
+    return root;
+  }
+
   globalThis.zedBrowserDialogs = {
     openPaths: options => prompt('open', options),
     savePath: (directory, suggestedName) => prompt('save', { directory, suggestedName }),
+    pickDevicePath,
   };
 }

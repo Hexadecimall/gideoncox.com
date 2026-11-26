@@ -39,13 +39,16 @@ function isMetadata(path) {
 }
 
 const pathArguments = new Map([
-  ['read-index', 0], ['read-head', 0], ['read-tree', 1], ['stage', 0], ['stage-deletion', 0], ['unstage', 0],
+  ['blame-revision', 0], ['blame-buffer', 0],
+  ['read-index', 0], ['read-head', 0], ['read-tree', 1], ['stage', 0], ['set-index-text', 0], ['stage-deletion', 0], ['unstage', 0],
 ]);
 const argCounts = new Map([
   ['init', 1], ['head', 0], ['status', 0], ['read-index', 1], ['read-head', 1], ['read-tree', 2],
+  ['switch-branch', 1], ['create-branch', 2], ['rename-branch', 2], ['delete-branch', 3],
   ['branches', 0], ['show', 1], ['read-blob', 1], ['resolve', 1], ['diff', 1], ['diff-stat', 1],
-  ['history', 3], ['read-commit', 1], ['commit-files', 2],
-  ['stage', 1], ['stage-deletion', 1], ['unstage', 1], ['commit', 3],
+  ['blame-revision', 2], ['blame-buffer', 2],
+  ['history', 3], ['search-commits', 4], ['read-commit', 1], ['commit-files', 2],
+  ['stage', 1], ['set-index-text', 2], ['stage-deletion', 1], ['unstage', 1], ['commit', 3],
 ]);
 
 function output() {
@@ -68,8 +71,9 @@ function output() {
 }
 
 export class GitWasiWorktree {
-  constructor(module, entries = []) {
+  constructor(module, entries = [], changeWorktree = false) {
     this.module = module;
+    this.changeWorktree = changeWorktree;
     this.repository = new PreopenDirectory('/repo', new Map());
     this.root = new PreopenDirectory('/', new Map([['repo', this.repository.dir]]));
     setupDirectory(this.repository);
@@ -91,24 +95,46 @@ export class GitWasiWorktree {
     } else {
       const { inode_obj: entry } = this.repository.path_lookup(path, 0);
       if (entry instanceof Directory) throw new Error('Conflicting Git snapshot paths.');
-      writeFile(this.repository.dir, '/' + path, bytes, !isMetadata(path));
+      writeFile(this.repository.dir, '/' + path, bytes, !this.changeWorktree && !isMetadata(path));
+    }
+  }
+
+  *walk(path, entry) {
+    if (entry instanceof Directory) {
+      yield [path, null];
+      for (const [name, value] of entry.contents) yield* this.walk(`${path}/${name}`, value);
+    } else if (entry instanceof File) {
+      yield [path, entry.data];
     }
   }
 
   *metadata() {
-    function* visit(path, entry) {
-      if (entry instanceof Directory) {
-        yield [path, null];
-        for (const [name, value] of entry.contents) yield* visit(`${path}/${name}`, value);
-      } else if (entry instanceof File) {
-        yield [path, entry.data];
-      }
-    }
     const entry = this.repository.dir.contents.get('.git');
-    if (entry instanceof Directory) yield* visit('.git', entry);
+    if (entry instanceof Directory) yield* this.walk('.git', entry);
   }
 
-  async run(operation, ...args) {
+  worktreeChanges(entries) {
+    const before = new Map(entries.filter(([path]) => !isMetadata(path)));
+    const changed = [];
+    let size = 0;
+    for (const [name, entry] of this.repository.dir.contents) {
+      if (isMetadata(name)) continue;
+      for (const [path, bytes] of this.walk(name, entry)) {
+        const previous = before.get(path);
+        before.delete(path);
+        if (bytes === previous || (bytes && previous?.length === bytes.length
+          && bytes.every((byte, offset) => byte === previous[offset]))) continue;
+        size += bytes?.byteLength ?? 0;
+        if (size > MAX_GIT_OUTPUT || changed.length >= 8192) {
+          throw new Error('Git checkout changes exceeded the browser limit.');
+        }
+        changed.push([path, bytes]);
+      }
+    }
+    return { changed, removed: [...before.keys()] };
+  }
+
+  async run(operation, args, input = null) {
     const pathIndex = pathArguments.get(operation);
     if (args.length !== argCounts.get(operation)
       || args.some(arg => typeof arg !== 'string' || arg.includes('\0'))
@@ -117,7 +143,7 @@ export class GitWasiWorktree {
     }
     const stdout = output();
     const stderr = output();
-    const stdin = new OpenFile(new File([]));
+    const stdin = new OpenFile(new File(input ?? [], { readonly: true }));
     const instanceWasi = new WASI(['zed-git', operation, ...args], ['HOME=/', 'XDG_CONFIG_HOME=/'],
       [stdin, stdout.fd, stderr.fd, this.repository, this.root], { debug: false });
     const instance = await WebAssembly.instantiate(this.module, { wasi_snapshot_preview1: instanceWasi.wasiImport });

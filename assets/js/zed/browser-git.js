@@ -2,7 +2,7 @@ const MAX_PENDING = 8;
 const TIMEOUT = 30_000;
 
 export class BrowserGit {
-  constructor(makeWorker = () => new Worker('/editor/runtime/git/worker.js?v=history-1', { type: 'module' })) {
+  constructor(makeWorker = () => new Worker('/editor/runtime/git/worker.js?v=git-worktree-1', { type: 'module' })) {
     this.makeWorker = makeWorker;
     this.pending = new Map();
     this.nextId = 0;
@@ -36,11 +36,12 @@ export class BrowserGit {
     this.pending.clear();
   }
 
-  request(entries, operations) {
+  request(entries, operations, input = null) {
     if (this.pending.size >= MAX_PENDING) return Promise.reject(new Error('Too many browser Git requests are running.'));
     this.worker ??= this.start();
     const id = ++this.nextId;
     const buffers = new Set();
+    if (input) buffers.add(input.buffer);
     for (const [, bytes] of entries) {
       if (bytes) buffers.add(bytes.buffer);
     }
@@ -48,7 +49,7 @@ export class BrowserGit {
       const timer = setTimeout(() => this.stop(new Error('The browser Git worker did not respond.')), TIMEOUT);
       this.pending.set(id, { resolve, reject, timer });
       try {
-        this.worker.postMessage({ id, entries, operations }, [...buffers]);
+        this.worker.postMessage({ id, entries, operations, input }, [...buffers]);
       } catch (error) {
         this.pending.delete(id);
         clearTimeout(timer);
