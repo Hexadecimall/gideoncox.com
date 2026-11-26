@@ -1,5 +1,6 @@
 import loadClangd from './clangd.js?v=21.1.0-2';
 import { LspFrames, lspFrame } from '/assets/js/zed/lsp-stream.js';
+import { projectBuildFlags } from './build-flags.js';
 
 const responses = new LspFrames();
 const output = new Uint8Array(16384);
@@ -61,6 +62,8 @@ async function start({ root, files, module }) {
   });
   clangd.FS.mkdirTree(root);
   for (const [path, bytes] of files) updateFile(path, bytes);
+  const buildFlags = projectBuildFlags(root, files);
+  if (buildFlags) updateFile(`${root}/.clangd`, buildFlags);
   clangd.FS.chdir(root);
   postMessage({ type: 'ready' });
   clangd.callMain(['--log=error', '--background-index=false', '--pch-storage=memory', '-j=2']);

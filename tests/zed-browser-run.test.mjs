@@ -295,7 +295,9 @@ test('the static Linux task offers the linked ELF under its target-specific file
   assert.equal(link.download, 'main-linux-x86_64-static.elf');
   assert.deepEqual(new Uint8Array(await (await fetch(link.href)).arrayBuffer()), artifact);
   t.mock.timers.tick(30000);
-  assert.equal((await bridge.read(id)).exitCode, 0);
+  const result = await bridge.read(id);
+  assert.equal(result.exitCode, 0);
+  assert.match(decode(result.data), /Build exit code: 0/);
 });
 
 test('requested C libraries are included before optional files and may exceed the per-file snapshot limit', async t => {

@@ -3,8 +3,28 @@ import test from 'node:test';
 import { BrowserClangd } from '../assets/js/zed/browser-clangd.js';
 import { LspFrames, lspFrame } from '../assets/js/zed/lsp-stream.js';
 import { installNativeHost } from '../assets/js/zed/native-host.js';
+import { projectBuildFlags } from '../editor/runtime/clangd/build-flags.js';
 
 const compileTestModule = () => WebAssembly.compile(Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0));
+
+test('clangd uses browser build flags when the project has no Clang configuration', () => {
+  const root = '/home/web';
+  const configPath = `${root}/.zed/browser-build.json`;
+  const encode = settings => new TextEncoder().encode(JSON.stringify(settings));
+  const files = [[configPath, encode({
+    cStandard: 'c23', cppStandard: 'gnu++23', defines: ['LABEL="two words"'], includeDirectories: ['include path'],
+  })]];
+  const [common, c, cpp] = new TextDecoder().decode(projectBuildFlags(root, files)).trim().split('\n---\n').map(JSON.parse);
+  assert.ok(common.CompileFlags.Add.includes('-DLABEL="two words"'));
+  assert.ok(common.CompileFlags.Add.includes(`-I${root}/include path`));
+  assert.deepEqual(c.CompileFlags.Add, ['-std=c23']);
+  assert.deepEqual(cpp.CompileFlags.Add, ['-std=gnu++23']);
+  for (const name of ['.clangd', 'build/compile_commands.json', 'compile_flags.txt']) {
+    assert.equal(projectBuildFlags(root, [...files, [`${root}/${name}`, new Uint8Array()]]), undefined);
+  }
+  assert.equal(projectBuildFlags(root, [[configPath, encode({ args: ['value'] })]]), undefined);
+  assert.equal(projectBuildFlags(root, [[configPath, encode({ defines: 'DEBUG' })]]), undefined);
+});
 
 test('clangd mirrors browser files and preserves ordinary stdio LSP', async context => {
   const worker = new EventTarget();

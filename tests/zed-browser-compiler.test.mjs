@@ -137,6 +137,42 @@ test('browser builds reject non-string arguments before starting the toolchain',
   } }), /"args".*must be an array of strings/);
 });
 
+test('Clang applies project language standards and macros to both WASI and native builds', async () => {
+  const files = {
+    '.zed/browser-build.json': JSON.stringify({
+      cStandard: 'c23', cppStandard: 'c++23', defines: ['ENABLED', 'LABEL="mixed build"', 'SIZE=42'],
+    }),
+    'helper.c': `static_assert(__STDC_VERSION__ >= 202311L);
+int size(void) { return ENABLED ? SIZE : 0; }`,
+    'main.cpp': `#include <iostream>
+static_assert(__cplusplus >= 202302L);
+extern "C" int size(void);
+int main() { std::cout << LABEL << ' ' << size(); }`,
+  };
+  const wasi = await run({ script: 'main.cpp', files });
+  assert.equal(wasi.code, 0, wasi.output);
+  assert.equal(wasi.ranProgram, true);
+  assert.match(wasi.output, /mixed build 42/);
+
+  const native = await run({ target: 'linux-x86_64-static', script: 'main.cpp', files });
+  assert.equal(native.code, 0, native.output);
+  assert.ok(native.artifact?.length);
+  assert.equal(new DataView(native.artifact.buffer).getUint16(18, true), 62); // EM_X86_64
+});
+
+test('Clang rejects invalid project standard and macro options', async () => {
+  for (const [settings, error] of [
+    [{ cStandard: false }, /"cStandard".*Clang language standard/],
+    [{ cppStandard: 'c++23 -O3' }, /"cppStandard".*Clang language standard/],
+    [{ defines: ['-DDEBUG'] }, /"defines".*macro names/],
+  ]) {
+    await assert.rejects(run({ script: 'main.c', files: {
+      '.zed/browser-build.json': JSON.stringify(settings),
+      'main.c': 'int main(void) { return 0; }',
+    } }), error);
+  }
+});
+
 test('Clippy reads native project lint configuration and returns source diagnostics for a Rust file', async () => {
   const result = await run({ command: 'browser-rust', target: 'clippy', script: 'main.rs', files: {
     'main.rs': 'fn main() { let blocked_name = true; println!("{}", blocked_name); }',

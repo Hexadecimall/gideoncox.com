@@ -21,6 +21,20 @@ export function isProjectRelativePath(path) {
     && !path.split('/').some(part => !part || part === '.' || part === '..');
 }
 
+export function clangCompileOptions(settings) {
+  const { cStandard = 'c17', cppStandard = 'c++20', defines = [] } = settings;
+  for (const [name, standard] of Object.entries({ cStandard, cppStandard })) {
+    if (typeof standard !== 'string' || !/^[a-z0-9+][a-z0-9+.:]*$/.test(standard)) {
+      throw new Error(`"${name}" in ${BUILD_CONFIG} must name a Clang language standard.`);
+    }
+  }
+  if (!Array.isArray(defines) || defines.some(define =>
+    typeof define !== 'string' || !/^[A-Za-z_][A-Za-z0-9_]*(?:=[^\r\n\0]*)?$/.test(define))) {
+    throw new Error(`"defines" in ${BUILD_CONFIG} must list macro names or NAME=value strings.`);
+  }
+  return { cStandard, cppStandard, defines };
+}
+
 export function clangLibraryPaths({ libraries }, target) {
   if (libraries === undefined) return [];
   if (!libraries || typeof libraries !== 'object' || Array.isArray(libraries)) {

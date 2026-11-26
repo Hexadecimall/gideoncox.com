@@ -2,9 +2,9 @@ import { installFileDialogs } from './dialogs.js?v=workspace-controls-1';
 import { installNativeTerminal } from './native-terminal.js?v=python-argv-1';
 import { installNativeHost } from './native-host.js?v=git-remotes-1';
 import { BrowserPython } from './browser-python.js?v=workspace-ready-1';
-import { BrowserClangd } from './browser-clangd.js?v=shared-module-1';
+import { BrowserClangd } from './browser-clangd.js?v=clang-project-options-1';
 import { BrowserRust } from './browser-rust.js?v=quickfix-1';
-import { BrowserRunBridge } from './browser-run.js?v=clang-startup-1';
+import { BrowserRunBridge } from './browser-run.js?v=clang-project-options-1';
 import { BrowserGit } from './browser-git.js?v=git-stash-1';
 import { openBrowserDatabase } from './browser-database.js?v=history-1';
 

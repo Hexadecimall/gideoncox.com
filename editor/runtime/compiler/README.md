@@ -5,7 +5,7 @@ select **Build and Run WebAssembly**. Output, compiler errors, and exit status
 appear in Zed's task terminal. Ctrl-C stops the task and Ctrl-D closes stdin.
 The menu continues to target the active editor while the task terminal is focused.
 
-Clang and LLD compile C17 and C++20 with the WASI SDK standard libraries. The
+Clang and LLD default to C17 and C++20 with the WASI SDK standard libraries. The
 default build links source files from the active project, skipping conventional
 output, vendor, and test directories. For projects with multiple entry points
 or additional header directories, put an explicit source list in
@@ -15,6 +15,9 @@ or additional header directories, put an explicit source list in
 {
   "sources": ["src/main.cpp", "src/math.cpp"],
   "includeDirectories": ["src/headers"],
+  "cStandard": "c23",
+  "cppStandard": "c++23",
+  "defines": ["FEATURE_ENABLED", "APP_NAME=\"Demo app\""],
   "libraries": {
     "wasi": ["lib/wasi/libmath.a"],
     "linux-x86_64-static": ["lib/linux/libmath.a"]
@@ -22,6 +25,14 @@ or additional header directories, put an explicit source list in
   "args": ["convert", "--name", "two words"]
 }
 ```
+
+`cStandard` and `cppStandard` select Clang language standards, including GNU
+dialects such as `gnu23` and `gnu++23`. `defines` supplies preprocessor macros
+to each C or C++ source file. Write each one as a name or `NAME=value` without
+the `-D` prefix. These options also apply to Linux cross-compilation targets.
+On language server startup, clangd uses these options and `includeDirectories`
+when the project has no `.clangd`, `compile_flags.txt`, or
+`compile_commands.json`.
 
 `libraries` takes project-relative static archives (`.a`) and object files
 (`.o`) built for the selected target. Use `linux-x86_64` for the freestanding
@@ -49,7 +60,7 @@ the program's return or exit status, or the build status if compilation fails.
 **Cross-Compile → Linux x86-64 (Static)** downloads an ELF executable linked
 with musl. C++ builds also link libc++ and its exception runtime. Run the file
 on x86-64 Linux after making it executable. The Linux headers and libraries
-download on demand.
+download on demand. The task terminal reports the build exit code.
 
 **Linux x86-64 (Freestanding)** uses `int main(void)` or a project-provided
 `_start` and skips the system libraries. The WASI C++ target uses libc++ without

@@ -2,7 +2,9 @@ import { ConsoleStdout, File, OpenFile, PreopenDirectory, wasi as errno } from '
 import WASI from '../rust/wasi/wasi.js?v=utf8-argv-1';
 import { TerminalOutput, TerminalStdin, writeFile } from '../terminal-wasi.js';
 import { loadArchive, loadModule } from './assets.js';
-import { BUILD_CONFIG, CLANG_TARGETS, parseBuildConfig, isProjectRelativePath, clangLibraryPaths } from './build-settings.js?v=1';
+import {
+  BUILD_CONFIG, CLANG_TARGETS, parseBuildConfig, isProjectRelativePath, clangLibraryPaths, clangCompileOptions,
+} from './build-settings.js?v=2';
 
 const CC_OUTPUT = '/.zed-compiler';
 const clangAssets = new Map();
@@ -122,14 +124,17 @@ function clangSettings({ cwd, script, files, target }, settings) {
   if (settings.linkCxx !== undefined && typeof settings.linkCxx !== 'boolean') {
     throw new Error(`"linkCxx" in ${BUILD_CONFIG} must be true or false.`);
   }
-  return { sources: [...new Set(sources)], includes: [cwd, ...new Set(includes), `${cwd}/include`], libraries };
+  return {
+    sources: [...new Set(sources)], includes: [cwd, ...new Set(includes), `${cwd}/include`], libraries,
+    ...clangCompileOptions(settings),
+  };
 }
 
 async function clangBuild(job, settings, output) {
   const freestanding = job.target === 'linux-x86_64';
   const linuxStatic = job.target === 'linux-x86_64-static';
   const isNative = freestanding || linuxStatic;
-  const { sources, includes, libraries } = clangSettings(job, settings);
+  const { sources, includes, libraries, cStandard, cppStandard, defines } = clangSettings(job, settings);
   const usesCpp = settings.linkCxx || sources.some(source => !source.endsWith('.c'));
   const [[clang, linker, sdk], cxx] = await Promise.all([
     loadClangToolchain(job.target),
@@ -151,7 +156,7 @@ async function clangBuild(job, settings, output) {
     const cpp = !source.endsWith('.c');
     const object = `${CC_OUTPUT}/${objects.length}.o`;
     const target = isNative ? 'x86_64-unknown-linux-musl' : 'wasm32-unknown-wasip1';
-    const flags = ['-cc1', '-triple', target, '-emit-obj', '-std=' + (cpp ? 'c++20' : 'c17'),
+    const flags = ['-cc1', '-triple', target, '-emit-obj', '-std=' + (cpp ? cppStandard : cStandard),
       '-x', cpp ? 'c++' : 'c'];
     if (freestanding) {
       flags.push('-fno-builtin', '-ffunction-sections', '-fdata-sections');
@@ -165,6 +170,7 @@ async function clangBuild(job, settings, output) {
       flags.push('-internal-isystem', '/clang/include', '-internal-isystem', '/wasi/include');
     }
     for (const include of includes) flags.push('-I', include);
+    for (const define of defines) flags.push('-D', define);
     print(output, `Compiling ${source.startsWith(CC_OUTPUT) ? 'Linux startup' : relative(job.cwd, source)}`);
     // LLVM's WebAssembly object writer patches offsets in its output stream.
     // Route it directly to a seekable file instead of Clang's temporary output path.

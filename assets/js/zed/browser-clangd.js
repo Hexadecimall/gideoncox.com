@@ -1,4 +1,5 @@
 import { BrowserLanguageServer } from './browser-language-server.js?v=shared-module-1';
+import { BUILD_CONFIG } from '../../../editor/runtime/compiler/build-settings.js?v=2';
 
 const configFiles = new Set(['.clangd', '.clang-format', '_clang-format', 'compile_commands.json', 'compile_flags.txt']);
 const flags = [
@@ -21,7 +22,7 @@ async function compileClangd() {
 export class BrowserClangd extends BrowserLanguageServer {
   constructor(
     zed,
-    makeWorker = () => new Worker('/editor/runtime/clangd/worker.js?v=21.1.0-4', { type: 'module' }),
+    makeWorker = () => new Worker('/editor/runtime/clangd/worker.js?v=21.1.0-5', { type: 'module' }),
     compile = compileClangd,
   ) {
     let compiled;
@@ -37,7 +38,7 @@ export class BrowserClangd extends BrowserLanguageServer {
       },
       includePath(path) {
         const name = path.slice(path.lastIndexOf('/') + 1);
-        return configFiles.has(name.toLowerCase()) || !name.includes('.')
+        return path.endsWith(`/${BUILD_CONFIG}`) || configFiles.has(name.toLowerCase()) || !name.includes('.')
           || /\.(?:c|cc|cpp|cxx|h|hh|hpp|hxx|inl|inc|ipp|tpp|ixx|cppm|m|mm)$/i.test(name);
       },
     });

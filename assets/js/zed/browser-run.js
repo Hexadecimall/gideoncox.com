@@ -5,7 +5,7 @@ import { joinBytes } from './lsp-stream.js';
 
 const PROGRAMS = new Map([
   ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=argv-2', targets: ['python'] }],
-  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=clang-startup-1',
+  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=clang-project-options-1',
     targets: CLANG_TARGETS }],
   ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi'] }],
   ['browser-rust', { label: 'Rust', worker: '/editor/runtime/compiler/worker.js?v=quickfix-1', targets: ['wasi', 'clippy'] }],
@@ -52,9 +52,8 @@ async function readProject(zed, { cwd: root, script, source, command, target }, 
 
 /** Binary terminal transport backed by a sandboxed WASI worker. */
 class BrowserTaskProcess {
-  constructor(worker, label, showExitCode, onArtifact, onBuild, retainWorker) {
+  constructor(worker, label, onArtifact, onBuild, retainWorker) {
     this.worker = worker;
-    this.showExitCode = showExitCode;
     this.stdin = createStdin();
     this.decoder = new TextDecoder();
     this.output = [];
@@ -93,7 +92,7 @@ class BrowserTaskProcess {
   finish(code, statusLabel = 'Task exit code', reusable = false) {
     if (this.exitCode !== null) return;
     this.exitCode = code;
-    if (this.showExitCode) this.append(encoder.encode(`\r\n${statusLabel}: ${code}\r\n`));
+    this.append(encoder.encode(`\r\n${statusLabel}: ${code}\r\n`));
     clearTimeout(this.timer);
     this.stdin.close();
     this.workerEvents.abort();
@@ -218,7 +217,6 @@ export class BrowserRunBridge {
     if (!isLanguageProject(root) || !projectPath(script, root) || !source
       || source.byteLength > MAX_FILE) throw new Error('The file is outside the browser project or too large.');
     const program = PROGRAMS.get(command);
-    const runsProgram = target === 'wasi' || target === 'python';
     if (command !== 'browser-python' && this.backgroundClippy) {
       const { id, ...check } = this.backgroundClippy;
       const { root } = check;
@@ -235,7 +233,7 @@ export class BrowserRunBridge {
     const reusableClang = command === 'browser-cc';
     const worker = reusableClang ? this.takeClangWorker(program.worker) : this.makeWorker(program.worker);
     const retainWorker = reusableClang ? worker => this.retainClangWorker(worker) : undefined;
-    const process = new BrowserTaskProcess(worker, program.label, runsProgram, data => {
+    const process = new BrowserTaskProcess(worker, program.label, data => {
       if (target !== 'linux-x86_64' && target !== 'linux-x86_64-static') {
         throw new Error('Unexpected browser build artifact.');
       }
