@@ -453,10 +453,10 @@ int main(int argc, char **argv)
     } else if (!strcmp(argv[1], "show") && argc == 3) {
         code = show_commit(repo, argv[2]);
     } else if (!strcmp(argv[1], "history") && argc == 5 &&
-        (!strcmp(argv[2], "all") || !strcmp(argv[2], "branch") || !strcmp(argv[2], "revision"))) {
+        (!strcmp(argv[2], "all") || !strcmp(argv[2], "branch") || !strcmp(argv[2], "revision") || !strcmp(argv[2], "path"))) {
         code = git_wasi_history(repo, argv[2], argv[3], argv[4]);
     } else if (!strcmp(argv[1], "search-commits") && argc == 6 &&
-        (!strcmp(argv[2], "all") || !strcmp(argv[2], "branch") || !strcmp(argv[2], "revision")) &&
+        (!strcmp(argv[2], "all") || !strcmp(argv[2], "branch") || !strcmp(argv[2], "revision") || !strcmp(argv[2], "path")) &&
         (!strcmp(argv[4], "hash") || !strcmp(argv[4], "ignore-case") || !strcmp(argv[4], "literal"))) {
         code = git_wasi_search(repo, argv[2], argv[3], argv[4], argv[5]);
     } else if (!strcmp(argv[1], "blame-revision") && argc == 4) {

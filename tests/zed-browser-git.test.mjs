@@ -310,14 +310,37 @@ test('the browser Git worker can reopen a repository and preserve its real Git i
     [beforeRename,'4','3','4',oldPath,'1'],
   ]);
   assert.deepEqual(renames.P, [[afterRename,newPath,beforeRename,oldPath]]);
+
+  const unrelated = await run([...renameHead.metadata, ['elsewhere.txt', encoder.encode('unrelated')]], [
+    ['stage', 'elsewhere.txt'], ['commit', ...identity, 'Before moving the other file'],
+  ]);
+  const followed = await run(unrelated.metadata, [
+    ['history', 'path', newPath, 'date'], ['history', 'path', newPath, 'reverse'],
+    ['search-commits', 'path', newPath, 'ignore-case', 'before MOVING'],
+    ['search-commits', 'path', newPath, 'hash', beforeRename.slice(0, 8)],
+    ['history', 'path', 'missing.txt', 'date'],
+  ]);
+  const commitIds = bytes => decoder.decode(bytes).split('\0')
+    .filter((value, index, fields) => index % 3 === 1 && fields[index - 1] === 'C');
+  assert.deepEqual(commitIds(followed.results[0]), [afterRename, beforeRename]);
+  assert.deepEqual(commitIds(followed.results[1]), [beforeRename, afterRename]);
+  assert.equal(decoder.decode(followed.results[2]), beforeRename + '\0');
+  assert.equal(decoder.decode(followed.results[3]), beforeRename + '\0');
+  assert.deepEqual(commitIds(followed.results[4]), []);
+  assert.equal(followed.metadata, null);
+  await assert.rejects(run(unrelated.metadata, [['history', 'path', '../private.txt', 'date']]), /Invalid Git arguments/);
+
   const shallowObject = `.git/objects/${beforeRename.slice(0,2)}/${beforeRename.slice(2)}`;
-  const shallowBlame = await run([
+  const shallowRename = [
     ...renameHead.metadata.filter(([name])=>name!==shallowObject),
     ['.git/shallow',encoder.encode(afterRename+'\n')],
-  ],[['blame-revision',newPath,afterRename]]);
+  ];
+  const shallowBlame = await run(shallowRename, [['blame-revision',newPath,afterRename]]);
   const shallowLines = blameRecords(shallowBlame.results[0]);
   assert.deepEqual(shallowLines.H.map(row=>row.slice(0,6)), [[afterRename,'1','6','1',newPath,'1']]);
   assert.deepEqual(shallowLines.P,[]);
+  const shallowHistory = await run(shallowRename, [['history', 'path', newPath, 'date']]);
+  assert.deepEqual(commitIds(shallowHistory.results[0]), [afterRename]);
 
 
 });

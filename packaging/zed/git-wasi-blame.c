@@ -68,34 +68,15 @@ static int previous_rename(git_repository *repo, const git_commit *commit, const
     const git_commit *parent, git_tree *parent_tree)
 {
     git_tree *tree = NULL;
-    git_diff *diff = NULL;
-    git_diff_options options;
-    git_diff_find_options similar;
+    char *source = NULL;
     int code = git_commit_tree(&tree, commit);
     if (code == 0)
-        code = git_diff_options_init(&options, GIT_DIFF_OPTIONS_VERSION);
-    if (code == 0) {
-        options.flags |= GIT_DIFF_SKIP_BINARY_CHECK;
-        code = git_diff_tree_to_tree(&diff, repo, parent_tree, tree, &options);
-    }
-    if (code == 0)
-        code = git_diff_find_options_init(&similar, GIT_DIFF_FIND_OPTIONS_VERSION);
-    if (code == 0) {
-        similar.flags = GIT_DIFF_FIND_RENAMES;
-        code = git_diff_find_similar(diff, &similar);
-    }
-    if (code == 0) {
+        code = git_wasi_find_rename(&source, repo, parent_tree, tree, path);
+    if (source)
+        previous_fields(commit, path, parent, source);
+    else if (code == 0)
         code = GIT_ENOTFOUND;
-        for (size_t i = 0; i < git_diff_num_deltas(diff); i++) {
-            const git_diff_delta *delta = git_diff_get_delta(diff, i);
-            if (delta->status == GIT_DELTA_RENAMED && !strcmp(delta->new_file.path, path)) {
-                previous_fields(commit, path, parent, delta->old_file.path);
-                code = 0;
-                break;
-            }
-        }
-    }
-    git_diff_free(diff);
+    free(source);
     git_tree_free(tree);
     return code;
 }

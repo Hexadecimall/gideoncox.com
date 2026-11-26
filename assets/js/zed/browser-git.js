@@ -2,7 +2,7 @@ const MAX_PENDING = 8;
 const TIMEOUT = 30_000;
 
 export class BrowserGit {
-  constructor(makeWorker = () => new Worker('/editor/runtime/git/worker.js?v=git-worktree-1', { type: 'module' })) {
+  constructor(makeWorker = () => new Worker('/editor/runtime/git/worker.js?v=git-file-history-1', { type: 'module' })) {
     this.makeWorker = makeWorker;
     this.pending = new Map();
     this.nextId = 0;

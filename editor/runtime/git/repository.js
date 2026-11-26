@@ -135,7 +135,8 @@ export class GitWasiWorktree {
   }
 
   async run(operation, args, input = null) {
-    const pathIndex = pathArguments.get(operation);
+    const fileHistory = (operation === 'history' || operation === 'search-commits') && args[0] === 'path';
+    const pathIndex = fileHistory ? 1 : pathArguments.get(operation);
     if (args.length !== argCounts.get(operation)
       || args.some(arg => typeof arg !== 'string' || arg.includes('\0'))
       || (pathIndex !== undefined && (!validPath(args[pathIndex]) || isMetadata(args[pathIndex])))) {
