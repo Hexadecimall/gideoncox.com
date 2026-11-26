@@ -1,5 +1,5 @@
 import { isBrowserProject } from './paths.js?v=local-folders-1';
-import { LocalFolders } from './local-folders.js?v=folder-git-1';
+import { LocalFolders } from './local-folders.js?v=folder-watch-1';
 
 function encode(bytes) {
   let text = '';
@@ -193,7 +193,7 @@ export function installNativeHost(transport, ...browserServices) {
     disconnect: () => host.disconnect(),
     fs: async (operation, args) => {
       if (operation === 'watch') {
-        const paths = folders.drainChanges();
+        const paths = await folders.drainChanges();
         if (host.active) {
           const native = await host.fs(operation, args).catch(error => {
             if (!paths.length) throw error;
@@ -226,6 +226,7 @@ export function installNativeHost(transport, ...browserServices) {
     processClose: id => processOwner(id).processClose(id),
   };
   window.addEventListener('pagehide', () => {
+    folders.stopWatching();
     for (const service of browserServices) service.close();
     host.disconnect(true);
   });

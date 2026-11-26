@@ -10,7 +10,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Workspace | Upstream Workspace/MultiWorkspace, project and outline panels, panes, tabs, command palette, search and settings | WASM build and browser workspace checks |
 | Documents | Browser filesystem with persisted documents and import/export dialogs | Browser file round trips |
 | Clipboard | Upstream editor Copy, Cut and Paste. Standard shortcuts use the browser paste event, and Edit → Paste uses the browser clipboard API. | Browser clipboard round trips |
-| Device folders | Chromium folder picker and direct file reads and writes through the selected handle. Zed remembers the most recent folder and checks its permission on reopen. | Chromium folder-handle and reload checks |
+| Device folders | Chromium folder picker and direct file reads and writes through the selected handle. Zed remembers the most recent folder and checks its permission on reopen. External changes reach the worktree through the browser observer or bounded metadata polling. | Folder-handle and reload checks, plus browser verification of external edits, new files, Git refresh, and unsaved-buffer protection through the polling path |
 | Settings and trust | Upstream Settings editor with search, user and project scopes, editable `settings.json`, keymap editing, bundled defaults and remembered project trust | Browser Settings and reload checks |
 | Startup cache | Versioned WebAssembly download in Cache Storage, with a network fallback | Cache tests and Chromium reload checks |
 | Vim | Upstream modes, keymap and status, enabled by `vim_mode` in Zed settings | WASM build and module validation |

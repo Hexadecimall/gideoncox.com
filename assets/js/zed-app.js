@@ -1,6 +1,6 @@
 import { installFileDialogs } from './zed/dialogs.js?v=workspace-controls-1';
 import { installNativeTerminal } from './zed/native-terminal.js?v=project-fs-1';
-import { installNativeHost } from './zed/native-host.js?v=folder-git-1';
+import { installNativeHost } from './zed/native-host.js?v=folder-watch-1';
 import { BrowserPython } from './zed/browser-python.js?v=workspace-ready-1';
 
 import { BrowserClangd } from './zed/browser-clangd.js?v=clangd-startup-1';

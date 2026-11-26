@@ -1,10 +1,12 @@
 import { rememberedFolder, rememberFolder } from './folder-history.js?v=1';
+import { FolderWatch, directoryRevision, fileRevision } from './folder-watch.js?v=1';
 
 const PREFIX = '/browser-folders';
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
 const MAX_GIT_SNAPSHOT_BYTES = 16 * 1024 * 1024;
 const MAX_GIT_ENTRIES = 8192;
 const UNUSED_GIT_DIRECTORIES = new Set(['hooks', 'logs', 'lfs', 'modules', 'worktrees']);
+const GIT_REFRESH_FILES = new Set(['.git/HEAD', '.git/index', '.git/packed-refs', '.git/config']);
 const ACCESS = { mode: 'readwrite' };
 
 function safePart(part) {
@@ -39,6 +41,7 @@ export class LocalFolders {
   mounts = new Map();
   changed = new Set();
   inodes = new Map();
+  watches = new Map();
 
   available() { return typeof globalThis.showDirectoryPicker === 'function'; }
   async pick() {
@@ -79,6 +82,9 @@ export class LocalFolders {
     }
     const path = root ?? `${PREFIX}/${crypto.randomUUID()}/${folder.name}`;
     this.mounts.set(path, folder);
+    const watch = new FolderWatch(path, candidate => this.readRevision(candidate), changed => this.changed.add(changed));
+    this.watches.set(path, watch);
+    void watch.start(folder);
     return path;
   }
 
@@ -115,6 +121,7 @@ export class LocalFolders {
     const handle = await this.entry(path);
     if (handle?.kind !== 'file') throw new Error('File does not exist.');
     const file = await handle.getFile();
+    this.rememberFile(path, file, true);
     if (file.size > MAX_FILE_BYTES) throw new Error('This file exceeds the 32 MB browser limit.');
     return new Uint8Array(await file.arrayBuffer());
   }
@@ -133,10 +140,35 @@ export class LocalFolders {
     this.changed.add(path);
   }
 
-  drainChanges() {
+  async drainChanges() {
+    await Promise.all([...this.watches.values()].map(watch => watch.poll()));
     const paths = [...this.changed];
     this.changed.clear();
     return paths;
+  }
+
+  stopWatching() {
+    for (const watch of this.watches.values()) watch.stop();
+  }
+
+  rememberFile(path, file, recent = false) {
+    this.watches.get(this.rootFor(path))?.remember(path, 'file', fileRevision(file), recent);
+  }
+
+  async directoryNames(directory) {
+    const names = [];
+    for await (const name of directory.keys()) if (safePart(name)) names.push(name);
+    return names;
+  }
+
+  async readRevision(path) {
+    const entry = await this.entry(path);
+    if (!entry) return undefined;
+    if (entry.kind === 'directory') {
+      const names = await this.directoryNames(entry);
+      return { type: 'directory', revision: directoryRevision(names) };
+    }
+    return { type: 'file', revision: fileRevision(await entry.getFile()) };
   }
 
   async listFiles(path, include, limit) {
@@ -175,7 +207,10 @@ export class LocalFolders {
 
     for (let index = 0; index < directories.length; index++) {
       const [parent, directory] = directories[index];
+      const watchGitDirectory = parent === '.git' || parent === '.git/refs' || parent.startsWith('.git/refs/');
+      const gitNames = [];
       for await (const entry of directory.values()) {
+        if (watchGitDirectory && safePart(entry.name)) gitNames.push(entry.name);
         if (!safePart(entry.name) || entry.name === '.git' ||
             (parent === '.git' && UNUSED_GIT_DIRECTORIES.has(entry.name))) continue;
         if (snapshot.length >= MAX_GIT_ENTRIES) throw new Error('The repository exceeds the browser Git snapshot limit.');
@@ -187,6 +222,9 @@ export class LocalFolders {
         }
 
         const file = await entry.getFile();
+        if (GIT_REFRESH_FILES.has(name) || name.startsWith('.git/refs/')) {
+          this.rememberFile(`${path}/${name}`, file, GIT_REFRESH_FILES.has(name));
+        }
         if (name === '.git/objects/info/alternates' && file.size) {
           throw new Error('Git object stores outside the selected repository are unavailable.');
         }
@@ -205,6 +243,9 @@ export class LocalFolders {
         isolatedConfig.set(diskConfig, contents.length);
         snapshot.push([name, isolatedConfig]);
       }
+      if (watchGitDirectory) {
+        this.watches.get(this.rootFor(path))?.remember(`${path}/${parent}`, 'directory', directoryRevision(gitNames));
+      }
     }
     return snapshot;
   }
@@ -218,6 +259,7 @@ export class LocalFolders {
         if (!this.inodes.has(path)) this.inodes.set(path, this.inodes.size + 1);
         const isDirectory = entry.kind === 'directory';
         const file = isDirectory ? null : await entry.getFile();
+        if (file) this.rememberFile(path, file);
         const modified = file?.lastModified ?? 0;
         return {
           inode: this.inodes.get(path), mtime_secs: Math.floor(modified / 1000),
@@ -228,9 +270,9 @@ export class LocalFolders {
       }
       case 'read_dir': {
         const directory = await this.directory(this.parsed(path));
-        const paths = [];
-        for await (const name of directory.keys()) if (safePart(name)) paths.push(`${path}/${name}`);
-        return paths;
+        const names = await this.directoryNames(directory);
+        this.watches.get(this.rootFor(path))?.remember(path, 'directory', directoryRevision(names));
+        return names.map(name => `${path}/${name}`);
       }
       case 'read': return this.read(path);
       case 'write': return this.write(path, args.data);
