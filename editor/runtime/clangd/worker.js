@@ -28,21 +28,7 @@ function writeStdin(message) {
   wakeStdin = undefined;
 }
 
-async function loadModule() {
-  const response = await fetch(new URL('./clangd.wasm.gz?v=21.1.0-2', import.meta.url));
-  if (!response.ok || !response.body) throw new Error('Could not download clangd.');
-  return WebAssembly.compileStreaming(new Response(
-    response.body.pipeThrough(new DecompressionStream('gzip')),
-    { headers: { 'Content-Type': 'application/wasm' } },
-  ));
-}
-
-// Overlap compiling the module with the project's initial file snapshot.
-const compiledModule = loadModule();
-compiledModule.catch(() => {});
-
-async function start(root, files) {
-  const module = await compiledModule;
+async function start({ root, files, module }) {
   clangd = await loadClangd({
     thisProgram: '/usr/bin/clangd',
     wasmMemory: new WebAssembly.Memory({ initial: 4096, maximum: 16384, shared: true }),
@@ -91,7 +77,7 @@ function updateFile(path, bytes) {
 
 addEventListener('message', async ({ data }) => {
   try {
-    if (data.type === 'start') await start(data.root, data.files);
+    if (data.type === 'start') await start(data);
     else if (data.type === 'file') updateFile(data.path, data.bytes);
     else if (data.type === 'lsp') writeStdin(data.message);
   } catch (error) {

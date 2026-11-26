@@ -110,9 +110,12 @@ class BrowserLspProcess {
     worker.addEventListener('messageerror', () => this.close(1, `${command} sent an invalid message.`));
   }
 
-  async start() {
-    const files = await projectFiles(this.zed, this.root, this.includePath, () => this.exitCode === null);
-    if (this.exitCode === null) this.worker.postMessage({ type: 'start', root: this.root, files });
+  async start(prepareRuntime) {
+    const [files, runtime] = await Promise.all([
+      projectFiles(this.zed, this.root, this.includePath, () => this.exitCode === null),
+      prepareRuntime?.(),
+    ]);
+    if (this.exitCode === null) this.worker.postMessage({ type: 'start', root: this.root, files, ...runtime });
   }
 
   read() {
@@ -200,13 +203,14 @@ class BrowserLspProcess {
 }
 
 export class BrowserLanguageServer {
-  constructor(zed, { command, makeWorker, initializeOptions, includePath, formatConfigFiles }) {
+  constructor(zed, { command, makeWorker, initializeOptions, includePath, formatConfigFiles, prepareRuntime }) {
     this.zed = zed;
     this.makeWorker = makeWorker;
     this.command = command;
     this.initializeOptions = initializeOptions;
     this.includePath = includePath;
     this.formatConfigFiles = formatConfigFiles;
+    this.prepareRuntime = prepareRuntime;
     this.prefix = `browser-${command}:`;
     this.running = new Map();
   }
@@ -221,7 +225,7 @@ export class BrowserLanguageServer {
     const process = new BrowserLspProcess(this.zed, options.cwd, this.makeWorker(), this.command,
       this.initializeOptions, this.includePath, this.formatConfigFiles);
     this.running.set(id, process);
-    process.start().catch(error => process.close(1, error?.message ?? String(error)));
+    process.start(this.prepareRuntime).catch(error => process.close(1, error?.message ?? String(error)));
     return { id, pid: 0 };
   }
 

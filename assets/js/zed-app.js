@@ -53,7 +53,7 @@ async function downloadWasm() {
 async function prepareRuntime(notifyDatabase) {
   const [zed, { prepareEditorServices }] = await Promise.all([
     import(`/assets/vendor/zed/pkg/zed_browser_probe.js?v=${build}`),
-    import('./zed/startup-services.js?v=model-download-5'),
+    import('./zed/startup-services.js?v=shared-clangd-1'),
   ]);
   await prepareEditorServices(zed, notifyDatabase);
   return zed;

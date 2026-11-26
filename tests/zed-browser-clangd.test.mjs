@@ -4,6 +4,8 @@ import { BrowserClangd } from '../assets/js/zed/browser-clangd.js';
 import { LspFrames, lspFrame } from '../assets/js/zed/lsp-stream.js';
 import { installNativeHost } from '../assets/js/zed/native-host.js';
 
+const compileTestModule = () => WebAssembly.compile(Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0));
+
 test('clangd mirrors browser files and preserves ordinary stdio LSP', async context => {
   const worker = new EventTarget();
   const messages = [];
@@ -30,7 +32,7 @@ test('clangd mirrors browser files and preserves ordinary stdio LSP', async cont
     delete globalThis.zedHost;
     delete globalThis.window;
   });
-  const clangd = new BrowserClangd(zed, () => worker);
+  const clangd = new BrowserClangd(zed, () => worker, compileTestModule);
   installNativeHost({}, clangd);
   const host = globalThis.zedHost;
   const { id } = await host.processOpen({ command: 'clangd', cwd: '/home/web' });
@@ -66,6 +68,7 @@ test('same-language projects keep independent workers and skip unrelated assets'
   const roots = ['/home/web/one', '/home/web/two'];
   const reads = [];
   const workers = [];
+  let compilations = 0;
   const zed = {
     async list_browser_paths() {
       return JSON.stringify(roots.flatMap(root => [
@@ -85,6 +88,9 @@ test('same-language projects keep independent workers and skip unrelated assets'
     worker.terminate = () => { worker.stopped = true; };
     workers.push(worker);
     return worker;
+  }, () => {
+    compilations++;
+    return compileTestModule();
   });
   globalThis.crossOriginIsolated = true;
   context.after(() => { clangd.close(); delete globalThis.crossOriginIsolated; });
@@ -95,6 +101,9 @@ test('same-language projects keep independent workers and skip unrelated assets'
   }))));
   assert.deepEqual(reads.sort(), roots.flatMap(root => [`${root}/.clang-format`, `${root}/main.cpp`]));
   assert.deepEqual(workers.map(worker => worker.messages[0].root), roots);
+  assert.equal(compilations, 1);
+  assert.ok(workers[0].messages[0].module instanceof WebAssembly.Module);
+  assert.equal(workers[0].messages[0].module, workers[1].messages[0].module);
   await clangd.processClose(first.id);
   assert.equal(workers[0].stopped, true);
   assert.equal(workers[1].stopped, undefined);
@@ -118,7 +127,7 @@ test('restored editors wait for the workspace filesystem before initializing LSP
     messages.push(message);
     if (message.type === 'start') worker.dispatchEvent(new MessageEvent('message', { data: { type: 'ready' } }));
   };
-  const clangd = new BrowserClangd(zed, () => worker);
+  const clangd = new BrowserClangd(zed, () => worker, compileTestModule);
   globalThis.crossOriginIsolated = true;
   context.after(() => { clangd.close(); delete globalThis.crossOriginIsolated; });
   const { id } = await clangd.processOpen({ command: 'clangd', cwd: '/home/web' });
@@ -129,4 +138,30 @@ test('restored editors wait for the workspace filesystem before initializing LSP
   assert.equal(snapshots, 1);
   assert.equal(messages[0].type, 'start');
   assert.equal(messages[1].message.method, 'initialize');
+});
+
+test('a failed clangd download can be retried after restarting the server', async context => {
+  let compilations = 0;
+  const clangd = new BrowserClangd({ list_browser_paths: async () => '[]' }, () => {
+    const worker = new EventTarget();
+    worker.terminate = () => {};
+    worker.postMessage = ({ type }) => {
+      if (type === 'start') worker.dispatchEvent(new MessageEvent('message', { data: { type: 'ready' } }));
+    };
+    return worker;
+  }, async () => {
+    if (++compilations === 1) throw new Error('Could not download clangd.');
+    return compileTestModule();
+  });
+  globalThis.crossOriginIsolated = true;
+  context.after(() => { clangd.close(); delete globalThis.crossOriginIsolated; });
+  const options = { command: 'clangd', cwd: '/home/web' };
+  const first = await clangd.processOpen(options);
+  const failed = await clangd.processRead(first.id);
+  assert.equal(failed.exitCode, 1);
+  assert.match(new TextDecoder().decode(failed.stderr), /Could not download clangd/);
+
+  const second = await clangd.processOpen(options);
+  await clangd.processWrite(second.id, lspFrame({ jsonrpc: '2.0', id: 1, method: 'initialize' }));
+  assert.equal(compilations, 2);
 });

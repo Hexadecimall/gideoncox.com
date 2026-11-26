@@ -19,9 +19,10 @@ initial memory, and gzip the executable for static hosting.
 python3 packaging/zed/patch-clangd.py INPUT_DIRECTORY editor/runtime/clangd
 ```
 
-The worker loads from this site. It runs one server for the browser workspace,
-starts with 256 MiB of shared memory, and uses the WASI headers for fallback
-analysis when the project has no compile database. The worker receives a project
+The workspace downloads and compiles clangd on demand, then shares the compiled
+module with each C/C++ language server worker in the page. Each worker starts with
+256 MiB of shared memory for its own threads and uses the WASI headers for fallback
+analysis when the project has no compile database. A worker receives a project
 snapshot of at most 16 MiB, with a 2 MiB limit per file. It mirrors saved file
 changes during the session. The editor’s **Format** command uses the project’s
 `.clang-format` or `_clang-format` file when one is present.
