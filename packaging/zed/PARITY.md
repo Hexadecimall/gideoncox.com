@@ -22,7 +22,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Python formatting | Ruff WebAssembly worker through Zed's Format command and formatting settings | LSP document edit and formatting tests |
 | Python execution | CPython WASI worker and upstream task terminal for browser workspace files | WASI runtime and buffer snapshot tests |
 | Diagnostics | Upstream Language Servers menu and Project Diagnostics view | Browser status bar and diagnostic checks |
-| Agent | Upstream Agent Panel and Threads Sidebar with an LMA provider for browser-local GGUF inference | Provider settings, model restoration, and browser streaming |
+| Agent | Upstream Agent Panel and Threads Sidebar with an LMA model library and optional loopback desktop inference | Hub search, browser model install and removal, settings reload, and desktop chat streaming |
 | Edit Prediction | Upstream inline predictions with the local Qwen2.5-Coder model | Browser Edit Prediction and settings persistence |
 | C/C++ | clangd 21 in a WebAssembly worker, with browser project files and bundled WASI headers | Chromium language-server and browser workspace checks |
 | Browser builds | Clang and LLD compile multi-file C and C++ for WASI and static Linux x86-64 with standard libraries. A freestanding Linux target is also available. Zig builds and runs WASI programs. Project build settings supply WASI arguments. | Chromium task terminal, argument forwarding, exit status and compiler-worker checks |

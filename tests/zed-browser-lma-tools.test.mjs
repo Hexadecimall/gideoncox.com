@@ -2,6 +2,8 @@ import assert from 'node:assert/strict';
 import test from 'node:test';
 import { BrowserLma } from '../editor/runtime/lma/client.js';
 import { QwenToolStream, qwenToolPrompt } from '../editor/runtime/lma/qwen-tools.js';
+import { DesktopLma, desktopUrl } from '../editor/runtime/lma/desktop.js';
+import { deleteModel, installedModels, installModel, modelFiles, searchModels } from '../editor/runtime/lma/model-cache.js';
 
 const tools = [{ type: 'function', function: { name: 'read_file', parameters: { type: 'object' } } }];
 
@@ -171,4 +173,79 @@ test('a cached selection survives reload and loads only when inference is reques
   assert.equal(job.id, 'next-prediction');
   worker.dispatchEvent(new MessageEvent('message', { data: { id: job.id, done: true } }));
   assert.deepEqual(events, [['next-prediction', { id: 'next-prediction', done: true }]]);
+});
+
+test('Hub search, revision-pinned install, listing, and removal use the browser cache', async t => {
+  const repository = 'example/Tiny-GGUF';
+  const revision = '1'.repeat(40);
+  const gguf = new TextEncoder().encode('GGUF' + '0'.repeat(20));
+  const entries = new Map();
+  const cache = {
+    async put(url, response) { entries.set(url, new Response(await response.arrayBuffer(), { headers: response.headers })); },
+    async match(url) { return entries.get(url.url ?? url)?.clone(); },
+    async keys() { return [...entries.keys()].map(url => new Request(url)); },
+    async delete(url) { return entries.delete(url); },
+  };
+  Object.defineProperty(globalThis, 'caches', { configurable: true, value: { open: async () => cache } });
+  t.after(() => delete globalThis.caches);
+  t.mock.method(globalThis, 'fetch', async address => {
+    const url = new URL(address);
+    if (url.pathname === '/api/models') {
+      assert.equal(url.searchParams.get('search'), 'tiny');
+      assert.equal(url.searchParams.get('filter'), 'gguf');
+      return Response.json([{ id: repository }]);
+    }
+    if (url.pathname === `/api/models/${repository}`) {
+      return Response.json({ sha: revision, siblings: [
+        { rfilename: 'Tiny.gguf', size: gguf.length },
+        { rfilename: 'mmproj-Tiny.gguf', size: gguf.length },
+        { rfilename: 'Too-Large.gguf', size: 600_000_000 },
+      ] });
+    }
+    assert.equal(url.pathname, `/${repository}/resolve/${revision}/Tiny.gguf`);
+    return new Response(gguf);
+  });
+  assert.deepEqual(await searchModels('tiny'), [repository]);
+  const [model, extra] = await modelFiles(repository);
+  assert.equal(extra, undefined);
+  assert.equal(model.name, 'Tiny.gguf');
+  await installModel(model);
+  assert.deepEqual((await installedModels()).map(({ id }) => id), [model.id]);
+  await deleteModel(model.id);
+  assert.deepEqual(await installedModels(), []);
+});
+
+test('desktop LMA only connects to loopback and streams the selected model', async t => {
+  assert.throws(() => desktopUrl('https://example.com'), /this computer/);
+  assert.throws(() => desktopUrl('http://localhost:8080/other'), /this computer/);
+  const { promise, resolve } = Promise.withResolvers();
+  const events = [];
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
+    assert.equal(options.headers.Authorization, 'Bearer test-token');
+    assert.equal(options.redirect, 'error');
+    if (url.endsWith('/v1/models')) return Response.json({ data: [{ id: 'local' }] });
+    assert.equal(url, 'http://127.0.0.1:8080/v1/chat/completions');
+    const body = JSON.parse(options.body);
+    assert.equal(body.model, 'local');
+    assert.equal(body.stream, true);
+    return new Response([
+      'data: {"choices":[{"delta":{"content":"Hello"}}]}',
+      'data: {"choices":[{"finish_reason":"stop"}],"usage":{"prompt_tokens":4,"completion_tokens":1}}',
+      'data: [DONE]',
+      '',
+    ].join('\n\n'));
+  });
+  const local = new DesktopLma((id, data) => {
+    assert.equal(id, 'request');
+    const event = JSON.parse(data);
+    events.push(event);
+    if (event.done) resolve();
+  });
+  assert.deepEqual(await local.connect('http://127.0.0.1:8080/v1', 'test-token'), ['local']);
+  local.start('request', { desktopModel: 'local', messages: [{ role: 'user', content: 'Hi' }], maxTokens: 24 });
+  await promise;
+  assert.deepEqual(events, [
+    { text: 'Hello' },
+    { done: true, finishReason: 'stop', promptTokens: 4, completionTokens: 1 },
+  ]);
 });

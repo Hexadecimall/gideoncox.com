@@ -12,7 +12,7 @@ import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=3';
 
 const loading = document.querySelector('#loading');
-const build = '813bc7be5412';
+const build = '68be4ef8672a';
 const gzip = true;
 
 async function downloadWasm() {
@@ -47,7 +47,7 @@ async function start() {
   const [zed, wasm, lma] = await Promise.all([
     import(`/assets/vendor/zed/pkg/zed_browser_probe.js?v=${build}`),
     downloadWasm(),
-    import('/editor/runtime/lma/client.js?v=provider-1').catch(error => {
+    import('/editor/runtime/lma/client.js?v=library-1').catch(error => {
       console.warn('LMA provider could not load.', error);
       return undefined;
     }),

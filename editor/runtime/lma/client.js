@@ -1,4 +1,7 @@
-import { hasCachedModel, recommendedModel } from './model-cache.js?v=provider-1';
+import {
+  deleteModel, hasCachedModel, installedModels, installModel, modelFiles, recommendedModel, searchModels,
+} from './model-cache.js?v=library-1';
+import { DesktopLma } from './desktop.js?v=library-1';
 
 const MAX_QUEUED = 8;
 const IDLE_MODEL_MS = 120_000;
@@ -11,6 +14,35 @@ export class BrowserLma {
     this.createWorker = createWorker;
     this.queue = [];
     this.ready = false;
+    this.desktop = new DesktopLma(receive);
+  }
+
+  async manage(operation, input) {
+    switch (operation) {
+      case 'search': return searchModels(input);
+      case 'files': return modelFiles(input);
+      case 'library': return installedModels();
+      case 'install': await installModel(input); return installedModels();
+      case 'use': return this.loadRecommendedModel(input);
+      case 'remove': {
+        this.checkModelSwitch();
+        this.downloading = true;
+        try {
+          await deleteModel(input);
+          if (this.selectedModel === input) {
+            this.onFailure('The installed model was removed.');
+            this.selectedModel = undefined;
+            try { globalThis.localStorage?.removeItem(SELECTED_MODEL); } catch { /* optional storage */ }
+          }
+        } finally {
+          this.downloading = false;
+        }
+        return installedModels();
+      }
+      case 'connect': return this.desktop.connect(input.url, input.key);
+      case 'disconnect': this.desktop.disconnect(); return [];
+      default: throw new Error('Unknown model library action.');
+    }
   }
 
   async selectModel() {
@@ -84,6 +116,10 @@ export class BrowserLma {
   }
 
   start(id, options) {
+    if (options.desktopModel !== undefined) {
+      this.desktop.start(id, options);
+      return;
+    }
     if (!this.restoring && (this.loading || this.downloading)) throw new Error('LMA is loading a model.');
     if (!this.ready && !this.selectedModel) throw new Error('Choose a GGUF model first.');
     if (this.queue.length >= MAX_QUEUED) throw new Error('LMA request queue is full.');
@@ -93,6 +129,7 @@ export class BrowserLma {
   }
 
   cancel(id) {
+    if (this.desktop.cancel(id)) return;
     if (this.active?.id === id) {
       this.active.cancelled = true;
       this.worker.postMessage({ type: 'cancel', id });
