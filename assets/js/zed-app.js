@@ -2,7 +2,7 @@ import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=4';
 
 const loading = document.querySelector('#loading');
-const build = '7333e722d8e7';
+const build = 'e9b7d00607d3';
 const gzip = true;
 const ios = /iPad|iPhone|iPod/.test(navigator.userAgent)
   || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
@@ -53,7 +53,7 @@ async function downloadWasm() {
 async function prepareRuntime(notifyDatabase) {
   const [zed, { prepareEditorServices }] = await Promise.all([
     import(`/assets/vendor/zed/pkg/zed_browser_probe.js?v=${build}`),
-    import('./zed/startup-services.js?v=model-download-3'),
+    import('./zed/startup-services.js?v=git-stash-1'),
   ]);
   await prepareEditorServices(zed, notifyDatabase);
   return zed;

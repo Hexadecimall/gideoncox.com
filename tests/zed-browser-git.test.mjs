@@ -306,6 +306,85 @@ test('the browser Git worker can reopen a repository and preserve its real Git i
   const remaining = await run(dropped.metadata, [['branches']]);
   assert.doesNotMatch(decoder.decode(remaining.results[0]), /refs\/heads\/updated-feature/);
 
+  const textFile = (file, text) => [file, encoder.encode(text)];
+  const stashBase = Array.from({ length: 15 }, (_, index) => `line ${index + 1}\n`).join('');
+  const stagedText = stashBase.replace('line 1\n', 'staged first\n');
+  const unstagedText = stashBase.replace('line 15\n', 'unstaged last\n');
+  const bothEdits = stagedText.replace('line 15\n', 'unstaged last\n');
+  const stashRoot = await run([textFile('selected.txt', 'base\n'), textFile('partial.txt', stashBase)], [
+    ['init', 'main'], ['stage', 'selected.txt'], ['stage', 'partial.txt'], ['commit', ...identity, 'Stash baseline'],
+  ]);
+  const stashConfig = textFile('.git/config', `[core]\nrepositoryformatversion = 0\n[user]\nname = ${identity[0]}\nemail = ${identity[1]}\n`);
+  const stashMetadata = stashRoot.metadata.filter(([file]) => file !== '.git/config').concat([stashConfig]);
+  const partialStage = await run(stashMetadata, [['set-index-text', 'partial.txt', 'false']], encoder.encode(stagedText));
+  const dirtyFiles = [
+    textFile('selected.txt', 'changed\n'), textFile('partial.txt', bothEdits),
+    textFile('new.txt', 'selected new file\n'), textFile('left.txt', 'unselected new file\n'),
+  ];
+  const saved = await run([...partialStage.metadata, ...dirtyFiles], [
+    ['stash-save', 'Selected files', 'selected.txt', 'new.txt'],
+    ['stash-list'], ['read-index', 'partial.txt'],
+  ]);
+  assert.match(decoder.decode(saved.results[1]), /^stash@\{0\}\0[0-9a-f]{40}\0\d+\0On main: Selected files\n$/);
+  assert.equal(decoder.decode(saved.results[2]), stagedText);
+  assert.deepEqual(saved.worktree.removed, ['new.txt']);
+  assert.deepEqual(saved.worktree.changed.map(([file, bytes]) => [file, decoder.decode(bytes)]), [
+    ['selected.txt', 'base\n'],
+  ]);
+  const afterSave = [textFile('selected.txt', 'base\n'), ...dirtyFiles.filter(([file]) => ['partial.txt', 'left.txt'].includes(file))];
+  const stagedStash = await run([...saved.metadata, ...afterSave], [
+    ['stash-staged', 'Just staged'], ['stash-list'], ['read-index', 'partial.txt'],
+  ]);
+  assert.match(decoder.decode(stagedStash.results[1]), /On main: Just staged\n[\s\S]*On main: Selected files\n/);
+  assert.equal(decoder.decode(stagedStash.results[2]), stashBase);
+  assert.deepEqual(stagedStash.worktree.changed.map(([file, bytes]) => [file, decoder.decode(bytes)]), [
+    ['partial.txt', unstagedText],
+  ]);
+  assert.deepEqual(stagedStash.worktree.removed, []);
+  const savedFiles = afterSave.map(([file, bytes]) => file === 'partial.txt' ? textFile(file, unstagedText) : [file, bytes]);
+  const cleanForApply = savedFiles.map(([file, bytes]) => file === 'partial.txt' ? textFile(file, stashBase) : [file, bytes]);
+  const appliedStash = await run([...stagedStash.metadata, ...cleanForApply], [['stash-apply', '0'], ['stash-list']]);
+  assert.match(decoder.decode(appliedStash.results[1]), /On main: Just staged/);
+  assert.deepEqual(appliedStash.worktree.changed.map(([file, bytes]) => [file, decoder.decode(bytes)]), [
+    ['partial.txt', stagedText],
+  ]);
+  await assert.rejects(run([
+    ...stagedStash.metadata, ...savedFiles, textFile('new.txt', 'conflicting file\n'),
+  ], [['stash-pop', '1']]), /conflict|exist|overwrite/i);
+  const poppedStash = await run([...stagedStash.metadata, ...savedFiles], [['stash-pop', '1'], ['stash-list']]);
+  assert.doesNotMatch(decoder.decode(poppedStash.results[1]), /Selected files/);
+  assert.deepEqual(poppedStash.worktree.changed.map(([file, bytes]) => [file, decoder.decode(bytes)]).sort(), [
+    ['new.txt', 'selected new file\n'], ['selected.txt', 'changed\n'],
+  ]);
+  const emptyStash = await run(poppedStash.metadata, [['stash-drop', '0'], ['stash-list']]);
+  assert.equal(decoder.decode(emptyStash.results[1]), '');
+  await assert.rejects(run(poppedStash.metadata, [['stash-drop', '-1']]), /Invalid Git stash index/);
+  await assert.rejects(run(poppedStash.metadata, [['stash-save', '', '.git/HEAD']]), /Invalid Git arguments/);
+
+  const renamedFiles = [textFile('renamed.txt', 'base\n'), textFile('partial.txt', stashBase)];
+  const stagedRename = await run([...stashMetadata, ...renamedFiles], [
+    ['stage-deletion', 'selected.txt'], ['stage', 'renamed.txt'], ['status'],
+  ]);
+  assert.match(decoder.decode(stagedRename.results[2]), /8\0renamed.txt\0selected.txt/);
+  const renamedStash = await run([...stagedRename.metadata, ...renamedFiles], [
+    ['stash-save', 'Rename', 'renamed.txt'], ['status'],
+  ]);
+  assert.equal(decoder.decode(renamedStash.results[1]), '');
+  assert.deepEqual(renamedStash.worktree.removed, ['renamed.txt']);
+  assert.deepEqual(renamedStash.worktree.changed.map(([file, bytes]) => [file, decoder.decode(bytes)]), [
+    ['selected.txt', 'base\n'],
+  ]);
+
+  const binaryBefore = Uint8Array.of(0, 9, 0, 9);
+  const binaryAfter = Uint8Array.of(0, 8, 1, 8);
+  const binaryRoot = await run([...stashMetadata, ['binary.dat', binaryBefore]], [
+    ['stage', 'binary.dat'], ['commit', ...identity, 'Binary baseline'],
+  ]);
+  const binaryStaged = await run([...binaryRoot.metadata, ['binary.dat', binaryAfter]], [
+    ['stage', 'binary.dat'], ['stash-staged', 'Binary change'],
+  ]);
+  assert.deepEqual(binaryStaged.worktree.changed, [['binary.dat', binaryBefore]]);
+
   const blameCommit = decoder.decode(branchCommit.results[1]).slice(0, -1);
   const rootCommit = decoder.decode(baseline.results[2]).slice(0, -1);
   const blameRepo = [

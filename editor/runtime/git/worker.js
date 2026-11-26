@@ -1,4 +1,4 @@
-import { GitWasiWorktree, MAX_GIT_OUTPUT } from './repository.js?v=git-remotes-1';
+import { GitWasiWorktree, MAX_GIT_OUTPUT } from './repository.js?v=git-stash-1';
 
 let engine;
 
@@ -13,10 +13,12 @@ async function loadEngine() {
   return WebAssembly.compileStreaming(new Response(stream, { headers: { 'Content-Type': 'application/wasm' } }));
 }
 
-const writesWorktree = new Set(['create-branch', 'switch-branch']);
+const writesWorktree = new Set([
+  'create-branch', 'switch-branch', 'stash-save', 'stash-staged', 'stash-pop', 'stash-apply',
+]);
 const writesMetadata = new Set([
   'init', 'stage', 'set-index-text', 'stage-deletion', 'unstage', 'commit', 'rename-branch', 'delete-branch', ...writesWorktree,
-  'remote-add', 'remote-remove',
+  'remote-add', 'remote-remove', 'stash-drop',
 ]);
 
 const MAX_GIT_INPUT = 16 * 1024 * 1024;

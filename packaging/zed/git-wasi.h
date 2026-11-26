@@ -17,5 +17,8 @@ int git_wasi_rename_branch(git_repository *repo, const char *name, const char *n
 int git_wasi_delete_branch(git_repository *repo, const char *name, int remote, int force);
 
 int git_wasi_blame(git_repository *repo, const char *path, const char *revision, size_t input_size);
+int git_wasi_stash_list(git_repository *repo);
+int git_wasi_stash_save(git_repository *repo, int staged_only, const char *message, int path_count, char **paths);
+int git_wasi_stash_restore(git_repository *repo, const char *action, const char *arg);
 
 #endif

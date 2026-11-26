@@ -50,7 +50,8 @@ cmake --build "$build/wasi-build" --parallel "${CMAKE_BUILD_PARALLEL_LEVEL:-4}"
 "$wasi_sdk/bin/clang" --target=wasm32-wasip1 -Os -Wall -Wextra -Werror \
   "-ffile-prefix-map=$source_dir=." -I"$libgit2/include" \
   "$source_dir/git-wasi.c" "$source_dir/git-wasi-history.c" \
-  "$source_dir/git-wasi-branches.c" "$source_dir/git-wasi-blame.c" "$build/wasi-build/libgit2.a" \
+  "$source_dir/git-wasi-branches.c" "$source_dir/git-wasi-blame.c" "$source_dir/git-wasi-stash.c" \
+  "$build/wasi-build/libgit2.a" \
   -Wl,-z,stack-size=1048576,--strip-all -o zed-git.wasm
 gzip -n -c zed-git.wasm > zed-git.wasm.gz
 hash=$(shasum -a 256 zed-git.wasm.gz | cut -d ' ' -f 1)

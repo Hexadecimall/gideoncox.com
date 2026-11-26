@@ -50,6 +50,7 @@ const argCounts = new Map([
   ['blame-revision', 2], ['blame-buffer', 2],
   ['history', 3], ['search-commits', 4], ['read-commit', 1], ['commit-files', 2],
   ['stage', 1], ['set-index-text', 2], ['stage-deletion', 1], ['unstage', 1], ['commit', 3],
+  ['stash-list', 0], ['stash-staged', 1], ['stash-apply', 1], ['stash-pop', 1], ['stash-drop', 1],
 ]);
 
 function output() {
@@ -138,8 +139,11 @@ export class GitWasiWorktree {
   async run(operation, args, input = null) {
     const fileHistory = (operation === 'history' || operation === 'search-commits') && args[0] === 'path';
     const pathIndex = fileHistory ? 1 : pathArguments.get(operation);
-    if (args.length !== argCounts.get(operation)
+    const saveStash = operation === 'stash-save';
+    const validCount = saveStash ? args.length >= 1 && args.length <= 8193 : args.length === argCounts.get(operation);
+    if (!validCount
       || args.some(arg => typeof arg !== 'string' || arg.includes('\0'))
+      || (saveStash && args.slice(1).some(path => !validPath(path) || isMetadata(path)))
       || (pathIndex !== undefined && (!validPath(args[pathIndex]) || isMetadata(args[pathIndex])))) {
       throw new Error('Invalid Git arguments.');
     }

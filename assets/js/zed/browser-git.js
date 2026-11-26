@@ -6,7 +6,7 @@ const READ_OPERATIONS = new Set([
   'head', 'status', 'branches', 'show', 'read-index', 'read-head', 'read-tree', 'read-blob',
   'resolve', 'diff', 'diff-stat', 'blame-revision', 'blame-buffer', 'history',
   'search-commits', 'read-commit', 'commit-files',
-  'remotes', 'branch-remote',
+  'remotes', 'branch-remote', 'stash-list',
 ]);
 
 function needsOnlyTrackedContents(operations) {
@@ -15,7 +15,7 @@ function needsOnlyTrackedContents(operations) {
 }
 
 export class BrowserGit {
-  constructor(makeWorker = () => new Worker('/editor/runtime/git/worker.js?v=git-remotes-1', { type: 'module' })) {
+  constructor(makeWorker = () => new Worker('/editor/runtime/git/worker.js?v=git-stash-1', { type: 'module' })) {
     this.makeWorker = makeWorker;
     this.pending = new Map();
     this.nextId = 0;

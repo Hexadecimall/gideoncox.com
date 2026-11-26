@@ -586,6 +586,15 @@ int main(int argc, char **argv)
         code = unstage(repo, argv[2]);
     } else if (!strcmp(argv[1], "commit") && argc == 5) {
         code = commit(repo, argv[2], argv[3], argv[4]);
+    } else if (!strcmp(argv[1], "stash-list") && argc == 2) {
+        code = git_wasi_stash_list(repo);
+    } else if (!strcmp(argv[1], "stash-save") && argc >= 3) {
+        code = git_wasi_stash_save(repo, 0, argv[2], argc - 3, argv + 3);
+    } else if (!strcmp(argv[1], "stash-staged") && argc == 3) {
+        code = git_wasi_stash_save(repo, 1, argv[2], 0, NULL);
+    } else if (argc == 3 && (!strcmp(argv[1], "stash-pop") ||
+        !strcmp(argv[1], "stash-apply") || !strcmp(argv[1], "stash-drop"))) {
+        code = git_wasi_stash_restore(repo, argv[1], argv[2]);
     } else {
         fputs("Unknown browser Git operation\n", stderr);
         code = 1;
