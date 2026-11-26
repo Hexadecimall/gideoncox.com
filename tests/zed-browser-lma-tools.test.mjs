@@ -3,7 +3,7 @@ import test from 'node:test';
 import { BrowserLma } from '../editor/runtime/lma/client.js';
 import { QwenToolStream, qwenToolPrompt } from '../editor/runtime/lma/qwen-tools.js';
 import { DesktopLma, desktopUrl } from '../editor/runtime/lma/desktop.js';
-import { deleteModel, installedModels, installModel, modelFiles, searchModels } from '../editor/runtime/lma/model-cache.js';
+import { deleteModel, installedModels, installModel, modelFiles, recommendedModel, searchModels } from '../editor/runtime/lma/model-cache.js';
 
 const tools = [{ type: 'function', function: { name: 'read_file', parameters: { type: 'object' } } }];
 
@@ -127,7 +127,7 @@ test('model switching frees the first worker and repeat selection reuses an alre
 });
 
 test('a cached selection survives reload and loads only when inference is requested', async t => {
-  const cache = { match: async () => new Response('GGUF') };
+  const cache = { match: async url => String(url).endsWith('.gguf') ? new Response('GGUF') : undefined };
   for (const [name, value] of [
     ['localStorage', { getItem: () => 'coder', setItem() {} }],
     ['caches', { match: cache.match, open: async () => cache }],
@@ -224,9 +224,9 @@ test('installing a large GGUF streams verified bytes into browser storage', asyn
   const revision = '2'.repeat(40);
   const filename = 'Large.gguf';
   const id = `https://huggingface.co/${repository}/resolve/${revision}/${filename}`;
-  const chunk = new Uint8Array(1024 * 1024);
+  const chunk = new Uint8Array(4 * 1024 * 1024);
   chunk.set(new TextEncoder().encode('GGUF'));
-  const blocks = 513;
+  const blocks = 1025;
   const bytes = blocks * chunk.length;
   let sent = 0;
   let saved = 0;
@@ -241,8 +241,9 @@ test('installing a large GGUF streams verified bytes into browser storage', asyn
   };
   Object.defineProperty(globalThis, 'caches', { configurable: true, value: { open: async () => cache } });
   t.after(() => delete globalThis.caches);
-  t.mock.method(globalThis, 'fetch', async url => {
+  t.mock.method(globalThis, 'fetch', async (url, options) => {
     assert.equal(url, id);
+    assert.equal(options.signal, undefined, 'A slow model download has no application deadline');
     return new Response(new ReadableStream({
       pull(controller) {
         if (sent === blocks) controller.close();
@@ -255,6 +256,53 @@ test('installing a large GGUF streams verified bytes into browser storage', asyn
   });
   await installModel({ id, repository, revision, filename, bytes });
   assert.equal(saved, bytes);
+});
+
+test('a split model installs every shard despite an insufficient-storage estimate', async t => {
+  const repository = 'example/Split-GGUF';
+  const revision = '3'.repeat(40);
+  const names = ['Split-00001-of-00002.gguf', 'Split-00002-of-00002.gguf'];
+  const gguf = new TextEncoder().encode('GGUF' + '0'.repeat(20));
+  const entries = new Map();
+  const seen = [];
+  const cache = {
+    async put(url, response) { entries.set(url, new Response(await response.blob(), { headers: response.headers })); },
+    async match(url) { return entries.get(url.url ?? url)?.clone(); },
+    async keys() { return [...entries.keys()].map(url => new Request(url)); },
+    async delete(url) { return entries.delete(url); },
+  };
+  const navigator = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', { configurable: true, value: {
+    storage: { async estimate() { return { usage: 100, quota: 101 }; } },
+  } });
+  Object.defineProperty(globalThis, 'caches', { configurable: true, value: { open: async () => cache } });
+  t.after(() => {
+    if (navigator) Object.defineProperty(globalThis, 'navigator', navigator);
+    else delete globalThis.navigator;
+    delete globalThis.caches;
+  });
+  t.mock.method(globalThis, 'fetch', async address => {
+    const url = new URL(address);
+    if (url.pathname.startsWith('/api/models/')) {
+      return Response.json({ sha: revision, siblings: [...names].reverse()
+        .map(rfilename => ({ rfilename, size: gguf.length })) });
+    }
+    seen.push(url.pathname.split('/').at(-1));
+    return new Response(gguf);
+  });
+  const [model] = await modelFiles(repository);
+  assert.equal(model.bytes, 2 * gguf.length);
+  assert.deepEqual(model.parts.map(part => part.filename), names);
+  const client = new BrowserLma(() => {}, undefined, message => seen.push(message));
+  const installed = await client.manage('install', model);
+  assert.match(seen[0], /available storage/);
+  assert.deepEqual(seen.slice(1), names);
+  assert.deepEqual(installed.map(entry => entry.id), [model.id]);
+  const files = await recommendedModel(model.id, { download: false });
+  assert.deepEqual(files.map(file => file.name), names);
+  for (const file of files) assert.deepEqual(new Uint8Array(await file.arrayBuffer()), gguf);
+  await deleteModel(model.id);
+  assert.equal(entries.size, 0);
 });
 
 test('desktop LMA only connects to loopback and streams the selected model', async t => {

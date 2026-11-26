@@ -2,7 +2,7 @@
 
 Open **Settings → AI → LLM Providers**, click **Configure**, and find LMA. If AI is disabled, enable it in Settings.
 
-Use **Find Models** to search Hugging Face or enter an exact `owner/repository`. Select a repository, then install a single-file GGUF. **Installed Models** lists browser downloads with their sizes and lets you activate or remove them. Installation depends on available browser storage. Running a model depends on its architecture and available browser memory. **Generation Settings** saves the output limit and temperature in `language_models.lma` in `settings.json`.
+Use **Find Models** to search Hugging Face or enter an exact `owner/repository`. Select a repository, then install a GGUF or a complete split GGUF. **Installed Models** lists browser downloads with their sizes and lets you activate or remove them. Use **Choose GGUF Model** to open a local file or select all parts of a split model together. Large models can show an advisory before the download or load begins. Installation depends on available browser storage. Running a model depends on its architecture and available browser memory. **Generation Settings** saves the output limit and temperature in `language_models.lma` in `settings.json`.
 
 ## Browser models
 

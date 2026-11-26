@@ -1,7 +1,8 @@
 import {
   deleteModel, hasCachedModel, installedModels, installModel, modelFiles, recommendedModel, searchModels,
-} from './model-cache.js?v=model-size-2';
+} from './model-cache.js?v=model-download-3';
 import { DesktopLma } from './desktop.js?v=library-1';
+import { downloadWarning, memoryWarning } from './resource-warning.js?v=1';
 
 const MAX_QUEUED = 8;
 const IDLE_MODEL_MS = 120_000;
@@ -9,9 +10,10 @@ const SELECTED_MODEL = 'zed.lma.selected-model';
 const version = new URL(import.meta.url).search;
 
 export class BrowserLma {
-  constructor(receive, createWorker = () => new Worker(new URL(`./worker.js${version}`, import.meta.url), { type: 'module' })) {
+  constructor(receive, createWorker = () => new Worker(new URL(`./worker.js${version}`, import.meta.url), { type: 'module' }), warn) {
     this.receive = receive;
     this.createWorker = createWorker;
+    this.warn = warn;
     this.queue = [];
     this.ready = false;
     this.desktop = new DesktopLma(receive);
@@ -22,7 +24,11 @@ export class BrowserLma {
       case 'search': return searchModels(input);
       case 'files': return modelFiles(input);
       case 'library': return installedModels();
-      case 'install': await installModel(input); return installedModels();
+      case 'install': {
+        this.warnAbout(await downloadWarning(input?.bytes));
+        await installModel(input);
+        return installedModels();
+      }
       case 'use': return this.loadRecommendedModel(input);
       case 'remove': {
         this.checkModelSwitch();
@@ -45,19 +51,25 @@ export class BrowserLma {
     }
   }
 
+  warnAbout(message) {
+    if (!message) return;
+    try { this.warn?.(message); } catch { /* Advisory only. */ }
+  }
+
   async selectModel() {
-    const file = await new Promise(resolve => {
+    const files = await new Promise(resolve => {
       const input = document.createElement('input');
       input.type = 'file';
       input.accept = '.gguf';
+      input.multiple = true;
       input.hidden = true;
       const finish = file => { input.remove(); resolve(file); };
-      input.addEventListener('change', () => finish(input.files[0]), { once: true });
+      input.addEventListener('change', () => finish(Array.from(input.files)), { once: true });
       input.addEventListener('cancel', () => finish(undefined), { once: true });
       document.body.append(input);
       input.click();
     });
-    return file && this.loadModel(file);
+    return files?.length ? this.loadModel(files) : undefined;
   }
 
   async loadRecommendedModel(kind = 'coder') {
@@ -97,6 +109,8 @@ export class BrowserLma {
   }
 
   replaceModel(file, modelKind) {
+    const files = Array.isArray(file) ? [...file].sort((left, right) => left.name.localeCompare(right.name)) : [file];
+    this.warnAbout(memoryWarning(files.reduce((bytes, member) => bytes + member.size, 0)));
     // WebAssembly memory cannot shrink. A fresh worker releases the old model's heap.
     clearTimeout(this.idleTimer);
     this.worker?.terminate();
@@ -105,9 +119,9 @@ export class BrowserLma {
     this.ready = false;
     return new Promise((resolve, reject) => {
       const id = crypto.randomUUID();
-      this.loading = { id, resolve, reject, name: file.name, kind: modelKind };
+      this.loading = { id, resolve, reject, name: files[0].name, kind: modelKind };
       try {
-        this.workerForModel().postMessage({ type: 'load', id, file, modelKind });
+        this.workerForModel().postMessage({ type: 'load', id, files, modelKind });
       } catch (error) {
         this.loading = undefined;
         reject(error);

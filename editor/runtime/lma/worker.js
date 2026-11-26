@@ -11,12 +11,24 @@ let loaded = false;
 let modelKind;
 let request;
 
-async function loadModel(file, kind) {
-  if (!(file instanceof Blob) || file.size < 24) {
-    throw new Error('Choose a valid GGUF model.');
+async function loadModel(files, kind) {
+  if (!Array.isArray(files) || !files.length) throw new Error('Choose a valid GGUF model.');
+  const first = /^(.*)-00001-of-(\d{5})\.gguf$/i.exec(files[0]?.name);
+  if (first) {
+    if (Number(first[2]) !== files.length || files.some((file, index) =>
+      file?.name.replace(/\.gguf$/i, '.gguf') !== `${first[1]}-${String(index + 1).padStart(5, '0')}-of-${first[2]}.gguf`)) {
+      throw new Error('Select every part of the split GGUF model.');
+    }
+  } else if (files.length !== 1 || /-\d{5}-of-\d{5}\.gguf$/i.test(files[0]?.name)) {
+    throw new Error('Select one GGUF model or every part of a split model.');
   }
-  const magic = new TextDecoder().decode(await file.slice(0, 4).arrayBuffer());
-  if (magic !== 'GGUF') throw new Error('This file is not a GGUF model.');
+  const blobs = [];
+  for (const file of files) {
+    if (!(file instanceof Blob) || file.size < 24) throw new Error('Choose a valid GGUF model.');
+    const magic = new TextDecoder().decode(await file.slice(0, 4).arrayBuffer());
+    if (magic !== 'GGUF') throw new Error('This file is not a GGUF model.');
+    blobs.push({ name: first ? file.name.replace(/\.gguf$/i, '.gguf') : 'weights.gguf', data: file });
+  }
 
   if (!runtime) {
     // Keep llama.cpp on the worker and read from the Blob, keeping a second full
@@ -27,11 +39,11 @@ async function loadModel(file, kind) {
     runtime.FS.mkdir(MODEL_PATH);
   }
 
-  runtime.FS.mount(runtime.WORKERFS, { blobs: [{ name: 'weights.gguf', data: file }] }, MODEL_PATH);
+  runtime.FS.mount(runtime.WORKERFS, { blobs }, MODEL_PATH);
   try {
     loaded = false;
     const result = runtime.ccall('lma_load', 'number', ['string', 'number', 'boolean'], [
-      `${MODEL_PATH}/weights.gguf`, MODEL_CONTEXT_TOKENS, kind === 'agent',
+      `${MODEL_PATH}/${blobs[0].name}`, MODEL_CONTEXT_TOKENS, kind === 'agent',
     ]);
     if (result !== 0) {
       throw new Error('LMA could not load this GGUF model. Check model compatibility and available browser memory.');
@@ -203,7 +215,7 @@ self.addEventListener('message', async ({ data }) => {
   request = job;
   try {
     if (data.type === 'load') {
-      await loadModel(data.file, data.modelKind);
+      await loadModel(data.files, data.modelKind);
       modelKind = data.modelKind;
       postMessage({ id: job.id, loaded: true });
     } else if (data.type === 'complete') {
