@@ -9,7 +9,7 @@ async function decompress(path, type) {
   });
 }
 
-async function run({ cwd, script, files, stdin }, output) {
+async function run({ cwd, script, files, stdin, programArgs = [] }, output) {
   const [module, stdlib] = await Promise.all([
     WebAssembly.compileStreaming(decompress('./python.wasm.gz?v=3.14.10', 'application/wasm')),
     decompress('./python314.zip.gz?v=3.14.10', 'application/zip').then(response => response.arrayBuffer()),
@@ -19,13 +19,13 @@ async function run({ cwd, script, files, stdin }, output) {
   for (const [path, data] of files) writeFile(root.dir, path, data);
 
   const bootstrap = `import os, runpy, sys
-cwd, script = sys.argv[1:3]
+cwd, script, *arguments = sys.argv[1:]
 os.chdir(cwd)
-sys.argv = [script]
+sys.argv = [script, *arguments]
 sys.path[0] = os.path.dirname(script)
 runpy.run_path(script, run_name="__main__")`;
   const tty = new ConsoleStdout(bytes => output.write(bytes));
-  const wasi = new WASI(['python3', '-B', '-u', '-c', bootstrap, cwd, script], ['PYTHONHOME=/usr'], [
+  const wasi = new WASI(['python3', '-B', '-u', '-c', bootstrap, cwd, script, ...programArgs], ['PYTHONHOME=/usr'], [
     new TerminalStdin(stdin, output), tty, tty, root,
   ]);
   const instance = await WebAssembly.instantiate(module, { wasi_snapshot_preview1: wasi.wasiImport });
@@ -37,7 +37,7 @@ self.addEventListener('message', async ({ data }) => {
   try {
     const code = await run(data, output);
     output.flush();
-    postMessage({ code });
+    postMessage({ code, ranProgram: true });
   } catch (error) {
     output.flush();
     postMessage({ error: error.message });

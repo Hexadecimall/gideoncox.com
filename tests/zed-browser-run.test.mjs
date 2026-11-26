@@ -1,4 +1,5 @@
 import assert from 'node:assert/strict';
+import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { BrowserRunBridge } from '../assets/js/zed/browser-run.js';
 import { createStdin, makeStdinReader } from '../editor/runtime/python/stdin.js';
@@ -19,7 +20,7 @@ test('WASI stdin supports wraparound, backpressure, and EOF', () => {
   assert.equal(stdin.write(encode('late')), false);
 });
 
-test('running Python snapshots the active buffer and keeps the project and terminal local', async t => {
+test('running Python forwards arguments and keeps the active buffer and terminal local', async t => {
   const isolation = Object.getOwnPropertyDescriptor(globalThis, 'crossOriginIsolated');
   Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value: true });
   t.after(() => {
@@ -38,17 +39,21 @@ test('running Python snapshots the active buffer and keeps the project and termi
   worker.terminate = () => { worker.terminated = true; };
   const posted = new Promise(resolve => { worker.postMessage = resolve; });
   const bridge = new BrowserRunBridge(editor, () => worker);
+  const argumentsForScript = ['--mode', 'two words', '', '雪'];
   const options = {
-    cwd: '/home/web/project', command: 'browser-python', args: [paths[0]],
+    cwd: '/home/web/project', command: 'browser-python',
+    args: [paths[0], 'python', '--', ...argumentsForScript],
     env: { ZED_BROWSER_SOURCE: 'changed in the editor' },
   };
   assert.equal(bridge.accepts({ command: 'python3' }), false);
   await assert.rejects(bridge.open({ ...options, args: ['/opt/project/main.py'] }), /outside the browser project/);
+  await assert.rejects(bridge.open({ ...options, args: [...options.args, 'bad\0arg'] }), /NUL/);
   const id = await bridge.open(options);
   t.after(() => bridge.close(id));
   assert.equal(bridge.owns(id), true);
   assert.match(decode((await bridge.read(id)).data), /Starting Python/);
-  const { files, stdin } = await posted;
+  const { files, stdin, programArgs } = await posted;
+  assert.deepEqual(programArgs, argumentsForScript);
   assert.deepEqual(reads, [paths[1]]);
   assert.deepEqual(files.map(([path, bytes]) => [path, decode(bytes)]), [
     [paths[0], 'changed in the editor'], [paths[1], 'helper'],
@@ -59,12 +64,49 @@ test('running Python snapshots the active buffer and keeps the project and termi
   assert.equal(read(100).length, 0);
   assert.equal(decode((await bridge.read(id)).data), 'Grüße\r\n');
   worker.dispatchEvent(new MessageEvent('message', { data: { chunk: encode('result\r\n') } }));
-  worker.dispatchEvent(new MessageEvent('message', { data: { code: 7 } }));
+  worker.dispatchEvent(new MessageEvent('message', { data: { code: 7, ranProgram: true } }));
   const result = await bridge.read(id);
   assert.equal(result.ended, true);
   assert.equal(result.exitCode, 7);
-  assert.equal(decode(result.data), 'result\r\n');
+  assert.equal(decode(result.data), 'result\r\n\r\nExit code: 7\r\n');
   assert.equal(worker.terminated, true);
+});
+
+test('CPython WASI receives exact sys.argv values and preserves the exit code', { timeout: 20000 }, async t => {
+  const scope = new EventTarget();
+  scope.close = () => {};
+  const chunks = [];
+  let finish;
+  const exited = new Promise(resolve => { finish = resolve; });
+  const restore = ['self', 'postMessage'].map(key => [key, Object.getOwnPropertyDescriptor(globalThis, key)]);
+  t.after(() => {
+    for (const [key, descriptor] of restore) {
+      if (descriptor) Object.defineProperty(globalThis, key, descriptor);
+      else delete globalThis[key];
+    }
+  });
+  globalThis.self = scope;
+  globalThis.postMessage = message => {
+    if (message.chunk) chunks.push(decode(message.chunk));
+    else finish(message);
+  };
+  t.mock.method(globalThis, 'fetch', async url => {
+    assert.equal(url.protocol, 'file:');
+    const asset = new URL(url);
+    asset.search = '';
+    return new Response(await readFile(asset));
+  });
+  await import('../editor/runtime/python/worker.js');
+
+  const cwd = '/home/web';
+  const script = `${cwd}/argument demo.py`;
+  const programArgs = ['--mode', 'two words', '', '雪', '"quotes"'];
+  const code = 'import json, sys\nprint(json.dumps(sys.argv, ensure_ascii=False))\nsys.exit(23)';
+  scope.dispatchEvent(new MessageEvent('message', {
+    data: { cwd, script, programArgs, files: [[script, encode(code)]], stdin: createStdin().buffer },
+  }));
+  assert.deepEqual(await exited, { code: 23, ranProgram: true });
+  assert.deepEqual(JSON.parse(chunks.join('')), [script, ...programArgs]);
 });
 
 test('a WebAssembly task forwards exact program arguments and displays the exit code after running', async t => {

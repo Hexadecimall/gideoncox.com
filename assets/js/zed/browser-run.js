@@ -4,7 +4,7 @@ import { MAX_PROJECT, isLanguageProject, projectFiles, readProjectFile } from '.
 import { joinBytes } from './lsp-stream.js';
 
 const PROGRAMS = new Map([
-  ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=2', targets: ['python'] }],
+  ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=argv-1', targets: ['python'] }],
   ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=warm-builds-1',
     targets: CLANG_TARGETS }],
   ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi'] }],
@@ -187,12 +187,13 @@ export class BrowserRunBridge {
     const script = args?.[0];
     const target = args?.[1] ?? (command === 'browser-python' ? 'python' : undefined);
     if (!program?.targets.includes(target)) throw new Error('Unsupported browser build target.');
+    const runsProgram = target === 'wasi' || target === 'python';
     let programArgs;
     if (args?.length > 2) {
-      if (target !== 'wasi' || args[2] !== '--') throw new Error('Invalid browser task arguments.');
+      if (!runsProgram || args[2] !== '--') throw new Error('Invalid browser task arguments.');
       programArgs = args.slice(3);
       if (programArgs.some(arg => typeof arg !== 'string' || arg.includes('\0'))) {
-        throw new Error('WebAssembly arguments must be strings without NUL characters.');
+        throw new Error('Program arguments must be strings without NUL characters.');
       }
     }
     if (!globalThis.crossOriginIsolated) throw new Error('Open the top-level Zed page to run browser tasks.');
@@ -214,7 +215,7 @@ export class BrowserRunBridge {
     const reusableClang = command === 'browser-cc';
     const worker = reusableClang ? this.takeClangWorker(program.worker) : this.makeWorker(program.worker);
     const retainWorker = reusableClang ? worker => this.retainClangWorker(worker) : undefined;
-    const process = new BrowserTaskProcess(worker, program.label, target === 'wasi', data => {
+    const process = new BrowserTaskProcess(worker, program.label, runsProgram, data => {
       if (target !== 'linux-x86_64' && target !== 'linux-x86_64-static') {
         throw new Error('Unexpected browser build artifact.');
       }

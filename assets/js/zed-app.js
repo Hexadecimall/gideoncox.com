@@ -5,14 +5,14 @@ import { BrowserPython } from './zed/browser-python.js?v=workspace-ready-1';
 
 import { BrowserClangd } from './zed/browser-clangd.js?v=clangd-startup-1';
 import { BrowserRust } from './zed/browser-rust.js?v=quickfix-1';
-import { BrowserRunBridge } from './zed/browser-run.js?v=warm-builds-1';
+import { BrowserRunBridge } from './zed/browser-run.js?v=python-argv-1';
 import { BrowserGit } from './zed/browser-git.js?v=git-worktree-1';
 import { openBrowserDatabase } from './zed/browser-database.js?v=history-1';
 import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=3';
 
 const loading = document.querySelector('#loading');
-const build = '310b22bdbaaa';
+const build = '41c4773aafbb';
 const gzip = true;
 
 async function downloadWasm() {
