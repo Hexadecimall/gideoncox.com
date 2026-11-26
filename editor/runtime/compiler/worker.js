@@ -2,10 +2,14 @@ import { ConsoleStdout, File, OpenFile, PreopenDirectory, wasi as errno } from '
 import WASI from '../rust/wasi/wasi.js?v=utf8-argv-1';
 import { TerminalOutput, TerminalStdin, writeFile } from '../terminal-wasi.js';
 import { loadArchive, loadModule } from './assets.js';
-import { BUILD_CONFIG, parseBuildConfig, isProjectRelativePath, clangLibraryPaths } from './build-settings.js?v=1';
+import { BUILD_CONFIG, CLANG_TARGETS, parseBuildConfig, isProjectRelativePath, clangLibraryPaths } from './build-settings.js?v=1';
 
 const CC_OUTPUT = '/.zed-compiler';
 const clangAssets = new Map();
+const CLANG_SYSROOTS = new Map([
+  ['wasi', 'wasi-sdk.tar.gz'],
+  ['linux-x86_64-static', 'linux-x86_64-sdk.tar.gz'],
+]);
 
 function loadClangAsset(name, load) {
   if (!clangAssets.has(name)) {
@@ -16,6 +20,16 @@ function loadClangAsset(name, load) {
   }
   return clangAssets.get(name);
 }
+
+function loadClangToolchain(target) {
+  const sdk = CLANG_SYSROOTS.get(target);
+  return Promise.all([
+    loadClangAsset('clang.wasm.gz', loadModule),
+    loadClangAsset('lld.wasm.gz', loadModule),
+    sdk ? loadClangAsset(sdk, loadArchive) : null,
+  ]);
+}
+
 const SOURCE = /\.(?:c|C|cc|cpp|cxx|c\+\+|CPP)$/;
 const SKIP_SOURCES = new Set(['.zed', '.zed-build', 'build', 'dist', 'vendor', 'tests', 'test']);
 const LINUX_HEADERS = [
@@ -117,10 +131,8 @@ async function clangBuild(job, settings, output) {
   const isNative = freestanding || linuxStatic;
   const { sources, includes, libraries } = clangSettings(job, settings);
   const usesCpp = settings.linkCxx || sources.some(source => !source.endsWith('.c'));
-  const sdkName = linuxStatic ? 'linux-x86_64-sdk.tar.gz' : 'wasi-sdk.tar.gz';
-  const [clang, linker, sdk, cxx] = await Promise.all([
-    loadClangAsset('clang.wasm.gz', loadModule), loadClangAsset('lld.wasm.gz', loadModule),
-    freestanding ? null : loadClangAsset(sdkName, loadArchive),
+  const [[clang, linker, sdk], cxx] = await Promise.all([
+    loadClangToolchain(job.target),
     linuxStatic && usesCpp ? loadClangAsset('linux-x86_64-cxx.tar.gz', loadArchive) : null,
   ]);
   const root = new PreopenDirectory('/', new Map());
@@ -244,6 +256,13 @@ async function rustBuild(job, settings, output) {
 }
 
 self.addEventListener('message', async ({ data: job }) => {
+  if (job.type === 'prepare-clang') {
+    if (CLANG_TARGETS.includes(job.target)) {
+      // A build reports any toolchain error once it receives the project files.
+      await loadClangToolchain(job.target).catch(() => {});
+    }
+    return;
+  }
   const output = new TerminalOutput();
   try {
     const settings = job.target === 'clippy' ? {} : readSettings(job);

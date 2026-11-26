@@ -5,7 +5,7 @@ import { joinBytes } from './lsp-stream.js';
 
 const PROGRAMS = new Map([
   ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=argv-2', targets: ['python'] }],
-  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=warm-builds-1',
+  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=clang-startup-1',
     targets: CLANG_TARGETS }],
   ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi'] }],
   ['browser-rust', { label: 'Rust', worker: '/editor/runtime/compiler/worker.js?v=quickfix-1', targets: ['wasi', 'clippy'] }],
@@ -255,12 +255,15 @@ export class BrowserRunBridge {
     this.sessions.set(id, process);
     process.append(encoder.encode(`Starting ${program.label}…\r\n`));
     const running = () => process.exitCode === null;
-    readProject(this.zed, { cwd: root, script, source, command, target }, running).then(files => {
+    const startJob = async () => {
+      if (reusableClang) worker.postMessage({ type: 'prepare-clang', target });
+      const files = await readProject(this.zed, { cwd: root, script, source, command, target }, running);
       if (running()) process.worker.postMessage({
         cwd, script, scriptArgument, files, command, target, programArgs, stdin: process.stdin.buffer,
         reusableClang,
       });
-    }).catch(error => process.fail(error.message));
+    };
+    startJob().catch(error => process.fail(error.message));
     return id;
   }
 

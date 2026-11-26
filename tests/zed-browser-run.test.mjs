@@ -126,7 +126,9 @@ test('a WebAssembly task forwards exact program arguments and displays the exit 
   ]) {
     const worker = new EventTarget();
     worker.terminate = () => {};
-    const posted = new Promise(resolve => { worker.postMessage = resolve; });
+    const posted = new Promise(resolve => {
+      worker.postMessage = job => { if (job.command) resolve(job); };
+    });
     const bridge = new BrowserRunBridge({ async list_browser_paths() { return '[]'; } }, () => worker);
     const options = {
       cwd: '/home/web/project', command: 'browser-cc', args: ['/home/web/project/main.c', 'wasi'],
@@ -274,7 +276,9 @@ test('the static Linux task offers the linked ELF under its target-specific file
   });
   const worker = new EventTarget();
   worker.terminate = () => {};
-  const posted = new Promise(resolve => { worker.postMessage = resolve; });
+  const posted = new Promise(resolve => {
+    worker.postMessage = job => { if (job.command) resolve(job); };
+  });
   const bridge = new BrowserRunBridge({ async list_browser_paths() { return '[]'; } }, () => worker);
   const id = await bridge.open({
     cwd: '/home/web/project', command: 'browser-cc',
@@ -307,24 +311,36 @@ test('requested C libraries are included before optional files and may exceed th
   const library = `${cwd}/vendor/libanswer.a`;
   const bytes = new Uint8Array(3 * 1024 * 1024);
   const reads = [];
+  const { promise: configReady, resolve: releaseConfig } = Promise.withResolvers();
   const zed = {
     async list_browser_paths() { return JSON.stringify([{ path: config }, { path: library }]); },
     async read_browser_file(path) {
       reads.push(path);
-      if (path === config) return encode(JSON.stringify({ libraries: { wasi: ['vendor/libanswer.a'] } }));
+      if (path === config) {
+        await configReady;
+        return encode(JSON.stringify({ libraries: { wasi: ['vendor/libanswer.a'] } }));
+      }
       if (path === library) return bytes;
       throw new Error('Unexpected file request');
     },
   };
   const worker = new EventTarget();
   worker.terminate = () => {};
-  const posted = new Promise(resolve => { worker.postMessage = resolve; });
+  const messages = [];
+  const posted = new Promise(resolve => {
+    worker.postMessage = job => {
+      messages.push(job);
+      if (job.command) resolve(job);
+    };
+  });
   const bridge = new BrowserRunBridge(zed, () => worker);
   const id = await bridge.open({
     cwd, command: 'browser-cc', args: [script, 'wasi'],
     env: { ZED_BROWSER_SOURCE: 'int main(void) { return 0; }' },
   });
   t.after(() => bridge.close(id));
+  assert.deepEqual(messages, [{ type: 'prepare-clang', target: 'wasi' }]);
+  releaseConfig();
   const { files } = await posted;
   assert.deepEqual(reads, [config, library]);
   assert.deepEqual(files.map(([path]) => path), [script, config, library]);

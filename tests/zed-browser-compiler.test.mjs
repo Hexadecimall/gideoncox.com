@@ -13,18 +13,19 @@ const encoder = new TextEncoder();
 const cwd = '/home/web/compiler-test';
 let job = 0;
 
-async function run({ command = 'browser-cc', target = 'wasi', script, files, programArgs, registry }) {
+async function run({ command = 'browser-cc', target = 'wasi', script, files, programArgs, registry, prepare = false }) {
   const handler = new EventTarget();
   handler.close = () => {};
   globalThis.self = handler;
   globalThis.Worker = WorkerHost;
   globalThis.addEventListener = handler.addEventListener.bind(handler);
   globalThis.removeEventListener = handler.removeEventListener.bind(handler);
-  const fetched = new Set();
+  const fetched = new Map();
   globalThis.fetch = async location => {
     const asset = new URL(location);
     asset.search = '';
-    fetched.add(asset.pathname.split('/').pop());
+    const name = asset.pathname.split('/').pop();
+    fetched.set(name, (fetched.get(name) ?? 0) + 1);
     if (asset.protocol === 'https:') {
       const data = registry?.get(asset.href);
       return data ? new Response(data) : new Response(null, { status: 404 });
@@ -54,6 +55,7 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files, pro
     };
   });
   await import(`${worker.href}?run=${++job}`);
+  if (prepare) handler.dispatchEvent(new MessageEvent('message', { data: { type: 'prepare-clang', target } }));
   handler.dispatchEvent(new MessageEvent('message', { data: {
     cwd, command, target, script: `${cwd}/${script}`, programArgs,
     files: Object.entries(files).map(([name, contents]) => [
@@ -64,7 +66,7 @@ async function run({ command = 'browser-cc', target = 'wasi', script, files, pro
 }
 
 test('the shipped browser toolchains compile, link, report diagnostics, and run', async () => {
-  const c = await run({ script: 'main.c', files: {
+  const c = await run({ script: 'main.c', prepare: true, files: {
     '.zed/browser-build.json': JSON.stringify({ args: ['unused'] }),
     'main.c': '#include <stdio.h>\n#include "math_test.h"\nint main(int argc, char **argv) { printf("C: %d\\n", twice(21)); return argc == 1 ? 0 : 1; }',
     'include/math_test.h': 'int twice(int value);',
@@ -73,6 +75,9 @@ test('the shipped browser toolchains compile, link, report diagnostics, and run'
   assert.equal(c.code, 0, c.output);
   assert.equal(c.ranProgram, true);
   assert.match(c.output, /C: 42/);
+  assert.equal(c.fetched.get('clang.wasm.gz'), 1);
+  assert.equal(c.fetched.get('lld.wasm.gz'), 1);
+  assert.equal(c.fetched.get('wasi-sdk.tar.gz'), 1);
 
   const cpp = await run({ script: 'main.cpp', files: {
     '.zed/browser-build.json': JSON.stringify({ args: ['unused'] }),

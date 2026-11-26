@@ -4,7 +4,7 @@ import { installNativeHost } from './native-host.js?v=folder-watch-1';
 import { BrowserPython } from './browser-python.js?v=workspace-ready-1';
 import { BrowserClangd } from './browser-clangd.js?v=clangd-startup-1';
 import { BrowserRust } from './browser-rust.js?v=quickfix-1';
-import { BrowserRunBridge } from './browser-run.js?v=python-argv-2';
+import { BrowserRunBridge } from './browser-run.js?v=clang-startup-1';
 import { BrowserGit } from './browser-git.js?v=folder-git-1';
 import { openBrowserDatabase } from './browser-database.js?v=history-1';
 
