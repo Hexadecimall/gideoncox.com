@@ -1,9 +1,9 @@
 const models = {
   coder: {
-    repository: 'Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF',
-    filename: 'qwen2.5-coder-0.5b-instruct-q4_k_m.gguf',
-    revision: 'ebb2015119c907b064c512bf053e945850b5875f',
-    bytes: 491400064,
+    repository: 'lmstudio-community/Qwen2.5-Coder-0.5B-GGUF',
+    filename: 'Qwen2.5-Coder-0.5B-Q4_K_M.gguf',
+    revision: 'a25ae40c247296c6f1059f6afe3c4ebecb54d9b9',
+    bytes: 397807840,
   },
   agent: {
     repository: 'unsloth/Qwen3-0.6B-GGUF',
@@ -12,6 +12,18 @@ const models = {
     bytes: 396705472,
   },
 };
+
+const CACHE_NAME = 'zed-lma-models';
+
+function modelUrl(model) {
+  return `https://huggingface.co/${model.repository}/resolve/${model.revision}/${model.filename}`;
+}
+
+export async function hasCachedModel(kind) {
+  if (!Object.hasOwn(models, kind)) return false;
+  const cached = await caches.match(modelUrl(models[kind]), { cacheName: CACHE_NAME });
+  return Boolean(cached?.ok);
+}
 
 function checkedDownload(body, model) {
   const magic = new TextEncoder().encode('GGUF');
@@ -31,24 +43,33 @@ function checkedDownload(body, model) {
   }));
 }
 
-export async function recommendedModel(kind = 'coder') {
+export async function recommendedModel(kind = 'coder', { download = true } = {}) {
   if (!Object.hasOwn(models, kind)) throw new Error('Unknown LMA model.');
   const model = models[kind];
-  const cache = await caches.open('zed-lma-models');
-  const url = `https://huggingface.co/${model.repository}/resolve/${model.revision}/${model.filename}`;
+  const cache = await caches.open(CACHE_NAME);
+  const url = modelUrl(model);
   let response = await cache.match(url);
   if (!response) {
-    const download = await fetch(url, {
+    if (!download) throw new Error('This LMA model was cleared from browser storage. Download it again in Settings.');
+    const remote = await fetch(url, {
       credentials: 'omit',
       referrerPolicy: 'no-referrer',
       signal: AbortSignal.timeout(15 * 60_000),
     });
-    if (!download.ok || !download.body) {
-      throw new Error(`The model download failed (${download.status}).`);
+    if (!remote.ok || !remote.body) {
+      throw new Error(`The model download failed (${remote.status}).`);
     }
-    await cache.put(url, new Response(checkedDownload(download.body, model), {
-      headers: { 'Content-Type': 'application/octet-stream' },
-    }));
+    try {
+      await cache.put(url, new Response(checkedDownload(remote.body, model), {
+        headers: { 'Content-Type': 'application/octet-stream' },
+      }));
+    } catch (error) {
+      if (error.name === 'QuotaExceededError') {
+        const size = Math.ceil(model.bytes / 1_000_000);
+        throw new Error(`Browser storage needs ${size} MB to save this model. You can also choose a GGUF file.`);
+      }
+      throw error;
+    }
     response = await cache.match(url);
   }
   if (!response) throw new Error('The downloaded model could not be read from browser storage.');

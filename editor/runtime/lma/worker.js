@@ -2,7 +2,6 @@ import { QwenToolStream, qwenToolPrompt } from './qwen-tools.js?v=3';
 
 const MAX_MODEL_BYTES = 512 * 1024 * 1024;
 const MODEL_CONTEXT_TOKENS = 8192;
-const AGENT_CONTEXT_TOKENS = 3072;
 const OUTPUT_BYTES = 4096;
 const MODEL_PATH = '/model';
 const ROLES = new Set(['system', 'user', 'assistant']);
@@ -32,8 +31,8 @@ async function loadModel(file, kind) {
   runtime.FS.mount(runtime.WORKERFS, { blobs: [{ name: 'weights.gguf', data: file }] }, MODEL_PATH);
   try {
     loaded = false;
-    const result = runtime.ccall('lma_load', 'number', ['string', 'number'], [
-      `${MODEL_PATH}/weights.gguf`, kind === 'agent' ? AGENT_CONTEXT_TOKENS : MODEL_CONTEXT_TOKENS,
+    const result = runtime.ccall('lma_load', 'number', ['string', 'number', 'boolean'], [
+      `${MODEL_PATH}/weights.gguf`, MODEL_CONTEXT_TOKENS, kind === 'agent',
     ]);
     if (result !== 0) throw new Error('LMA could not load this GGUF model.');
     loaded = true;
@@ -49,7 +48,7 @@ function beginCompletion(prompt, messages, tools, qwenToolChat, temperature, see
     }
     const rendered = qwenToolPrompt(messages, tools, { disableThinking: modelKind === 'agent' });
     if (encoder.encode(rendered).length > 65536 || rendered.includes('\0')) {
-      throw new Error('The chat exceeds the model context.');
+      throw new Error('The LMA request is too large. Send less project context or start a new thread.');
     }
     return runtime.ccall('lma_begin', 'number', ['string', 'number', 'number'], [rendered, temperature, seed]);
   }
@@ -98,7 +97,9 @@ async function complete(job, { prompt, messages, tools = [], qwenToolChat = fals
     throw new Error('Invalid stop sequences.');
   }
   const promptTokens = beginCompletion(prompt, messages, tools, qwenToolChat, temperature, seed);
-  if (promptTokens === -2) throw new Error('The prompt exceeds the model context.');
+  if (promptTokens === -2) {
+    throw new Error(`This request exceeds LMA’s ${MODEL_CONTEXT_TOKENS.toLocaleString('en-US')}-token context. Send less project context or start a new thread.`);
+  }
   if (promptTokens < 0) throw new Error('LMA could not process the prompt.');
   const cachedPromptTokens = runtime._lma_cached_prompt_tokens();
 
@@ -153,7 +154,8 @@ async function complete(job, { prompt, messages, tools = [], qwenToolChat = fals
       if (remainingPrompt < 0) throw new Error('LMA could not evaluate the prompt.');
       if (remainingPrompt > 0) await yieldWorker();
     }
-    for (; written < maxTokens && !job.cancelled; written++) {
+    const outputBudget = Math.min(maxTokens, MODEL_CONTEXT_TOKENS - promptTokens);
+    for (; written < outputBudget && !job.cancelled; written++) {
       const size = runtime._lma_next(address, OUTPUT_BYTES, Boolean(toolStream));
       if (size === -2) {
         finishReason = 'stop';

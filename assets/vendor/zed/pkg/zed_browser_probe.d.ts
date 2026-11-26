@@ -7,6 +7,8 @@ export function list_browser_paths(): Promise<string>;
 
 export function list_files(): Promise<string>;
 
+export function lma_worker_event(id: string, event: string): void;
+
 export function open_file(path: string): Promise<void>;
 
 export function read_browser_file(path: string): Promise<Uint8Array>;
@@ -45,6 +47,7 @@ export interface InitOutput {
     readonly editor_text: (a: number) => void;
     readonly list_browser_paths: () => number;
     readonly list_files: () => number;
+    readonly lma_worker_event: (a: number, b: number, c: number, d: number) => void;
     readonly open_file: (a: number, b: number) => number;
     readonly read_browser_file: (a: number, b: number) => number;
     readonly save_file: (a: number, b: number) => number;
@@ -94,15 +97,15 @@ export interface InitOutput {
     readonly iswpunct: (a: number) => number;
     readonly iswupper: (a: number) => number;
     readonly iswxdigit: (a: number) => number;
-    readonly __wasm_bindgen_func_elem_56646: (a: number, b: number, c: number, d: number) => void;
-    readonly __wasm_bindgen_func_elem_56933: (a: number, b: number, c: number, d: number) => void;
-    readonly __wasm_bindgen_func_elem_54095: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_54095_2: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_54095_3: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_54095_4: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_54095_5: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_123946: (a: number, b: number, c: number) => void;
-    readonly __wasm_bindgen_func_elem_52016: (a: number, b: number) => void;
+    readonly __wasm_bindgen_func_elem_56793: (a: number, b: number, c: number, d: number) => void;
+    readonly __wasm_bindgen_func_elem_57080: (a: number, b: number, c: number, d: number) => void;
+    readonly __wasm_bindgen_func_elem_54242: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_54242_2: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_54242_3: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_54242_4: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_54242_5: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_124078: (a: number, b: number, c: number) => void;
+    readonly __wasm_bindgen_func_elem_52165: (a: number, b: number) => void;
     readonly __wbindgen_export: (a: number, b: number) => number;
     readonly __wbindgen_export2: (a: number, b: number, c: number, d: number) => number;
     readonly __wbindgen_export3: (a: number) => void;

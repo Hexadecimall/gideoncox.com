@@ -123,3 +123,52 @@ test('model switching frees the first worker and repeat selection reuses an alre
   loaded(workers[1]);
   assert.equal(await agent, 'Agent.gguf');
 });
+
+test('a cached selection survives reload and loads only when inference is requested', async t => {
+  const cache = { match: async () => new Response('GGUF') };
+  for (const [name, value] of [
+    ['localStorage', { getItem: () => 'coder', setItem() {} }],
+    ['caches', { match: cache.match, open: async () => cache }],
+  ]) {
+    const original = Object.getOwnPropertyDescriptor(globalThis, name);
+    Object.defineProperty(globalThis, name, { configurable: true, value });
+    t.after(() => {
+      if (original) Object.defineProperty(globalThis, name, original);
+      else delete globalThis[name];
+    });
+  }
+  t.mock.method(globalThis, 'fetch', () => assert.fail('A restored selection must not fetch a model'));
+
+  const { promise: loading, resolve: modelLoading } = Promise.withResolvers();
+  const { promise: request, resolve: completing } = Promise.withResolvers();
+  const events = [];
+  let workers = 0;
+  const client = new BrowserLma((id, event) => events.push([id, JSON.parse(event)]), () => {
+    workers++;
+    return Object.assign(new EventTarget(), {
+      postMessage(job) {
+        if (job.type === 'load') {
+          assert.equal(job.modelKind, 'coder');
+          modelLoading(() => this.dispatchEvent(new MessageEvent('message', {
+            data: { id: job.id, loaded: true },
+          })));
+        } else {
+          completing({ worker: this, job });
+        }
+      },
+      terminate() {},
+    });
+  });
+
+  assert.equal(await client.restoreModel(), 'coder');
+  assert.equal(workers, 0);
+  client.start('old-prediction', { prompt: 'old' });
+  client.start('next-prediction', { prompt: 'next' });
+  client.cancel('old-prediction');
+  (await loading)();
+  const { worker, job } = await request;
+  assert.equal(workers, 1);
+  assert.equal(job.id, 'next-prediction');
+  worker.dispatchEvent(new MessageEvent('message', { data: { id: job.id, done: true } }));
+  assert.deepEqual(events, [['next-prediction', { id: 'next-prediction', done: true }]]);
+});

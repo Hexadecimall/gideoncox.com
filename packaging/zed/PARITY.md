@@ -22,8 +22,8 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Python formatting | Ruff WebAssembly worker through Zed's Format command and formatting settings | LSP document edit and formatting tests |
 | Python execution | CPython WASI worker and upstream task terminal for browser workspace files | WASI runtime and buffer snapshot tests |
 | Diagnostics | Upstream Language Servers menu and Project Diagnostics view | Browser status bar and diagnostic checks |
-| Agent | Upstream Agent Panel, Threads Sidebar, and LLM provider settings | Browser Settings navigation and workspace checks |
-| Edit Prediction | Upstream inline prediction controls and provider settings | Browser status bar and Settings navigation |
+| Agent | Upstream Agent Panel and Threads Sidebar with an LMA provider for browser-local GGUF inference | Provider settings, model restoration, and browser streaming |
+| Edit Prediction | Upstream inline predictions with the local Qwen2.5-Coder model | Browser Edit Prediction and settings persistence |
 | C/C++ | clangd 21 in a WebAssembly worker, with browser project files and bundled WASI headers | Chromium language-server and browser workspace checks |
 | Browser builds | Clang and LLD compile multi-file C and C++ for WASI and static Linux x86-64 with standard libraries. A freestanding Linux target is also available. Zig builds and runs WASI programs. Project build settings supply WASI arguments. | Chromium task terminal, argument forwarding, exit status and compiler-worker checks |
 | Rust | rust-analyzer in a WASI worker with a bundled standard library, local Cargo path dependencies, and generated source from successful builds | Concurrent worktrees and browser diagnostics on generated Rust source |
@@ -45,7 +45,7 @@ menu. The pending controls display a Zed notification when activated.
 - Extension installation, execution, grammars, themes and extension-provided language servers.
 - Browser LSP runners for languages beyond C/C++, Python and Rust.
 - Rust browser tooling for Git and private registry dependencies, build scripts that launch external tools, and procedural macros. Additional native targets and build-system integration for browser C, C++, and Zig projects.
-- Collaboration, authentication, hosted services, browser LMA integration, and full Agent tool support.
+- Collaboration, authentication, hosted services, and full Agent tool support. Browser LMA supports read-only project tools.
 - Audit remaining desktop workspace and session state for browser persistence.
 - Desktop platform integrations, multiple OS windows and native file dialogs.
 - Broader keyboard, IME, accessibility, touch and browser compatibility testing.

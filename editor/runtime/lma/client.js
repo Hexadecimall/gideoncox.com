@@ -1,6 +1,8 @@
-import { recommendedModel } from './model-cache.js?v=2';
+import { hasCachedModel, recommendedModel } from './model-cache.js?v=provider-1';
 
 const MAX_QUEUED = 8;
+const IDLE_MODEL_MS = 120_000;
+const SELECTED_MODEL = 'zed.lma.selected-model';
 const version = new URL(import.meta.url).search;
 
 export class BrowserLma {
@@ -27,9 +29,7 @@ export class BrowserLma {
   }
 
   async loadRecommendedModel(kind = 'coder') {
-    if (this.active || this.loading || this.downloading || this.queue.length) {
-      throw new Error('Finish the current LMA request first.');
-    }
+    this.checkModelSwitch();
     if (this.ready && this.loadedModel?.kind === kind) return this.loadedModel.name;
     this.downloading = true;
     let file;
@@ -42,10 +42,31 @@ export class BrowserLma {
   }
 
   loadModel(file, modelKind) {
-    if (this.active || this.loading || this.downloading || this.queue.length) {
-      return Promise.reject(new Error('Finish the current LMA request first.'));
+    this.checkModelSwitch();
+    return this.replaceModel(file, modelKind);
+  }
+
+  checkModelSwitch() {
+    if (this.active || this.loading || this.downloading || this.restoring || this.queue.length) {
+      throw new Error('Finish the current LMA request first.');
     }
+  }
+
+  async restoreModel() {
+    try {
+      const saved = globalThis.localStorage?.getItem(SELECTED_MODEL);
+      if (saved && await hasCachedModel(saved) && !this.ready && !this.loading && !this.downloading) {
+        this.selectedModel = saved;
+        return saved;
+      }
+    } catch {
+      // A manually selected model can still be used when browser storage is blocked.
+    }
+  }
+
+  replaceModel(file, modelKind) {
     // WebAssembly memory cannot shrink. A fresh worker releases the old model's heap.
+    clearTimeout(this.idleTimer);
     this.worker?.terminate();
     this.worker = undefined;
     this.loadedModel = undefined;
@@ -63,9 +84,10 @@ export class BrowserLma {
   }
 
   start(id, options) {
-    if (this.loading || this.downloading) throw new Error('LMA is loading a model.');
-    if (!this.ready) throw new Error('Choose a GGUF model first.');
+    if (!this.restoring && (this.loading || this.downloading)) throw new Error('LMA is loading a model.');
+    if (!this.ready && !this.selectedModel) throw new Error('Choose a GGUF model first.');
     if (this.queue.length >= MAX_QUEUED) throw new Error('LMA request queue is full.');
+    clearTimeout(this.idleTimer);
     this.queue.push({ ...options, type: 'complete', id });
     this.runNext();
   }
@@ -97,9 +119,37 @@ export class BrowserLma {
   }
 
   runNext() {
-    if (this.active) return;
+    if (this.active || this.restoring || !this.queue.length) return;
+    if (!this.ready) {
+      this.restoring = true;
+      const kind = this.selectedModel;
+      recommendedModel(kind, { download: false })
+        .then(file => this.queue.length ? this.replaceModel(file, kind) : undefined)
+        .catch(error => this.onFailure(error.message))
+        .finally(() => {
+          this.restoring = false;
+          this.runNext();
+        });
+      return;
+    }
     this.active = this.queue.shift();
-    if (this.active) this.worker.postMessage(this.active);
+    try {
+      this.worker.postMessage(this.active);
+    } catch (error) {
+      this.onFailure(error.message);
+    }
+  }
+
+  releaseIdleModel() {
+    if (!this.ready || !this.selectedModel || this.active || this.queue.length) return;
+    clearTimeout(this.idleTimer);
+    this.idleTimer = setTimeout(() => {
+      this.worker?.terminate();
+      this.worker = undefined;
+      this.loadedModel = undefined;
+      this.ready = false;
+    }, IDLE_MODEL_MS);
+    this.idleTimer.unref?.();
   }
 
   onMessage(data) {
@@ -109,7 +159,15 @@ export class BrowserLma {
       this.ready = data.loaded === true;
       if (this.ready) {
         this.loadedModel = { name, kind };
+        this.selectedModel = kind;
+        try {
+          if (kind) globalThis.localStorage?.setItem(SELECTED_MODEL, kind);
+          else globalThis.localStorage?.removeItem(SELECTED_MODEL);
+        } catch {
+          // Storage permissions only affect restoration after reload.
+        }
         resolve(name);
+        this.releaseIdleModel();
       }
       else reject(new Error(data.error || 'LMA could not load the model.'));
       return;
@@ -119,10 +177,12 @@ export class BrowserLma {
     if (data.done || data.error) {
       this.active = undefined;
       this.runNext();
+      this.releaseIdleModel();
     }
   }
 
   onFailure(message) {
+    clearTimeout(this.idleTimer);
     this.worker?.terminate();
     this.worker = undefined;
     this.loadedModel = undefined;

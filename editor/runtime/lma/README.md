@@ -1,12 +1,14 @@
 # Browser LMA in Zed
 
-Enable AI in Zed settings with `"disable_ai": false`. Open **Configure Providers** in the Agent Panel. **Download or Load Qwen3 for Agent** offers the pinned 397 MB model for browser-local chat and Zed's read-only project tools.
+Open **Settings → AI → LLM Providers**, click **Configure**, and find LMA. Choose **Download or Load Qwen3 for Agent**, then select the model in the Agent Panel. If AI is disabled, enable it in Settings.
 
-The Agent can read files, list directories, search text, and find paths. The selected Agent profile, workspace trust, and Zed's tool permissions still apply. Qwen3 uses a 3,072-token context. Project reads and inference run in the browser.
+The 397 MB Qwen3 model has an 8,192-token context. Its available project tools are file reads, directory listings, text search, and path search. Zed’s Agent profile, workspace trust, and permissions apply. Project data and inference stay in the browser.
 
-**Download or Load Qwen2.5-Coder** offers the 491 MB model for chat and inline Edit Prediction. **Choose GGUF Model…** opens a compatible local file up to 512 MB. The loaded model occupies one worker at a time. Switching models frees the previous worker, and another visit can load the downloaded weights from browser storage.
+For inline predictions, choose **Download or Load Qwen2.5-Coder**, then **Use for Edit Prediction**. This 398 MB base model is configured through Zed’s existing Edit Prediction settings. **Choose GGUF Model…** loads a compatible local file up to 512 MB for Agent chat.
 
-Set these fields in `settings.json` to use Qwen for inline predictions.
+LMA keeps one model in memory at a time. Preset models stay in browser storage and reload on demand after a refresh or two minutes of inactivity. Selecting a GGUF from disk applies to the current session.
+
+The Edit Prediction button writes these fields to `settings.json`.
 
 ```json
 {
@@ -15,7 +17,9 @@ Set these fields in `settings.json` to use Qwen for inline predictions.
     "open_ai_compatible_api": {
       "api_url": "lma://browser/completions",
       "model": "qwen2.5-coder",
-      "prompt_format": "qwen"
+      "prompt_format": "qwen",
+      "max_output_tokens": 48,
+      "prediction_debounce": 650
     }
   }
 }
@@ -23,5 +27,4 @@ Set these fields in `settings.json` to use Qwen for inline predictions.
 
 The browser runtime build instructions and pinned inference library are in the [corresponding source archive](../../../assets/vendor/zed/lma-source.tar.gz).
 
-
-Model sources are [Qwen3 0.6B](https://huggingface.co/Qwen/Qwen3-0.6B) with the [pinned GGUF quantization](https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/tree/50968a4468ef4233ed78cd7c3de230dd1d61a56b), and [Qwen2.5-Coder 0.5B Instruct GGUF](https://huggingface.co/Qwen/Qwen2.5-Coder-0.5B-Instruct-GGUF/tree/ebb2015119c907b064c512bf053e945850b5875f).
+Model sources are [Qwen3 0.6B](https://huggingface.co/Qwen/Qwen3-0.6B), the [pinned Qwen3 GGUF](https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/tree/50968a4468ef4233ed78cd7c3de230dd1d61a56b), and the [pinned Qwen2.5-Coder 0.5B base GGUF](https://huggingface.co/lmstudio-community/Qwen2.5-Coder-0.5B-GGUF/tree/a25ae40c247296c6f1059f6afe3c4ebecb54d9b9).
