@@ -2,7 +2,7 @@ import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=3';
 
 const loading = document.querySelector('#loading');
-const build = 'ad9597fd8308';
+const build = '7333e722d8e7';
 const gzip = true;
 
 function fitVisualViewport() {
