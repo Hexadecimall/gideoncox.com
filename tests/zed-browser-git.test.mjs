@@ -3,10 +3,49 @@ import { createHash } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
 import test from 'node:test';
 import { deflateSync } from 'node:zlib';
+import { BrowserGit } from '../assets/js/zed/browser-git.js';
+import { LocalFolders } from '../assets/js/zed/local-folders.js';
 
 const worker = new URL('../editor/runtime/git/worker.js', import.meta.url);
 const encoder = new TextEncoder();
 const decoder = new TextDecoder();
+
+function folderFixture(entries, reads) {
+  function directory(name) {
+    const children = new Map();
+    function handle(child, kind) {
+      if (!children.has(child)) throw new DOMException('Missing entry', 'NotFoundError');
+      const entry = children.get(child);
+      if (entry.kind !== kind) throw new DOMException('Wrong entry type', 'TypeMismatchError');
+      return entry;
+    }
+    return {
+      kind: 'directory', name, children,
+      async isSameEntry(other) { return this === other; },
+      async getFileHandle(child) { return handle(child, 'file'); },
+      async getDirectoryHandle(child) { return handle(child, 'directory'); },
+      async *values() { yield* children.values(); },
+    };
+  }
+  const root = directory('history-fixture');
+  for (const [path, content] of entries) {
+    const parts = path.split('/');
+    const name = parts.pop();
+    const parent = parts.reduce((current, part) => {
+      if (!current.children.has(part)) current.children.set(part, directory(part));
+      return current.children.get(part);
+    }, root);
+    if (content === null) {
+      if (!parent.children.has(name)) parent.children.set(name, directory(name));
+    } else {
+      parent.children.set(name, {
+        kind: 'file', name,
+        async getFile() { reads.push(path); return new Blob([content]); },
+      });
+    }
+  }
+  return root;
+}
 
 test('the browser Git worker can reopen a repository and preserve its real Git index and objects', async t => {
   const endpoint = new EventTarget();
@@ -342,5 +381,46 @@ test('the browser Git worker can reopen a repository and preserve its real Git i
   const shallowHistory = await run(shallowRename, [['history', 'path', newPath, 'date']]);
   assert.deepEqual(commitIds(shallowHistory.results[0]), [afterRename]);
 
+  const reads = [];
+  const folders = new LocalFolders();
+  globalThis.zedLocalFolders = folders;
+  t.after(() => { delete globalThis.zedLocalFolders; });
+  const snapshotPath = await folders.mount(folderFixture([
+    ...renameHead.metadata, [newPath, encoder.encode(moved + 'Line edited outside the editor.\n')],
+    ['.git/hooks/unused', encoder.encode('fixture')],
+  ], reads));
+  const mountedWorker = new EventTarget();
+  mountedWorker.terminate = () => {};
+  mountedWorker.postMessage = (message, transfers) => {
+    const { id, entries, operations, input } = structuredClone(message, { transfer: transfers });
+    run(entries, operations, input).then(
+      data => mountedWorker.dispatchEvent(new MessageEvent('message', { data: { ...data, id } })),
+      error => mountedWorker.dispatchEvent(new MessageEvent('message', { data: { error: error.message, id } })),
+    );
+  };
+  const mountedGit = new BrowserGit(() => mountedWorker);
+  t.after(() => mountedGit.stop(new Error('Test finished')));
+  await assert.rejects(mountedGit.requestSelectedFolder(snapshotPath, false, [['commit', ...identity, 'Write']]), /Git changes/);
+  assert.deepEqual(reads, []);
+  await assert.rejects(mountedGit.requestSelectedFolder('/home/web', false, [['head']]), /Choose a local folder/);
+  const diskHistory = await mountedGit.requestSelectedFolder(snapshotPath, false, [
+    ['history', 'path', newPath, 'date'], ['branches'],
+  ]);
+  assert.deepEqual(commitIds(diskHistory.results[0]), [afterRename, beforeRename]);
+  assert.equal(decoder.decode(diskHistory.results[1]).split('\0')[0], 'refs/heads/main');
+  assert.ok(reads.includes('.git/config'));
+  assert.ok(!reads.includes(newPath) && !reads.includes('.git/hooks/unused'));
+  const diskStatus = await mountedGit.requestSelectedFolder(snapshotPath, true, [['status'], ['diff', 'index-worktree']]);
+  assert.equal(diskStatus.metadata, null);
+  assert.equal(diskStatus.worktree, null);
+  assert.match(decoder.decode(diskStatus.results[0]), /moved file\.txt/);
+  assert.match(decoder.decode(diskStatus.results[1]), /\+Line edited outside the editor\./);
+
+  const sourceBytes = encoder.encode(moved);
+  const withExecutableIndex = await run(renameHead.metadata, [['set-index-text', newPath, 'true']], sourceBytes);
+  const diskMode = folderFixture([...withExecutableIndex.metadata, [newPath, sourceBytes]], []);
+  const executableMount = await folders.mount(diskMode);
+  const modeStatus = await mountedGit.requestSelectedFolder(executableMount, true, [['diff', 'index-worktree']]);
+  assert.equal(decoder.decode(modeStatus.results[0]), '');
 
 });

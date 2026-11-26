@@ -1,11 +1,17 @@
 const MAX_PENDING = 8;
 const TIMEOUT = 30_000;
+const READ_OPERATIONS = new Set([
+  'head', 'status', 'branches', 'show', 'read-index', 'read-head', 'read-tree', 'read-blob',
+  'resolve', 'diff', 'diff-stat', 'blame-revision', 'blame-buffer', 'history',
+  'search-commits', 'read-commit', 'commit-files',
+]);
 
 export class BrowserGit {
   constructor(makeWorker = () => new Worker('/editor/runtime/git/worker.js?v=git-file-history-1', { type: 'module' })) {
     this.makeWorker = makeWorker;
     this.pending = new Map();
     this.nextId = 0;
+    this.folderSnapshots = 0;
   }
 
   start() {
@@ -36,8 +42,27 @@ export class BrowserGit {
     this.pending.clear();
   }
 
+  async requestSelectedFolder(root, includeTree, operations, input) {
+    if (operations.some(([operation]) => !READ_OPERATIONS.has(operation))) {
+      throw new Error('Git changes to folders opened from disk are unavailable.');
+    }
+    if (this.pending.size + this.folderSnapshots >= MAX_PENDING) {
+      throw new Error('Too many browser Git requests are running.');
+    }
+    const folders = globalThis.zedLocalFolders;
+    if (!folders) throw new Error('Open a local folder before reading its Git history.');
+    this.folderSnapshots++;
+    let entries;
+    try {
+      entries = await folders.gitSnapshot(root, includeTree);
+    } finally {
+      this.folderSnapshots--;
+    }
+    return this.request(entries, operations, input);
+  }
+
   request(entries, operations, input = null) {
-    if (this.pending.size >= MAX_PENDING) return Promise.reject(new Error('Too many browser Git requests are running.'));
+    if (this.pending.size + this.folderSnapshots >= MAX_PENDING) return Promise.reject(new Error('Too many browser Git requests are running.'));
     this.worker ??= this.start();
     const id = ++this.nextId;
     const buffers = new Set();

@@ -31,6 +31,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Rust builds | WASI Cargo and rustc build workspaces with local path dependencies and public crates.io packages. Rust build scripts run inside WASI. Run and Build picks the binary from the active source and preserves arguments and exit status. Cargo compiler messages reach Project Diagnostics through the Rust language server. | Workspace, registry, build-script, and diagnostics tests, plus the Zed browser task |
 | Rust Clippy | On-demand WASI Clippy for Rust files and Cargo packages through Run and Build or Rust Analyzer's `check.command` setting. Clippy reports findings in Project Diagnostics, reads native lint configuration, and exposes machine-applicable suggestions in Quick Fix. | Standalone and Cargo lint tests, including local dependencies, build scripts, and denied lints. Browser save and Quick Fix checks. |
 | Local Git | Upstream Git panel with a WASI libgit2 worker for browser-stored projects. Initialize repositories, view changes and diffs, stage or unstage files, and commit using the repository's `user.name` and `user.email` settings. Browse repository and file history, search commits, and open commits to inspect their changes. File history follows renames. | Browser panels, commit persistence after reload, and worker tests for rename with edits, file history search, merge parents, packed refs, detached HEAD, and shallow history |
+| Git in folders opened from disk | The same Git panel reads branch, status, diff, blame, and history data from the selected directory handle. Repository snapshots stay in the browser and use the Git worker's 16 MiB and 8,192-entry limits. | Mounted browser directory fixture in the Git panel, including diffs and rename history. Worker tests verify write rejection. |
 | Tasks | Upstream task picker and task terminal; native command, arguments, environment, working directory and completion status | Real task PTY exit/output tests; integrated browser check pending |
 
 The browser uses the desktop status layout for Language Servers, Project Diagnostics
@@ -40,7 +41,7 @@ menu. The pending controls display a Zed notification when activated.
 
 ## Remaining work
 
-- File history across complex merges, branch changes, staging individual diff hunks, remotes, GitHub, and repositories in folders opened from disk.
+- File history across complex merges, branch changes, staging individual diff hunks, remotes, GitHub, and Git writes in folders opened from disk.
 - Native debugger sessions and debugger UI.
 - Extension installation, execution, grammars, themes and extension-provided language servers.
 - Browser LSP runners for languages beyond C/C++, Python and Rust.

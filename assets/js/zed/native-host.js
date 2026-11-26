@@ -1,5 +1,5 @@
 import { isBrowserProject } from './paths.js?v=local-folders-1';
-import { LocalFolders } from './local-folders.js?v=folder-memory-1';
+import { LocalFolders } from './local-folders.js?v=folder-git-1';
 
 function encode(bytes) {
   let text = '';

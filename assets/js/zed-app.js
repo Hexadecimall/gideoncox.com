@@ -1,18 +1,18 @@
 import { installFileDialogs } from './zed/dialogs.js?v=workspace-controls-1';
 import { installNativeTerminal } from './zed/native-terminal.js?v=project-fs-1';
-import { installNativeHost } from './zed/native-host.js?v=folder-memory-1';
+import { installNativeHost } from './zed/native-host.js?v=folder-git-1';
 import { BrowserPython } from './zed/browser-python.js?v=workspace-ready-1';
 
 import { BrowserClangd } from './zed/browser-clangd.js?v=clangd-startup-1';
 import { BrowserRust } from './zed/browser-rust.js?v=quickfix-1';
 import { BrowserRunBridge } from './zed/browser-run.js?v=python-argv-1';
-import { BrowserGit } from './zed/browser-git.js?v=git-file-history-1';
+import { BrowserGit } from './zed/browser-git.js?v=folder-git-1';
 import { openBrowserDatabase } from './zed/browser-database.js?v=history-1';
 import { prepareEditorIsolation } from './zed/isolation.js';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=3';
 
 const loading = document.querySelector('#loading');
-const build = '34d71a17c46f';
+const build = '83416f27a5e9';
 const gzip = true;
 
 async function downloadWasm() {

@@ -2,6 +2,9 @@ import { rememberedFolder, rememberFolder } from './folder-history.js?v=1';
 
 const PREFIX = '/browser-folders';
 const MAX_FILE_BYTES = 32 * 1024 * 1024;
+const MAX_GIT_SNAPSHOT_BYTES = 16 * 1024 * 1024;
+const MAX_GIT_ENTRIES = 8192;
+const UNUSED_GIT_DIRECTORIES = new Set(['hooks', 'logs', 'lfs', 'modules', 'worktrees']);
 const ACCESS = { mode: 'readwrite' };
 
 function safePart(part) {
@@ -155,6 +158,55 @@ export class LocalFolders {
       }
     }
     return files;
+  }
+
+  async gitSnapshot(path, includeTree) {
+    const root = await this.directory(this.parsed(path));
+    const metadata = await entryAt(root, '.git');
+    if (metadata?.kind !== 'directory') {
+      throw new Error('The selected folder needs a Git directory. Linked worktrees are unavailable.');
+    }
+
+    const directories = [['.git', metadata]];
+    const snapshot = [['.git', null]];
+    const diskConfig = new TextEncoder().encode('\n[core]\n\tfilemode = false\n');
+    let bytes = 0;
+    if (includeTree) directories.push(['', root]);
+
+    for (let index = 0; index < directories.length; index++) {
+      const [parent, directory] = directories[index];
+      for await (const entry of directory.values()) {
+        if (!safePart(entry.name) || entry.name === '.git' ||
+            (parent === '.git' && UNUSED_GIT_DIRECTORIES.has(entry.name))) continue;
+        if (snapshot.length >= MAX_GIT_ENTRIES) throw new Error('The repository exceeds the browser Git snapshot limit.');
+        const name = parent ? `${parent}/${entry.name}` : entry.name;
+        if (entry.kind === 'directory') {
+          directories.push([name, entry]);
+          snapshot.push([name, null]);
+          continue;
+        }
+
+        const file = await entry.getFile();
+        if (name === '.git/objects/info/alternates' && file.size) {
+          throw new Error('Git object stores outside the selected repository are unavailable.');
+        }
+        const config = name === '.git/config';
+        bytes += file.size + (config ? diskConfig.length : 0);
+        if (bytes > MAX_GIT_SNAPSHOT_BYTES) throw new Error('The repository exceeds the browser Git snapshot limit.');
+        const contents = new Uint8Array(await file.arrayBuffer());
+        if (!config) {
+          snapshot.push([name, contents]);
+          continue;
+        }
+        // Directory handles expose file contents without executable bits.
+        // Override filemode only inside the worker's temporary repository.
+        const isolatedConfig = new Uint8Array(contents.length + diskConfig.length);
+        isolatedConfig.set(contents);
+        isolatedConfig.set(diskConfig, contents.length);
+        snapshot.push([name, isolatedConfig]);
+      }
+    }
+    return snapshot;
   }
 
   async fs(operation, args) {
