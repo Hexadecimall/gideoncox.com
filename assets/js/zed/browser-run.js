@@ -4,7 +4,7 @@ import { MAX_PROJECT, isLanguageProject, projectFiles, readProjectFile } from '.
 import { joinBytes } from './lsp-stream.js';
 
 const PROGRAMS = new Map([
-  ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=argv-1', targets: ['python'] }],
+  ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=argv-2', targets: ['python'] }],
   ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=warm-builds-1',
     targets: CLANG_TARGETS }],
   ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi'] }],
@@ -22,8 +22,8 @@ function projectPath(path, root) {
 }
 
 async function readProject(zed, { cwd: root, script, source, command, target }, running) {
-  const inputs = new Map([[script, encoder.encode(source)]]);
-  let reserved = inputs.get(script).byteLength;
+  const inputs = new Map([[script, source]]);
+  let reserved = source.byteLength;
   let config;
   if (target === 'wasi' || command === 'browser-cc') {
     const configPath = `${root}/${BUILD_CONFIG}`;
@@ -164,6 +164,17 @@ export class BrowserRunBridge {
   accepts(options) { return PROGRAMS.has(options.command); }
   owns(id) { return id.startsWith(SESSION_PREFIX); }
 
+  async openPythonScript({ root, cwd, script, scriptArgument, programArgs }) {
+    if (!isLanguageProject(root) || (cwd !== root && !projectPath(cwd, root)) || !projectPath(script, root)) {
+      throw new Error('Choose a Python script inside the open browser project.');
+    }
+    const source = await readProjectFile(this.zed, script).catch(() => undefined);
+    if (!source) throw new Error(`Python could not open ${scriptArgument}.`);
+    return this.start({
+      root, cwd, script, scriptArgument, source, command: 'browser-python', target: 'python', programArgs,
+    });
+  }
+
   takeClangWorker(path) {
     const idleWorker = this.idleClangWorker;
     if (!idleWorker) return this.makeWorker(path);
@@ -192,13 +203,22 @@ export class BrowserRunBridge {
     if (args?.length > 2) {
       if (!runsProgram || args[2] !== '--') throw new Error('Invalid browser task arguments.');
       programArgs = args.slice(3);
-      if (programArgs.some(arg => typeof arg !== 'string' || arg.includes('\0'))) {
-        throw new Error('Program arguments must be strings without NUL characters.');
-      }
+    }
+    return this.start({
+      root: cwd, cwd, script, source: typeof source === 'string' ? encoder.encode(source) : undefined,
+      command, target, programArgs,
+    });
+  }
+
+  async start({ root, cwd, script, scriptArgument, source, command, target, programArgs }) {
+    if (programArgs?.some(arg => typeof arg !== 'string' || arg.includes('\0'))) {
+      throw new Error('Program arguments must be strings without NUL characters.');
     }
     if (!globalThis.crossOriginIsolated) throw new Error('Open the top-level Zed page to run browser tasks.');
-    if (!isLanguageProject(cwd) || !projectPath(script, cwd) || typeof source !== 'string'
-      || encoder.encode(source).length > MAX_FILE) throw new Error('The file is outside the browser project or too large.');
+    if (!isLanguageProject(root) || !projectPath(script, root) || !source
+      || source.byteLength > MAX_FILE) throw new Error('The file is outside the browser project or too large.');
+    const program = PROGRAMS.get(command);
+    const runsProgram = target === 'wasi' || target === 'python';
     if (command !== 'browser-python' && this.backgroundClippy) {
       const { id, ...check } = this.backgroundClippy;
       const { root } = check;
@@ -235,9 +255,9 @@ export class BrowserRunBridge {
     this.sessions.set(id, process);
     process.append(encoder.encode(`Starting ${program.label}…\r\n`));
     const running = () => process.exitCode === null;
-    readProject(this.zed, { cwd, script, source, command, target }, running).then(files => {
+    readProject(this.zed, { cwd: root, script, source, command, target }, running).then(files => {
       if (running()) process.worker.postMessage({
-        cwd, script, files, command, target, programArgs, stdin: process.stdin.buffer,
+        cwd, script, scriptArgument, files, command, target, programArgs, stdin: process.stdin.buffer,
         reusableClang,
       });
     }).catch(error => process.fail(error.message));

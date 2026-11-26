@@ -9,7 +9,7 @@ async function decompress(path, type) {
   });
 }
 
-async function run({ cwd, script, files, stdin, programArgs = [] }, output) {
+async function run({ cwd, script, scriptArgument = script, files, stdin, programArgs = [] }, output) {
   const [module, stdlib] = await Promise.all([
     WebAssembly.compileStreaming(decompress('./python.wasm.gz?v=3.14.10', 'application/wasm')),
     decompress('./python314.zip.gz?v=3.14.10', 'application/zip').then(response => response.arrayBuffer()),
@@ -17,15 +17,20 @@ async function run({ cwd, script, files, stdin, programArgs = [] }, output) {
   const root = new PreopenDirectory('/', new Map());
   writeFile(root.dir, '/usr/lib/python314.zip', stdlib, true);
   for (const [path, data] of files) writeFile(root.dir, path, data);
+  let directory = root.dir;
+  for (const part of cwd.slice(1).split('/')) {
+    directory = directory.contents.get(part) || directory.create_entry_for_path(part, true).entry;
+  }
 
   const bootstrap = `import os, runpy, sys
-cwd, script, *arguments = sys.argv[1:]
+cwd, script, script_argument, *arguments = sys.argv[1:]
 os.chdir(cwd)
-sys.argv = [script, *arguments]
+sys.argv = [script_argument, *arguments]
+sys.orig_argv = ["python3", *sys.argv]
 sys.path[0] = os.path.dirname(script)
-runpy.run_path(script, run_name="__main__")`;
+runpy.run_path(script_argument, run_name="__main__")`;
   const tty = new ConsoleStdout(bytes => output.write(bytes));
-  const wasi = new WASI(['python3', '-B', '-u', '-c', bootstrap, cwd, script, ...programArgs], ['PYTHONHOME=/usr'], [
+  const wasi = new WASI(['python3', '-B', '-u', '-c', bootstrap, cwd, script, scriptArgument, ...programArgs], ['PYTHONHOME=/usr'], [
     new TerminalStdin(stdin, output), tty, tty, root,
   ]);
   const instance = await WebAssembly.instantiate(module, { wasi_snapshot_preview1: wasi.wasiImport });

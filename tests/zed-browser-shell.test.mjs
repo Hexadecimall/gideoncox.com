@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFile } from 'node:fs/promises';
 import { Shell } from '../assets/js/terminal/shell.js';
+import { BrowserRunBridge } from '../assets/js/zed/browser-run.js';
 import { BrowserShellBridge } from '../assets/js/zed/browser-shell.js';
 import { BrowserTerminalProject } from '../assets/js/zed/terminal-project.js';
 import { terminalTransport } from '../assets/js/zed/native-terminal.js';
@@ -128,4 +129,58 @@ test('the Ark worker reads and updates the live Zed project, expands globs, and 
   assert.equal(files.size, 2);
   const browserRoot = '/home/web';
   await assert.rejects(project.fs(browserRoot, 'read', [`${browserRoot}-outside/notes.txt`]), /outside/);
+});
+
+test('Browser Ark runs a saved Python script with exact arguments, stdin, and shell exit status', { timeout: 12000 }, async t => {
+  const isolation = Object.getOwnPropertyDescriptor(globalThis, 'crossOriginIsolated');
+  Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value: true });
+  t.after(() => {
+    if (isolation) Object.defineProperty(globalThis, 'crossOriginIsolated', isolation);
+    else delete globalThis.crossOriginIsolated;
+  });
+  const root = '/home/web';
+  const cwd = `${root}/project/run`;
+  const script = `${root}/project/argument demo.py`;
+  const helper = `${root}/project/helper.py`;
+  const files = new Map([
+    [script, 'import json, os, sys, helper\nprint(json.dumps([sys.argv, os.getcwd(), helper.text, input()]))\nsys.exit(23)'],
+    [helper, 'text = "helper"'],
+  ]);
+  const editor = {
+    async terminal_project_fs(_root, operation, args) {
+      assert.equal(operation, 'metadata');
+      assert.ok(cwd.startsWith(JSON.parse(args)[0]));
+      return '["d","0"]';
+    },
+    async list_browser_paths() { return JSON.stringify([...files.keys()].map(path => ({ path }))); },
+    async read_browser_file(path) {
+      assert.ok(files.has(path), path);
+      return encode.encode(files.get(path));
+    },
+  };
+  const fixture = new URL('./fixtures/zed-terminal-project-worker.mjs', import.meta.url);
+  const pythonWorker = new URL('?runtime=python', fixture);
+  const browser = new BrowserRunBridge(editor, () => new WorkerHost(pythonWorker));
+  const shell = new BrowserShellBridge(() => new WorkerHost(fixture), new BrowserTerminalProject(editor), browser);
+  const id = await shell.open({ cwd, columns: 80 });
+  t.after(() => shell.close(id));
+
+  async function readThrough(marker) {
+    let output = '';
+    while (!output.includes(marker)) output += decode.decode((await shell.read(id)).data);
+    return output;
+  }
+
+  shell.write(id, encode.encode('python3 "../argument demo.py" --mode "two words" "" 雪\r'));
+  await readThrough('Starting Python');
+  shell.write(id, encode.encode('from stdin\r'));
+  const output = await readThrough('\x1b[32mark:~/project/run $ ');
+  assert.match(output, /Exit code: 23/);
+  const line = output.split('\r\n').find(line => line.startsWith('[['));
+  assert.deepEqual(JSON.parse(line), [
+    ['../argument demo.py', '--mode', 'two words', '', '雪'], cwd, 'helper', 'from stdin',
+  ]);
+  shell.write(id, encode.encode('echo $?\r'));
+  await readThrough('\r\n23\r\n');
+  assert.equal(browser.sessions.size, 0);
 });

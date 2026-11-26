@@ -2,7 +2,7 @@ import { LineBuffer } from '../terminal/line-buffer.js';
 import { joinBytes } from './lsp-stream.js';
 import { isBrowserProject } from './paths.js';
 
-const WORKER = '/editor/runtime/ark/worker.js?v=2';
+const WORKER = '/editor/runtime/ark/worker.js?v=python-argv-1';
 const SESSION_PREFIX = 'browser-shell:';
 const LINE_LIMIT = 16_384;
 const encoder = new TextEncoder();
@@ -22,11 +22,12 @@ function columns(text) {
 }
 
 class BrowserShellProcess {
-  constructor(worker, size, project, mount) {
+  constructor(worker, size, project, mount, browser) {
     this.worker = worker;
     this.size = size;
     this.project = project;
     this.mount = mount;
+    this.browser = browser;
     this.line = new LineBuffer();
     this.decoder = new TextDecoder();
     this.output = [];
@@ -93,6 +94,7 @@ class BrowserShellProcess {
   finish(code, message = 'Browser Ark closed.') {
     if (this.exitCode !== null) return;
     this.exitCode = code;
+    if (this.task) this.browser.close(this.task);
     this.worker.terminate();
     for (const request of this.requests.values()) request.reject(new Error(message));
     this.requests.clear();
@@ -139,7 +141,9 @@ class BrowserShellProcess {
     this.running = true;
     if (this.interrupt) Atomics.store(this.interrupt, 0, 0);
     try {
-      const result = await this.request('run', { source, interrupt: this.interrupt?.buffer });
+      const result = await this.request('run', {
+        source, interrupt: this.interrupt?.buffer, browserPython: Boolean(this.browser && this.mount),
+      });
       if (result.incomplete && !this.cancelled) {
         this.continuation = source + '\n';
         return;
@@ -151,6 +155,10 @@ class BrowserShellProcess {
       this.draft = '';
       if (result.incomplete) return;
       this.cwd = result.cwd;
+      if (result.python) {
+        await this.runPython(result.python);
+        return;
+      }
       for (const action of result.actions) {
         if (action === 'clear') this.append('\x1b[2J\x1b[H');
         if (action.startsWith('edit:') && this.mount) {
@@ -171,13 +179,49 @@ class BrowserShellProcess {
     }
   }
 
+  async runPython(command) {
+    let code = 130;
+    let id;
+    try {
+      if (!this.cancelled) id = await this.browser.openPythonScript({
+        root: this.mount.root, cwd: this.cwd, ...command,
+      });
+      if (id && !this.cancelled && this.exitCode === null) {
+        this.task = id;
+        while (this.exitCode === null) {
+          const { data, ended, exitCode } = await this.browser.read(id);
+          if (this.exitCode !== null) return;
+          if (data.length) {
+            this.output.push(data);
+            this.wake?.();
+          }
+          if (ended) {
+            code = exitCode ?? 130;
+            break;
+          }
+        }
+      }
+    } catch (error) {
+      if (!this.cancelled && this.exitCode === null) {
+        this.append(lineEndings(`${error.message}\n`));
+        code = 1;
+      }
+    } finally {
+      if (id) await this.browser.close(id);
+      this.task = undefined;
+    }
+    if (this.exitCode === null) await this.request('status', { code });
+  }
+
   async complete() {
     if (this.line.cursor !== this.line.text.length) return;
     const text = this.line.text;
     const token = text.match(/[^\s;|&]*$/)[0];
     if (/["'\\]/.test(token)) return;
     const start = text.length - token.length;
-    const matches = await this.request('complete', { prefix: token, command: start === 0 });
+    const matches = await this.request('complete', {
+      prefix: token, command: start === 0, browserPython: Boolean(this.browser && this.mount),
+    });
     if (this.line.text !== text) return;
     if (matches.length === 1) this.line.replace(text.slice(0, start) + matches[0].replace(/([\s'"\\$;|&()<>])/g, '\\$1'));
     else if (matches.length) this.append(lineEndings('\n' + matches.join('  ') + '\n'));
@@ -240,6 +284,7 @@ class BrowserShellProcess {
 
   write(bytes) {
     if (this.exitCode !== null) return;
+    if (this.task) return this.browser.write(this.task, bytes);
     const text = this.decoder.decode(bytes, { stream: true });
     if (text === '\x03') return this.cancel();
     const epoch = this.inputEpoch;
@@ -257,9 +302,10 @@ class BrowserShellProcess {
 }
 
 export class BrowserShellBridge {
-  constructor(makeWorker = () => new Worker(WORKER, { type: 'module' }), project) {
+  constructor(makeWorker = () => new Worker(WORKER, { type: 'module' }), project, browser) {
     this.makeWorker = makeWorker;
     this.project = project;
+    this.browser = browser;
     this.sessions = new Map();
   }
 
@@ -273,7 +319,7 @@ export class BrowserShellBridge {
   async open(options) {
     const id = SESSION_PREFIX + crypto.randomUUID();
     const mount = typeof SharedArrayBuffer === 'function' ? this.project?.mount(options.cwd) : undefined;
-    const process = new BrowserShellProcess(this.makeWorker(), options, this.project, mount);
+    const process = new BrowserShellProcess(this.makeWorker(), options, this.project, mount, this.browser);
     this.sessions.set(id, process);
     try { await process.start(); }
     catch (error) { this.close(id); throw error; }
@@ -288,7 +334,7 @@ export class BrowserShellBridge {
     return result;
   }
 
-  write(id, bytes) { this.sessions.get(id)?.write(bytes); }
+  write(id, bytes) { return this.sessions.get(id)?.write(bytes); }
   resize(id, size) {
     const process = this.sessions.get(id);
     if (process) { process.size = size; process.render(); }

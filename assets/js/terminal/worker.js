@@ -1,4 +1,4 @@
-import { Interrupted, Shell } from './shell.js?v=project-fs-1';
+import { Interrupted, Shell } from './shell.js?v=python-argv-1';
 import { projectChannel } from './project-ipc.js?v=1';
 import { pack } from './wasm.js?v=project-fs-1';
 
@@ -81,7 +81,7 @@ async function handle(message) {
     else if (message.type === 'run') {
       try {
         const interrupt = message.interrupt && new Int32Array(message.interrupt);
-        value = shell.run(message.source, interrupt);
+        value = shell.run(message.source, interrupt, localProject && message.browserPython);
       }
       catch (error) {
         if (error.incomplete) return { value: { incomplete: true }, changed: false };
@@ -91,6 +91,8 @@ async function handle(message) {
         value = { out: '', err: interrupted ? '' : `${error.message}\n`, code, actions: [], cwd: shell.files.request('cwd')[0] };
       }
       changed = true;
+    } else if (message.type === 'status' && localProject) {
+      shell.status = message.code;
     } else if (message.type === 'files') {
       const { action, args = {} } = message;
       const parameters = action === 'rename' ? [args.from, args.to] : action === 'write' ? [args.path, args.text] : [args.path];
@@ -104,6 +106,7 @@ async function handle(message) {
       const prefix = message.prefix;
       const builtins = 'help pwd cd ls mkdir touch cat cp mv rm rmdir edit echo printf grep head tail wc sort uniq seq export unset alias unalias env true false test clear source ark'.split(' ');
       value = shell.glob(prefix + '*');
+      if (message.browserPython && localProject) builtins.push('python', 'python3');
       if (message.command) value = [...new Set([...builtins.filter(name => name.startsWith(prefix)), ...value])].sort();
     } else throw new Error('Unknown terminal request');
     if (changed && !localProject) {

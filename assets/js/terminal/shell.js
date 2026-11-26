@@ -65,13 +65,30 @@ export class Shell {
     }
   }
   capture(source) { return this.isolated(() => this.execute(this.ark.parse(source)).out.replace(/\n+$/, '')); }
-  run(source, interrupt) {
+  run(source, interrupt, browserPython = false) {
     this.steps = 0;
     this.deadline = Date.now() + 4000;
     this.flow = null;
     this.interrupt = interrupt;
     try {
-      const result = this.execute(this.ark.parse(source));
+      const tree = this.ark.parse(source);
+      const node = tree?.children.length === 1 ? tree.children[0] : tree;
+      const command = node?.words[0];
+      if (browserPython && node?.kind === 0 && !node.redirects.length && !node.background && !node.negate
+        && (command === 'python' || command === 'python3') && !this.aliases.has(command) && !this.functions.has(command)) {
+        if (interrupt && Atomics.load(interrupt, 0)) throw new Interrupted();
+        const args = this.expand(node.words.slice(1));
+        const endOfOptions = args[0] === '--';
+        if (endOfOptions) args.shift();
+        const [scriptArgument, ...programArgs] = args;
+        if (!scriptArgument || (!endOfOptions && scriptArgument.startsWith('-'))) {
+          this.status = 2;
+          return { ...empty(2), err: `Usage: ${command} script.py [args]\n`, cwd: this.env.PWD };
+        }
+        const [script] = this.files.request('resolve', scriptArgument);
+        return { ...empty(), cwd: this.env.PWD, python: { script, scriptArgument, programArgs } };
+      }
+      const result = this.execute(tree);
       return { ...result, cwd: this.files.request('cwd')[0], exited: this.flow?.kind === 'exit' };
     } finally {
       this.flow = null;

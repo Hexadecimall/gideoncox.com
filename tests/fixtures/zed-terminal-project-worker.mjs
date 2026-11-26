@@ -5,4 +5,8 @@ globalThis.fetch = async url => {
   file.search = '';
   return new Response(await readFile(file));
 };
-await import('../../editor/runtime/ark/worker.js');
+if (location.searchParams.get('runtime') === 'python') {
+  await import('../../editor/runtime/python/worker.js');
+} else {
+  await import('../../editor/runtime/ark/worker.js');
+}
