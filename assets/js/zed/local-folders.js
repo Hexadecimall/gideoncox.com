@@ -193,7 +193,7 @@ export class LocalFolders {
     return files;
   }
 
-  async gitSnapshot(path, includeTree, selectContents) {
+  async gitSnapshot(path, includeTree, { selectContents, configOnly = false } = {}) {
     const root = await this.directory(this.parsed(path));
     const metadata = await entryAt(root, '.git');
     if (metadata?.kind !== 'directory') {
@@ -203,6 +203,7 @@ export class LocalFolders {
     const directories = [['.git', metadata]];
     const snapshot = [['.git', null]];
     const diskConfig = new TextEncoder().encode('\n[core]\n\tfilemode = false\n');
+    let followsIncludes = false;
     let bytes = 0;
     let trackedPaths;
     if (includeTree) directories.push(['', root]);
@@ -210,6 +211,7 @@ export class LocalFolders {
     for (let index = 0; index < directories.length; index++) {
       const [parent, directory] = directories[index];
       if (parent === '' && selectContents) trackedPaths = await selectContents(snapshot);
+      if (configOnly && parent === '.git/objects' && !followsIncludes) continue;
       const worktree = parent !== '.git' && !parent.startsWith('.git/');
       const watchGitDirectory = parent === '.git' || parent === '.git/refs' || parent.startsWith('.git/refs/');
       const gitNames = [];
@@ -241,6 +243,9 @@ export class LocalFolders {
         bytes += file.size + (config ? diskConfig.length : 0);
         if (bytes > MAX_GIT_SNAPSHOT_BYTES) throw new Error('The repository exceeds the browser Git snapshot limit.');
         const contents = new Uint8Array(await file.arrayBuffer());
+        if (configOnly && (config || name === '.git/config.worktree')) {
+          followsIncludes ||= /\binclude(?:if)?\b/i.test(new TextDecoder().decode(contents));
+        }
         if (!config) {
           snapshot.push([name, contents]);
           continue;

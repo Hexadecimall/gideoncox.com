@@ -1,4 +1,4 @@
-import { GitWasiWorktree, MAX_GIT_OUTPUT } from './repository.js?v=git-index-paths-1';
+import { GitWasiWorktree, MAX_GIT_OUTPUT } from './repository.js?v=git-remotes-1';
 
 let engine;
 
@@ -16,6 +16,7 @@ async function loadEngine() {
 const writesWorktree = new Set(['create-branch', 'switch-branch']);
 const writesMetadata = new Set([
   'init', 'stage', 'set-index-text', 'stage-deletion', 'unstage', 'commit', 'rename-branch', 'delete-branch', ...writesWorktree,
+  'remote-add', 'remote-remove',
 ]);
 
 const MAX_GIT_INPUT = 16 * 1024 * 1024;

@@ -32,6 +32,7 @@ This is a port of upstream Rust and GPUI code. Full desktop parity is unfinished
 | Rust Clippy | On-demand WASI Clippy for Rust files and Cargo packages through Run and Build or Rust Analyzer's `check.command` setting. Clippy reports findings in Project Diagnostics, reads native lint configuration, and exposes machine-applicable suggestions in Quick Fix. | Standalone and Cargo lint tests, including local dependencies, build scripts, and denied lints. Browser save and Quick Fix checks. |
 | Local Git | Upstream Git panel with a WASI libgit2 worker for browser-stored projects. Initialize repositories, view changes and diffs, stage or unstage files, and commit using the repository's `user.name` and `user.email` settings. Browse repository and file history, search commits, and open commits to inspect their changes. File history follows renames. | Browser panels, commit persistence after reload, and worker tests for rename with edits, file history search, merge parents, packed refs, detached HEAD, and shallow history |
 | Git in folders opened from disk | The same Git panel reads branch, status, diff, blame, and history data from the selected directory handle. Status and unstaged diff scans normally read tracked file contents and Git rules, using only filenames for untracked files. Repository snapshots stay in the browser and use the Git worker's 16 MiB and 8,192-entry limits. | Mounted browser directory fixture in the Git panel, including diffs and rename history. Worker tests cover large ignored files and write rejection. |
+| Git remotes and permalinks | The Git worker reads remote names and URLs, resolves branch remote preferences, and saves remote additions and removals in trusted browser-stored repositories. Zed's upstream hosting providers build commit-specific file and line links from configured remotes. | Branch-picker remote creation and reload, opening and copying a GitHub line permalink from a mounted folder, and worker tests for remote selection and removal. |
 | Tasks | Upstream task picker and task terminal; native command, arguments, environment, working directory and completion status | Real task PTY exit/output tests; integrated browser check pending |
 
 The browser uses the desktop status layout for Language Servers, Project Diagnostics
@@ -41,7 +42,7 @@ menu. The pending controls display a Zed notification when activated.
 
 ## Remaining work
 
-- File history across complex merges, branch changes, staging individual diff hunks, remotes, GitHub, and Git writes in folders opened from disk.
+- File history across complex merges, branch changes, staging individual diff hunks, remote fetch, pull and push, GitHub authentication and hosted actions, and Git writes in folders opened from disk.
 - Native debugger sessions and debugger UI.
 - Extension installation, execution, grammars, themes and extension-provided language servers.
 - Browser LSP runners for languages beyond C/C++, Python and Rust.

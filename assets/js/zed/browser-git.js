@@ -6,6 +6,7 @@ const READ_OPERATIONS = new Set([
   'head', 'status', 'branches', 'show', 'read-index', 'read-head', 'read-tree', 'read-blob',
   'resolve', 'diff', 'diff-stat', 'blame-revision', 'blame-buffer', 'history',
   'search-commits', 'read-commit', 'commit-files',
+  'remotes', 'branch-remote',
 ]);
 
 function needsOnlyTrackedContents(operations) {
@@ -14,7 +15,7 @@ function needsOnlyTrackedContents(operations) {
 }
 
 export class BrowserGit {
-  constructor(makeWorker = () => new Worker('/editor/runtime/git/worker.js?v=git-index-paths-1', { type: 'module' })) {
+  constructor(makeWorker = () => new Worker('/editor/runtime/git/worker.js?v=git-remotes-1', { type: 'module' })) {
     this.makeWorker = makeWorker;
     this.pending = new Map();
     this.nextId = 0;
@@ -76,7 +77,9 @@ export class BrowserGit {
     try {
       const selectContents = includeTree && needsOnlyTrackedContents(operations)
         ? snapshot => this.trackedPaths(snapshot) : undefined;
-      entries = await folders.gitSnapshot(root, includeTree, selectContents);
+      const configOnly = !includeTree && operations.every(([operation]) =>
+        operation === 'remotes' || operation === 'branch-remote');
+      entries = await folders.gitSnapshot(root, includeTree, { selectContents, configOnly });
     } finally {
       this.folderSnapshots--;
     }

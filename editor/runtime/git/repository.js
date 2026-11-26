@@ -44,6 +44,7 @@ const pathArguments = new Map([
 ]);
 const argCounts = new Map([
   ['init', 1], ['head', 0], ['status', 0], ['index-paths', 0], ['read-index', 1], ['read-head', 1], ['read-tree', 2],
+  ['remotes', 0], ['branch-remote', 2], ['remote-add', 2], ['remote-remove', 1],
   ['switch-branch', 1], ['create-branch', 2], ['rename-branch', 2], ['delete-branch', 3],
   ['branches', 0], ['show', 1], ['read-blob', 1], ['resolve', 1], ['diff', 1], ['diff-stat', 1],
   ['blame-revision', 2], ['blame-buffer', 2],

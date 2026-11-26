@@ -93,6 +93,32 @@ test('the browser Git worker can reopen a repository and preserve its real Git i
   const initialSha = outputs[7].slice(0, -1);
   assert.match(initialSha, /^[a-f0-9]{40}$/);
 
+  const configured = await run(initial.metadata, [
+    ['remotes'],
+    ['remote-add', 'origin', 'https://github.com/example/project.git'],
+    ['remote-add', 'publish', 'ssh://git@example.invalid/project'],
+    ['remotes'],
+  ]);
+  assert.equal(decoder.decode(configured.results[0]), '');
+  assert.deepEqual(decoder.decode(configured.results[3]).split('\0'), [
+    'origin', 'https://github.com/example/project.git', 'publish', 'ssh://git@example.invalid/project', '',
+  ]);
+  const trackingConfig = configured.metadata.map(([name, bytes]) => [name, name !== '.git/config' ? bytes :
+    encoder.encode(decoder.decode(bytes) + '\n[branch "main"]\n\tremote = origin\n\tmerge = refs/heads/main\n'
+      + '[remote]\n\tpushDefault = publish\n'
+      + '[branch "topic/feature"]\n\tpushRemote = origin\n')]);
+  const trackedRemotes = await run(trackingConfig, [
+    ['branch-remote', 'main', 'fetch'], ['branch-remote', 'main', 'push'],
+    ['branch-remote', 'topic/feature', 'push'], ['branch-remote', 'absent', 'fetch'],
+  ]);
+  assert.deepEqual(trackedRemotes.results.map(bytes => bytes && decoder.decode(bytes)),
+    ['origin\0', 'publish\0', 'origin\0', null]);
+  assert.equal(trackedRemotes.metadata, null);
+  await assert.rejects(run(configured.metadata, [['remote-add', 'origin', 'https://example.invalid/other']]), /already exists/);
+  const removed = await run(configured.metadata, [['remote-remove', 'publish']]);
+  const reopenedRemotes = await run(removed.metadata, [['remotes']]);
+  assert.equal(decoder.decode(reopenedRemotes.results[0]), 'origin\0https://github.com/example/project.git\0');
+
   const reopened = await run([...initial.metadata, [path, encoder.encode('two\n')], ignored, scratch], [
     ['status'], ['read-head', path], ['resolve', 'HEAD'], ['diff-stat', 'index-worktree'],
     ['diff', 'head-worktree'], ['stage', path], ['diff-stat', 'head-index'],
@@ -404,13 +430,24 @@ test('the browser Git worker can reopen a repository and preserve its real Git i
   const mountedGit = new BrowserGit(() => mountedWorker);
   t.after(() => mountedGit.stop(new Error('Test finished')));
   await assert.rejects(mountedGit.requestSelectedFolder(snapshotPath, false, [['commit', ...identity, 'Write']]), /Git changes/);
+  await assert.rejects(mountedGit.requestSelectedFolder(snapshotPath, false, [['remote-add', 'origin', 'https://example.invalid']]), /Git changes/);
   assert.deepEqual(reads, []);
+  const remoteReads = [];
+  const remoteMount = await folders.mount(folderFixture([
+    ...trackingConfig,
+    ['.git/objects/pack/large.fixture', new Uint8Array(17 * 1024 * 1024)],
+  ], remoteReads));
+  const diskRemotes = await mountedGit.requestSelectedFolder(remoteMount, false, [['remotes'], ['branch-remote', 'main', 'fetch']]);
+  assert.equal(decoder.decode(diskRemotes.results[1]), 'origin\0');
+  assert.match(decoder.decode(diskRemotes.results[0]), /https:\/\/github\.com\/example\/project\.git/);
+  assert.ok(!remoteReads.some(path => path.startsWith('.git/objects/')));
   await assert.rejects(mountedGit.requestSelectedFolder('/home/web', false, [['head']]), /Choose a local folder/);
   const diskHistory = await mountedGit.requestSelectedFolder(snapshotPath, false, [
-    ['history', 'path', newPath, 'date'], ['branches'],
+    ['history', 'path', newPath, 'date'], ['branches'], ['remotes'],
   ]);
   assert.deepEqual(commitIds(diskHistory.results[0]), [afterRename, beforeRename]);
   assert.equal(decoder.decode(diskHistory.results[1]).split('\0')[0], 'refs/heads/main');
+  assert.equal(decoder.decode(diskHistory.results[2]), '');
   assert.ok(reads.includes('.git/config'));
   assert.ok(!reads.includes(newPath) && !reads.includes('.git/hooks/unused'));
   const diskStatus = await mountedGit.requestSelectedFolder(snapshotPath, true, [['status'], ['diff', 'index-worktree']]);

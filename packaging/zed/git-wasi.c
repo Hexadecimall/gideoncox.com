@@ -39,6 +39,65 @@ static int index_paths(void)
     return code;
 }
 
+static int list_remotes(git_repository *repo)
+{
+    git_strarray names = {0};
+    int code = git_remote_list(&names, repo);
+    for (size_t i = 0; code == 0 && i < names.count; i++) {
+        git_remote *remote = NULL;
+        code = git_remote_lookup(&remote, repo, names.strings[i]);
+        if (code == 0) {
+            git_wasi_field(names.strings[i]);
+            git_wasi_field(git_remote_url(remote));
+        }
+        git_remote_free(remote);
+    }
+    git_strarray_dispose(&names);
+    return code < 0 ? git_wasi_fail("Reading Git remotes") : 0;
+}
+
+static int branch_remote(git_repository *repo, const char *branch, int push)
+{
+    git_config *config = NULL;
+    git_buf name = GIT_BUF_INIT;
+    size_t key_size = strlen(branch) + sizeof("branch..pushremote");
+    char *key = malloc(key_size);
+    if (!key) {
+        fputs("Could not allocate the Git branch name.\n", stderr);
+        return 1;
+    }
+
+    int code = git_repository_config_snapshot(&config, repo);
+    if (code == 0) {
+        if (push) {
+            snprintf(key, key_size, "branch.%s.pushremote", branch);
+            code = git_config_get_string_buf(&name, config, key);
+            if (code == GIT_ENOTFOUND)
+                code = git_config_get_string_buf(&name, config, "remote.pushdefault");
+        }
+        if (!push || code == GIT_ENOTFOUND) {
+            snprintf(key, key_size, "branch.%s.remote", branch);
+            code = git_config_get_string_buf(&name, config, key);
+        }
+    }
+    if (code == 0 && name.size)
+        git_wasi_field(name.ptr);
+    else if (code == 0 || code == GIT_ENOTFOUND)
+        code = 2;
+    git_buf_dispose(&name);
+    git_config_free(config);
+    free(key);
+    return code < 0 ? git_wasi_fail("Reading the Git branch remote") : code;
+}
+
+static int add_remote(git_repository *repo, const char *name, const char *url)
+{
+    git_remote *remote = NULL;
+    int code = git_remote_create(&remote, repo, name, url);
+    git_remote_free(remote);
+    return code < 0 ? git_wasi_fail("Adding the Git remote") : 0;
+}
+
 static int status(git_repository *repo)
 {
     git_status_options options;
@@ -462,6 +521,15 @@ int main(int argc, char **argv)
         code = read_branch(repo);
     } else if (!strcmp(argv[1], "branches") && argc == 2) {
         code = list_branches(repo);
+    } else if (!strcmp(argv[1], "remotes") && argc == 2) {
+        code = list_remotes(repo);
+    } else if (!strcmp(argv[1], "branch-remote") && argc == 4 &&
+        (!strcmp(argv[3], "push") || !strcmp(argv[3], "fetch"))) {
+        code = branch_remote(repo, argv[2], !strcmp(argv[3], "push"));
+    } else if (!strcmp(argv[1], "remote-add") && argc == 4) {
+        code = add_remote(repo, argv[2], argv[3]);
+    } else if (!strcmp(argv[1], "remote-remove") && argc == 3) {
+        code = git_remote_delete(repo, argv[2]) < 0 ? git_wasi_fail("Removing the Git remote") : 0;
     } else if (!strcmp(argv[1], "switch-branch") && argc == 3) {
         code = git_wasi_switch_branch(repo, argv[2]);
     } else if (!strcmp(argv[1], "create-branch") && argc == 4) {
