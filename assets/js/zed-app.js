@@ -1,4 +1,4 @@
-import { prepareEditorIsolation } from './zed/isolation.js';
+import { prepareEditorIsolation } from './zed/isolation.js?v=2';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=4';
 
 const loading = document.querySelector('#loading');
