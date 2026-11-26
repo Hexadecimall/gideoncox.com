@@ -21,6 +21,24 @@ void git_wasi_field(const char *value)
     fputc('\0', stdout);
 }
 
+static int index_paths(void)
+{
+    git_index *index = NULL;
+    if (git_index_open(&index, "/repo/.git/index") < 0)
+        return git_wasi_fail("Opening the Git index");
+    int code = 0;
+    for (size_t i = 0; i < git_index_entrycount(index); i++) {
+        const git_index_entry *entry = git_index_get_byindex(index, i);
+        if (entry->mode == GIT_FILEMODE_TREE) {
+            code = 2;
+            break;
+        }
+        git_wasi_field(entry->path);
+    }
+    git_index_free(index);
+    return code;
+}
+
 static int status(git_repository *repo)
 {
     git_status_options options;
@@ -425,7 +443,9 @@ int main(int argc, char **argv)
 
     git_repository *repo = NULL;
     int code;
-    if (!strcmp(argv[1], "init") && argc == 3) {
+    if (!strcmp(argv[1], "index-paths") && argc == 2) {
+        code = index_paths();
+    } else if (!strcmp(argv[1], "init") && argc == 3) {
         git_repository_init_options options;
         code = git_repository_init_options_init(&options, GIT_REPOSITORY_INIT_OPTIONS_VERSION);
         if (code == 0) {

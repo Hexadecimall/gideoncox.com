@@ -388,6 +388,9 @@ test('the browser Git worker can reopen a repository and preserve its real Git i
   const snapshotPath = await folders.mount(folderFixture([
     ...renameHead.metadata, [newPath, encoder.encode(moved + 'Line edited outside the editor.\n')],
     ['.git/hooks/unused', encoder.encode('fixture')],
+    ['generated/.gitignore', encoder.encode('ignored.bin\n')],
+    ['generated/ignored.bin', new Uint8Array(17 * 1024 * 1024)],
+    ['untracked.txt', encoder.encode('not staged')],
   ], reads));
   const mountedWorker = new EventTarget();
   mountedWorker.terminate = () => {};
@@ -414,7 +417,11 @@ test('the browser Git worker can reopen a repository and preserve its real Git i
   assert.equal(diskStatus.metadata, null);
   assert.equal(diskStatus.worktree, null);
   assert.match(decoder.decode(diskStatus.results[0]), /moved file\.txt/);
+  assert.match(decoder.decode(diskStatus.results[0]), /untracked\.txt/);
+  assert.doesNotMatch(decoder.decode(diskStatus.results[0]), /ignored\.bin/);
   assert.match(decoder.decode(diskStatus.results[1]), /\+Line edited outside the editor\./);
+  assert.ok(reads.includes('generated/.gitignore'));
+  assert.ok(!reads.includes('generated/ignored.bin') && !reads.includes('untracked.txt'));
 
   const sourceBytes = encoder.encode(moved);
   const withExecutableIndex = await run(renameHead.metadata, [['set-index-text', newPath, 'true']], sourceBytes);

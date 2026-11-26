@@ -1,4 +1,4 @@
-import { GitWasiWorktree, MAX_GIT_OUTPUT } from './repository.js?v=git-file-history-1';
+import { GitWasiWorktree, MAX_GIT_OUTPUT } from './repository.js?v=git-index-paths-1';
 
 let engine;
 

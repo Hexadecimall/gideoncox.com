@@ -7,6 +7,7 @@ const MAX_GIT_SNAPSHOT_BYTES = 16 * 1024 * 1024;
 const MAX_GIT_ENTRIES = 8192;
 const UNUSED_GIT_DIRECTORIES = new Set(['hooks', 'logs', 'lfs', 'modules', 'worktrees']);
 const GIT_REFRESH_FILES = new Set(['.git/HEAD', '.git/index', '.git/packed-refs', '.git/config']);
+const WORKTREE_GIT_FILES = new Set(['.gitignore', '.gitattributes', '.gitmodules']);
 const ACCESS = { mode: 'readwrite' };
 
 function safePart(part) {
@@ -192,7 +193,7 @@ export class LocalFolders {
     return files;
   }
 
-  async gitSnapshot(path, includeTree) {
+  async gitSnapshot(path, includeTree, selectContents) {
     const root = await this.directory(this.parsed(path));
     const metadata = await entryAt(root, '.git');
     if (metadata?.kind !== 'directory') {
@@ -203,10 +204,13 @@ export class LocalFolders {
     const snapshot = [['.git', null]];
     const diskConfig = new TextEncoder().encode('\n[core]\n\tfilemode = false\n');
     let bytes = 0;
+    let trackedPaths;
     if (includeTree) directories.push(['', root]);
 
     for (let index = 0; index < directories.length; index++) {
       const [parent, directory] = directories[index];
+      if (parent === '' && selectContents) trackedPaths = await selectContents(snapshot);
+      const worktree = parent !== '.git' && !parent.startsWith('.git/');
       const watchGitDirectory = parent === '.git' || parent === '.git/refs' || parent.startsWith('.git/refs/');
       const gitNames = [];
       for await (const entry of directory.values()) {
@@ -221,6 +225,11 @@ export class LocalFolders {
           continue;
         }
 
+        if (worktree && trackedPaths && !trackedPaths.has(name) && !WORKTREE_GIT_FILES.has(entry.name)) {
+          // Status needs the filename to report untracked files and apply ignore rules.
+          snapshot.push([name, new Uint8Array()]);
+          continue;
+        }
         const file = await entry.getFile();
         if (GIT_REFRESH_FILES.has(name) || name.startsWith('.git/refs/')) {
           this.rememberFile(`${path}/${name}`, file, GIT_REFRESH_FILES.has(name));

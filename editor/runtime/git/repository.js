@@ -43,7 +43,7 @@ const pathArguments = new Map([
   ['read-index', 0], ['read-head', 0], ['read-tree', 1], ['stage', 0], ['set-index-text', 0], ['stage-deletion', 0], ['unstage', 0],
 ]);
 const argCounts = new Map([
-  ['init', 1], ['head', 0], ['status', 0], ['read-index', 1], ['read-head', 1], ['read-tree', 2],
+  ['init', 1], ['head', 0], ['status', 0], ['index-paths', 0], ['read-index', 1], ['read-head', 1], ['read-tree', 2],
   ['switch-branch', 1], ['create-branch', 2], ['rename-branch', 2], ['delete-branch', 3],
   ['branches', 0], ['show', 1], ['read-blob', 1], ['resolve', 1], ['diff', 1], ['diff-stat', 1],
   ['blame-revision', 2], ['blame-buffer', 2],
