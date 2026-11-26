@@ -1,9 +1,11 @@
 import { prepareEditorIsolation } from './zed/isolation.js';
-import { editorWasmResponse } from './zed/wasm-cache.js?v=3';
+import { editorWasmResponse } from './zed/wasm-cache.js?v=4';
 
 const loading = document.querySelector('#loading');
 const build = '7333e722d8e7';
 const gzip = true;
+const ios = /iPad|iPhone|iPod/.test(navigator.userAgent)
+  || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);
 
 function fitVisualViewport() {
   const viewport = window.visualViewport;
@@ -22,7 +24,7 @@ function fitVisualViewport() {
 }
 
 async function downloadWasm() {
-  const download = await editorWasmResponse(build, { gzip });
+  const download = await editorWasmResponse(build, { gzip, cacheBeforeCompile: ios });
   const { response } = download;
   if (!response.ok) throw new Error(`Download failed (${response.status})`);
   const saved = download.save();
@@ -30,7 +32,7 @@ async function downloadWasm() {
     let length = 0;
     const body = download.body(bytes => {
       length += bytes;
-      loading.textContent = `Loading Zed · ${(length / 1048576).toFixed(1)} MB`;
+      loading.textContent = ios ? 'Compiling Zed…' : `Loading Zed · ${(length / 1048576).toFixed(1)} MB`;
     });
     let module;
     if (!body || !WebAssembly.compileStreaming) {
@@ -66,7 +68,11 @@ async function start() {
     if (readyZed) readyZed.show_database_notice(message);
     else databaseNotice = message;
   };
-  const [wasm, zed] = await Promise.all([downloadWasm(), prepareRuntime(notifyDatabase)]);
+  // On iOS, disk snapshots and Wasm compilation share the WebContent process.
+  // Restore browser services after compiling so their peak allocations do not overlap.
+  const [wasm, zed] = ios
+    ? [await downloadWasm(), await prepareRuntime(notifyDatabase)]
+    : await Promise.all([downloadWasm(), prepareRuntime(notifyDatabase)]);
   loading.textContent = 'Starting Zed…';
   await zed.default({ module_or_path: wasm });
   const deadline = performance.now() + 30000;

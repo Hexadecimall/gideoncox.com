@@ -84,3 +84,53 @@ test('gzip builds stream into WebAssembly while the cache keeps compressed bytes
   await warm.discard();
   assert.equal(entries.size, 0);
 });
+
+test('limited-memory startup saves and releases the download stream before compiling', async () => {
+  const { cacheStorage } = cacheStorageFixture();
+  const cache = await cacheStorage.open();
+  const put = cache.put;
+  cache.put = async (url, response) => {
+    // CacheStorage consumes the supplied stream and provides a separate reader.
+    await put(url, new Response(await response.arrayBuffer()));
+  };
+  const wasm = Uint8Array.of(0, 97, 115, 109, 1, 0, 0, 0);
+  let requests = 0;
+  const options = {
+    gzip: true,
+    cacheBeforeCompile: true,
+    cacheStorage,
+    async request() {
+      requests++;
+      const response = new Response(gzipSync(wasm));
+      response.clone = () => assert.fail('Do not fork the network body during compilation');
+      return response;
+    },
+  };
+  for (let open = 0; open < 2; open++) {
+    const download = await editorWasmResponse('mobile', options);
+    await download.save();
+    assert.deepEqual(new Uint8Array(await new Response(download.body()).arrayBuffer()), wasm);
+  }
+  assert.equal(requests, 1);
+});
+
+test('limited-memory startup can compile after storage consumes a failed write', async () => {
+  const { cacheStorage } = cacheStorageFixture();
+  const cache = await cacheStorage.open();
+  cache.put = async (_url, response) => {
+    await response.arrayBuffer();
+    throw new Error('Quota exceeded');
+  };
+  const requests = [];
+  const download = await editorWasmResponse('quota', {
+    cacheBeforeCompile: true,
+    cacheStorage,
+    async request(url, { cache }) {
+      requests.push([url, cache]);
+      return new Response('editor');
+    },
+  });
+  assert.equal(await new Response(download.body()).text(), 'editor');
+  assert.deepEqual(requests.map(([, mode]) => mode), ['no-cache', 'force-cache']);
+  assert.equal(requests[0][0], requests[1][0]);
+});
