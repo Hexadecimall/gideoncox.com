@@ -5,7 +5,7 @@ import { joinBytes } from './lsp-stream.js';
 
 const PROGRAMS = new Map([
   ['browser-python', { label: 'Python', worker: '/editor/runtime/python/worker.js?v=2', targets: ['python'] }],
-  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=project-libs-1',
+  ['browser-cc', { label: 'Clang', worker: '/editor/runtime/compiler/worker.js?v=warm-builds-1',
     targets: CLANG_TARGETS }],
   ['browser-zig', { label: 'Zig', worker: '/editor/runtime/compiler/worker.js?v=6', targets: ['wasi'] }],
   ['browser-rust', { label: 'Rust', worker: '/editor/runtime/compiler/worker.js?v=quickfix-1', targets: ['wasi', 'clippy'] }],
@@ -13,6 +13,7 @@ const PROGRAMS = new Map([
 const SESSION_PREFIX = 'browser-run:';
 const MAX_FILE = 2 * 1024 * 1024;
 const INPUT_LIMIT = 8192;
+const CLANG_IDLE_MS = 15_000;
 const encoder = new TextEncoder();
 
 function projectPath(path, root) {
@@ -51,7 +52,7 @@ async function readProject(zed, { cwd: root, script, source, command, target }, 
 
 /** Binary terminal transport backed by a sandboxed WASI worker. */
 class BrowserTaskProcess {
-  constructor(worker, label, showExitCode, onArtifact, onBuild) {
+  constructor(worker, label, showExitCode, onArtifact, onBuild, retainWorker) {
     this.worker = worker;
     this.showExitCode = showExitCode;
     this.stdin = createStdin();
@@ -59,6 +60,9 @@ class BrowserTaskProcess {
     this.output = [];
     this.line = '';
     this.exitCode = null;
+    this.retainWorker = retainWorker;
+    this.workerEvents = new AbortController();
+    const listenerOptions = { signal: this.workerEvents.signal };
     this.timer = setTimeout(() => this.fail(`${label} exceeded the five-minute task limit.`), 300000);
     worker.addEventListener('message', ({ data }) => {
       if (this.exitCode !== null) return;
@@ -69,15 +73,15 @@ class BrowserTaskProcess {
         catch (error) { this.fail(error.message); }
       }
       else if (typeof data.code === 'number') {
-        this.finish(data.code, data.ranProgram ? 'Exit code' : 'Build exit code');
+        this.finish(data.code, data.ranProgram ? 'Exit code' : 'Build exit code', true);
       }
       else if (typeof data.error === 'string') this.fail(data.error);
-    });
+    }, listenerOptions);
     worker.addEventListener('error', event => {
       event.preventDefault();
       this.fail(event.message || `${label} worker stopped.`);
-    });
-    worker.addEventListener('messageerror', () => this.fail(`${label} returned an invalid message.`));
+    }, listenerOptions);
+    worker.addEventListener('messageerror', () => this.fail(`${label} returned an invalid message.`), listenerOptions);
   }
 
   fail(message) {
@@ -86,13 +90,15 @@ class BrowserTaskProcess {
     this.finish(1);
   }
 
-  finish(code, statusLabel = 'Task exit code') {
+  finish(code, statusLabel = 'Task exit code', reusable = false) {
     if (this.exitCode !== null) return;
     this.exitCode = code;
     if (this.showExitCode) this.append(encoder.encode(`\r\n${statusLabel}: ${code}\r\n`));
     clearTimeout(this.timer);
     this.stdin.close();
-    this.worker.terminate();
+    this.workerEvents.abort();
+    if (reusable && this.retainWorker) this.retainWorker(this.worker);
+    else this.worker.terminate();
     this.onOutput?.();
   }
 
@@ -158,6 +164,23 @@ export class BrowserRunBridge {
   accepts(options) { return PROGRAMS.has(options.command); }
   owns(id) { return id.startsWith(SESSION_PREFIX); }
 
+  takeClangWorker(path) {
+    const idleWorker = this.idleClangWorker;
+    if (!idleWorker) return this.makeWorker(path);
+    clearTimeout(idleWorker.timer);
+    this.idleClangWorker = undefined;
+    return idleWorker.worker;
+  }
+
+  retainClangWorker(worker) {
+    const timer = setTimeout(() => {
+      this.idleClangWorker = undefined;
+      worker.terminate();
+    }, CLANG_IDLE_MS);
+    timer.unref?.();
+    this.idleClangWorker = { worker, timer };
+  }
+
   async open({ cwd, command, args, env }) {
     const program = PROGRAMS.get(command);
     const source = env?.ZED_BROWSER_SOURCE;
@@ -188,7 +211,10 @@ export class BrowserRunBridge {
     }
     const id = SESSION_PREFIX + crypto.randomUUID();
     const onBuild = command === 'browser-rust' ? snapshot => this.onRustBuild?.(cwd, snapshot) : undefined;
-    const process = new BrowserTaskProcess(this.makeWorker(program.worker), program.label, target === 'wasi', data => {
+    const reusableClang = command === 'browser-cc';
+    const worker = reusableClang ? this.takeClangWorker(program.worker) : this.makeWorker(program.worker);
+    const retainWorker = reusableClang ? worker => this.retainClangWorker(worker) : undefined;
+    const process = new BrowserTaskProcess(worker, program.label, target === 'wasi', data => {
       if (target !== 'linux-x86_64' && target !== 'linux-x86_64-static') {
         throw new Error('Unexpected browser build artifact.');
       }
@@ -203,7 +229,7 @@ export class BrowserRunBridge {
       finally { link.remove(); }
       setTimeout(() => URL.revokeObjectURL(url), 30_000);
       process.append(encoder.encode(`Built ${link.download}\r\n`));
-    }, onBuild);
+    }, onBuild, retainWorker);
     if (command !== 'browser-python') this.compiling = id;
     this.sessions.set(id, process);
     process.append(encoder.encode(`Starting ${program.label}…\r\n`));
@@ -211,6 +237,7 @@ export class BrowserRunBridge {
     readProject(this.zed, { cwd, script, source, command, target }, running).then(files => {
       if (running()) process.worker.postMessage({
         cwd, script, files, command, target, programArgs, stdin: process.stdin.buffer,
+        reusableClang,
       });
     }).catch(error => process.fail(error.message));
     return id;

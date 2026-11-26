@@ -5,6 +5,17 @@ import { loadArchive, loadModule } from './assets.js';
 import { BUILD_CONFIG, parseBuildConfig, isProjectRelativePath, clangLibraryPaths } from './build-settings.js?v=1';
 
 const CC_OUTPUT = '/.zed-compiler';
+const clangAssets = new Map();
+
+function loadClangAsset(name, load) {
+  if (!clangAssets.has(name)) {
+    clangAssets.set(name, load(name).catch(error => {
+      clangAssets.delete(name);
+      throw error;
+    }));
+  }
+  return clangAssets.get(name);
+}
 const SOURCE = /\.(?:c|C|cc|cpp|cxx|c\+\+|CPP)$/;
 const SKIP_SOURCES = new Set(['.zed', '.zed-build', 'build', 'dist', 'vendor', 'tests', 'test']);
 const LINUX_HEADERS = [
@@ -108,9 +119,9 @@ async function clangBuild(job, settings, output) {
   const usesCpp = settings.linkCxx || sources.some(source => !source.endsWith('.c'));
   const sdkName = linuxStatic ? 'linux-x86_64-sdk.tar.gz' : 'wasi-sdk.tar.gz';
   const [clang, linker, sdk, cxx] = await Promise.all([
-    loadModule('clang.wasm.gz'), loadModule('lld.wasm.gz'),
-    freestanding ? null : loadArchive(sdkName),
-    linuxStatic && usesCpp ? loadArchive('linux-x86_64-cxx.tar.gz') : null,
+    loadClangAsset('clang.wasm.gz', loadModule), loadClangAsset('lld.wasm.gz', loadModule),
+    freestanding ? null : loadClangAsset(sdkName, loadArchive),
+    linuxStatic && usesCpp ? loadClangAsset('linux-x86_64-cxx.tar.gz', loadArchive) : null,
   ]);
   const root = new PreopenDirectory('/', new Map());
   for (const [path, bytes] of job.files) writeFile(root.dir, path, bytes, true);
@@ -245,9 +256,9 @@ self.addEventListener('message', async ({ data: job }) => {
     output.flush();
     postMessage({ error: error.message });
   } finally {
-    self.close();
+    if (job.command !== 'browser-cc' || !job.reusableClang) self.close();
   }
-}, { once: true });
+});
 
 const BROWSER_COMPILERS = new Map([
   ['browser-cc', clangBuild],

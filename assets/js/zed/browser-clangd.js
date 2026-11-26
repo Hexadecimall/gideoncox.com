@@ -10,7 +10,7 @@ const flags = [
 ];
 
 export class BrowserClangd extends BrowserLanguageServer {
-  constructor(zed, makeWorker = () => new Worker('/editor/runtime/clangd/worker.js?v=21.1.0-2', { type: 'module' })) {
+  constructor(zed, makeWorker = () => new Worker('/editor/runtime/clangd/worker.js?v=21.1.0-3', { type: 'module' })) {
     super(zed, {
       command: 'clangd', makeWorker, initializeOptions: { fallbackFlags: flags },
       includePath(path) {

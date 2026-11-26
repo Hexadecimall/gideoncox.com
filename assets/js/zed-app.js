@@ -3,9 +3,9 @@ import { installNativeTerminal } from './zed/native-terminal.js?v=project-fs-1';
 import { installNativeHost } from './zed/native-host.js?v=folder-memory-1';
 import { BrowserPython } from './zed/browser-python.js?v=workspace-ready-1';
 
-import { BrowserClangd } from './zed/browser-clangd.js?v=workspace-ready-1';
+import { BrowserClangd } from './zed/browser-clangd.js?v=clangd-startup-1';
 import { BrowserRust } from './zed/browser-rust.js?v=quickfix-1';
-import { BrowserRunBridge } from './zed/browser-run.js?v=quickfix-1';
+import { BrowserRunBridge } from './zed/browser-run.js?v=warm-builds-1';
 import { BrowserGit } from './zed/browser-git.js?v=git-worktree-1';
 import { openBrowserDatabase } from './zed/browser-database.js?v=history-1';
 import { prepareEditorIsolation } from './zed/isolation.js';

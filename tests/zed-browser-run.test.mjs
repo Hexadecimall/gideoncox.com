@@ -102,6 +102,42 @@ test('a WebAssembly task forwards exact program arguments and displays the exit 
   }
 });
 
+test('C builds reuse a worker after normal exit and release it after cancellation', async t => {
+  const isolation = Object.getOwnPropertyDescriptor(globalThis, 'crossOriginIsolated');
+  Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value: true });
+  t.after(() => {
+    if (isolation) Object.defineProperty(globalThis, 'crossOriginIsolated', isolation);
+    else delete globalThis.crossOriginIsolated;
+  });
+
+  const workers = [];
+  const bridge = new BrowserRunBridge({ async list_browser_paths() { return '[]'; } }, () => {
+    const worker = new EventTarget();
+    worker.postMessage = () => {};
+    worker.terminate = () => { worker.terminated = true; };
+    workers.push(worker);
+    return worker;
+  });
+  const cwd = '/home/web/project';
+  const options = {
+    cwd, command: 'browser-cc', args: [`${cwd}/main.c`, 'wasi'],
+    env: { ZED_BROWSER_SOURCE: 'int main(void) { return 0; }' },
+  };
+  const first = await bridge.open(options);
+  workers[0].dispatchEvent(new MessageEvent('message', { data: { code: 0, ranProgram: true } }));
+  assert.equal((await bridge.read(first)).exitCode, 0);
+  assert.equal(workers[0].terminated, undefined);
+
+  const second = await bridge.open(options);
+  assert.equal(workers.length, 1);
+  await bridge.close(second);
+  assert.equal(workers[0].terminated, true);
+
+  const third = await bridge.open(options);
+  assert.equal(workers.length, 2);
+  await bridge.close(third);
+});
+
 test('Zig and Rust snapshot saved arguments even when the project listing omits the config', async t => {
   const isolation = Object.getOwnPropertyDescriptor(globalThis, 'crossOriginIsolated');
   Object.defineProperty(globalThis, 'crossOriginIsolated', { configurable: true, value: true });
