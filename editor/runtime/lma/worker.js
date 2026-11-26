@@ -45,9 +45,13 @@ async function loadModel(files, kind) {
     const result = runtime.ccall('lma_load', 'number', ['string', 'number', 'boolean'], [
       `${MODEL_PATH}/${blobs[0].name}`, MODEL_CONTEXT_TOKENS, kind === 'agent',
     ]);
-    if (result !== 0) {
-      throw new Error('LMA could not load this GGUF model. Check model compatibility and available browser memory.');
+    if (result === -2) {
+      throw new Error('The browser runner could not open the GGUF weights. Check the model architecture, quantization, and available memory.');
     }
+    if (result === -3) {
+      throw new Error('The browser runner could not initialize the model context. The model may need more memory.');
+    }
+    if (result !== 0) throw new Error(`The browser runner could not initialize the model (${result}).`);
     loaded = true;
   } finally {
     runtime.FS.unmount(MODEL_PATH);

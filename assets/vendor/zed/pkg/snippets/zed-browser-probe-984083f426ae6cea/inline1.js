@@ -1,9 +1,4 @@
 
-export function select_model() {
-  const runtime = globalThis.zedLma;
-  if (!runtime) throw new Error('Browser LMA is unavailable.');
-  return runtime.selectModel();
-}
 export async function restore_model() {
   const runtime = globalThis.zedLma;
   if (!runtime) return;
@@ -11,10 +6,10 @@ export async function restore_model() {
   const library = await runtime.manage('library').catch(() => []);
   return JSON.stringify({ selected, library });
 }
-export async function manage_models(operation, input) {
+export async function manage_models(operation, input, progress) {
   const runtime = globalThis.zedLma;
   if (!runtime) throw new Error('Browser LMA is unavailable.');
-  return JSON.stringify(await runtime.manage(operation, JSON.parse(input)));
+  return JSON.stringify(await runtime.manage(operation, JSON.parse(input), progress));
 }
 export function start_completion(id, options) {
   const runtime = globalThis.zedLma;

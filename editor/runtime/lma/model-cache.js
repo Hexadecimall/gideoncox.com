@@ -21,10 +21,19 @@ const REPOSITORY = /^[\w.-]+\/[\w.-]+$/;
 const METADATA_HEADER = 'X-Zed-Lma-Model';
 const SHARD = /^(.*)-(\d{5})-of-(\d{5})\.gguf$/i;
 const SHARD_MANIFEST = '?zed-shards=1';
+const LOCAL_ID = /^local:[a-f0-9-]{36}$/i;
 
 function modelUrl(model) {
   const file = model.filename.split('/').map(encodeURIComponent).join('/');
   return `${HUB}/${model.repository}/resolve/${model.revision}/${file}`;
+}
+
+function localModelUrl(id, filename = 'model.gguf') {
+  return new URL(`/editor/_lma_models/${id.slice(6)}/${encodeURIComponent(filename)}`, location.origin).href;
+}
+
+function partUrl(model, part) {
+  return LOCAL_ID.test(model.id) ? localModelUrl(model.id, part.filename) : modelUrl({ ...model, ...part });
 }
 
 export async function hasCachedModel(kind) {
@@ -35,12 +44,13 @@ export async function hasCachedModel(kind) {
   }
   const model = await manifest.json();
   const parts = await Promise.all(model.parts.map(part =>
-    caches.match(modelUrl({ ...model, ...part }), { cacheName: CACHE_NAME })));
+    caches.match(partUrl(model, part), { cacheName: CACHE_NAME })));
   return parts.every(part => part?.ok);
 }
 
 export function cacheKey(id) {
   if (Object.hasOwn(models, id)) return modelUrl(models[id]);
+  if (LOCAL_ID.test(id)) return localModelUrl(id);
   const url = new URL(id);
   if (url.origin !== HUB || url.username || url.password || url.search || url.hash ||
     !/^\/[\w.-]+\/[\w.-]+\/resolve\/[a-f0-9]{40}\/[^?#]+\.gguf$/i.test(url.pathname)) {
@@ -127,7 +137,7 @@ export async function installedModels() {
     if (request.url.endsWith(SHARD_MANIFEST)) {
       const manifest = await cache.match(request);
       const model = await manifest?.json();
-      return model?.parts.every(part => available.has(modelUrl({ ...model, ...part }))) ? model : undefined;
+      return model?.parts.every(part => available.has(partUrl(model, part))) ? model : undefined;
     }
     const preset = Object.keys(models).find(id => modelUrl(models[id]) === request.url);
     if (preset) return entry(preset, models[preset]);
@@ -144,7 +154,7 @@ export async function deleteModel(id) {
   await withModelLock(url, async () => {
     const manifest = await (await cache.match(url + SHARD_MANIFEST))?.json();
     if (manifest) {
-      for (const part of manifest.parts) await removeModelBody(cache, modelUrl({ ...manifest, ...part }));
+      for (const part of manifest.parts) await removeModelBody(cache, partUrl(manifest, part));
       await cache.delete(url + SHARD_MANIFEST);
     } else {
       await removeModelBody(cache, url);
@@ -157,7 +167,7 @@ function withModelLock(key, action) {
   return locks ? locks.request(key, action) : action();
 }
 
-function checkedDownload(body, model) {
+function checkedDownload(body, model, onBytes) {
   const magic = new TextEncoder().encode('GGUF');
   let received = 0;
   return body.pipeThrough(new TransformStream({
@@ -167,6 +177,7 @@ function checkedDownload(body, model) {
       }
       received += chunk.length;
       if (received > model.bytes) throw new Error('The model download exceeds its expected size.');
+      onBytes?.(received);
       controller.enqueue(chunk);
     },
     flush() {
@@ -175,7 +186,7 @@ function checkedDownload(body, model) {
   }));
 }
 
-async function downloadModel(cache, url, model, metadata) {
+async function downloadModel(cache, url, model, metadata, onBytes) {
   const remote = await fetch(url, {
     credentials: 'omit',
     referrerPolicy: 'no-referrer',
@@ -184,7 +195,11 @@ async function downloadModel(cache, url, model, metadata) {
   if (!remote.ok || !remote.body) {
     throw new Error(`The model download failed (${remote.status}).`);
   }
-  const body = checkedDownload(remote.body, model);
+  await cacheModelBody(cache, url, remote.body, model, metadata, onBytes);
+}
+
+async function cacheModelBody(cache, url, input, model, metadata, onBytes) {
+  const body = checkedDownload(input, model, onBytes);
   try {
     const headers = new Headers({ 'Content-Type': 'application/octet-stream' });
     if (metadata) headers.set(METADATA_HEADER, encodeURIComponent(JSON.stringify(metadata)));
@@ -199,21 +214,24 @@ async function downloadModel(cache, url, model, metadata) {
   }
 }
 
-async function cacheModel(id, model, download) {
+async function cacheModel(id, model, download, onBytes) {
   const cache = await caches.open(CACHE_NAME);
   const url = cacheKey(id);
   const response = await (download && model ? withModelLock(url, async () => {
     const cached = await cache.match(url);
-    if (cached) return cached;
-    await downloadModel(cache, url, model, entry(id, model));
+    if (cached) {
+      onBytes?.(model.bytes);
+      return cached;
+    }
+    await downloadModel(cache, url, model, entry(id, model), onBytes);
     return cache.match(url);
   }) : cache.match(url));
-  if (!response && (!download || !model)) throw new Error('This model is no longer installed. Install it again in Settings.');
+  if (!response && (!download || !model)) throw new Error('Download or import this model in Settings before loading it.');
   if (!response) throw new Error('The downloaded model could not be read from browser storage.');
   return response;
 }
 
-export async function installModel(candidate) {
+export async function installModel(candidate, onBytes) {
   if (!candidate || !REPOSITORY.test(candidate.repository) ||
     !Number.isSafeInteger(candidate.bytes) || candidate.bytes < 24) {
     throw new Error('Select a supported GGUF file.');
@@ -231,14 +249,17 @@ export async function installModel(candidate) {
     }
     await withModelLock(url, async () => {
       const written = [];
+      let saved = 0;
       try {
         for (const part of candidate.parts) {
           const shard = { ...candidate, ...part };
           const key = cacheKey(modelUrl(shard));
           if (!await cache.match(key)) {
-            await downloadModel(cache, key, shard);
+            await downloadModel(cache, key, shard, undefined, received => onBytes?.(saved + received));
             written.push(key);
           }
+          saved += part.bytes;
+          onBytes?.(saved);
         }
         await cache.put(url + SHARD_MANIFEST, Response.json(candidate));
       } catch (error) {
@@ -248,7 +269,49 @@ export async function installModel(candidate) {
     });
     return;
   }
-  await cacheModel(candidate.id, candidate, true);
+  await cacheModel(candidate.id, candidate, true, onBytes);
+}
+
+export async function importModel(files, onProgress = () => {}, warn = () => {}) {
+  const ordered = Array.from(files).sort((left, right) => left.name.localeCompare(right.name));
+  if (!ordered.length || ordered.some(file => !/\.gguf$/i.test(file.name) || file.size < 24)) {
+    throw new Error('Choose a valid GGUF model.');
+  }
+  const first = SHARD.exec(ordered[0].name);
+  if (first ? Number(first[2]) !== 1 || Number(first[3]) !== ordered.length ||
+      ordered.some((file, index) => file.name.replace(/\.gguf$/i, '.gguf') !==
+        `${first[1]}-${String(index + 1).padStart(5, '0')}-of-${first[3]}.gguf`) : ordered.length !== 1) {
+    throw new Error('Choose one GGUF file or every part of a split model.');
+  }
+  const id = `local:${crypto.randomUUID()}`;
+  const name = first ? `${first[1]}.gguf` : ordered[0].name;
+  const bytes = ordered.reduce((size, file) => size + file.size, 0);
+  const candidate = { id, name, bytes, repository: '' };
+  const cache = await caches.open(CACHE_NAME);
+  await warn(bytes);
+  const url = cacheKey(id);
+  onProgress(0, bytes, name);
+  if (!first) {
+    await cacheModelBody(cache, url, ordered[0].stream(), candidate, candidate,
+      received => onProgress(received, bytes, name));
+    return;
+  }
+  const parts = ordered.map(file => ({ filename: file.name, bytes: file.size }));
+  const written = [];
+  let saved = 0;
+  try {
+    for (const [index, part] of parts.entries()) {
+      const key = partUrl(candidate, part);
+      await cacheModelBody(cache, key, ordered[index].stream(), part, undefined,
+        received => onProgress(saved + received, bytes, name));
+      written.push(key);
+      saved += part.bytes;
+    }
+    await cache.put(url + SHARD_MANIFEST, Response.json({ ...candidate, parts }));
+  } catch (error) {
+    await Promise.allSettled(written.map(key => removeModelBody(cache, key)));
+    throw error;
+  }
 }
 
 export async function recommendedModel(id = 'coder', { download = true } = {}) {
@@ -258,7 +321,7 @@ export async function recommendedModel(id = 'coder', { download = true } = {}) {
   if (manifest) {
     const files = [];
     for (const part of manifest.parts) {
-      const response = await cache.match(modelUrl({ ...manifest, ...part }));
+      const response = await cache.match(partUrl(manifest, part));
       if (!response) throw new Error('A GGUF part is missing. Install the model again in Settings.');
       files.push(new File([await readModelBody(response)], part.filename.split('/').at(-1)));
     }
@@ -267,6 +330,9 @@ export async function recommendedModel(id = 'coder', { download = true } = {}) {
   if (SHARD.test(url)) throw new Error('This split model is no longer installed. Install it again in Settings.');
   const model = Object.hasOwn(models, id) ? models[id] : undefined;
   const response = await cacheModel(id, model, download);
-  const filename = model?.filename ?? decodeURIComponent(new URL(id).pathname.split('/').at(-1));
+  const metadata = response.headers.get(METADATA_HEADER);
+  const filename = model?.filename ?? (LOCAL_ID.test(id)
+    ? JSON.parse(decodeURIComponent(metadata)).name
+    : decodeURIComponent(new URL(id).pathname.split('/').at(-1)));
   return new File([await readModelBody(response)], filename, { type: 'application/octet-stream' });
 }

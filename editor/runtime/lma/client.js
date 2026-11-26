@@ -1,6 +1,6 @@
 import {
-  deleteModel, hasCachedModel, installedModels, installModel, modelFiles, recommendedModel, searchModels,
-} from './model-cache.js?v=model-download-4';
+  deleteModel, hasCachedModel, importModel, installedModels, installModel, modelFiles, recommendedModel, searchModels,
+} from './model-cache.js?v=model-download-5';
 import { DesktopLma } from './desktop.js?v=library-1';
 import { downloadWarning, memoryWarning } from './resource-warning.js?v=1';
 
@@ -8,6 +8,17 @@ const MAX_QUEUED = 8;
 const IDLE_MODEL_MS = 120_000;
 const SELECTED_MODEL = 'zed.lma.selected-model';
 const version = new URL(import.meta.url).search;
+
+function transferProgress(notify) {
+  if (!notify) return () => {};
+  let last = -Infinity;
+  return (received, bytes, name) => {
+    const now = performance.now();
+    if (received < bytes && now - last < 100) return;
+    last = now;
+    notify(received, bytes, name ?? 'GGUF model');
+  };
+}
 
 export class BrowserLma {
   constructor(receive, createWorker = () => new Worker(new URL(`./worker.js${version}`, import.meta.url), { type: 'module' }), warn) {
@@ -19,14 +30,16 @@ export class BrowserLma {
     this.desktop = new DesktopLma(receive);
   }
 
-  async manage(operation, input) {
+  async manage(operation, input, progress) {
     switch (operation) {
       case 'search': return searchModels(input);
       case 'files': return modelFiles(input);
       case 'library': return installedModels();
+      case 'import': return this.importModel(progress);
       case 'install': {
         this.warnAbout(await downloadWarning(input?.bytes));
-        await installModel(input);
+        const report = transferProgress(progress);
+        await installModel(input, received => report(received, input.bytes, input.name));
         return installedModels();
       }
       case 'use': return this.loadRecommendedModel(input);
@@ -56,7 +69,7 @@ export class BrowserLma {
     try { this.warn?.(message); } catch { /* Advisory only. */ }
   }
 
-  async selectModel() {
+  async importModel(progress) {
     const files = await new Promise(resolve => {
       const input = document.createElement('input');
       input.type = 'file';
@@ -69,7 +82,9 @@ export class BrowserLma {
       document.body.append(input);
       input.click();
     });
-    return files?.length ? this.loadModel(files) : undefined;
+    if (!files?.length) return null;
+    await importModel(files, transferProgress(progress), async bytes => this.warnAbout(await downloadWarning(bytes)));
+    return installedModels();
   }
 
   async loadRecommendedModel(kind = 'coder') {
@@ -78,7 +93,7 @@ export class BrowserLma {
     this.downloading = true;
     let file;
     try {
-      file = await recommendedModel(kind);
+      file = await recommendedModel(kind, { download: false });
     } finally {
       this.downloading = false;
     }
@@ -135,7 +150,7 @@ export class BrowserLma {
       return;
     }
     if (!this.restoring && (this.loading || this.downloading)) throw new Error('LMA is loading a model.');
-    if (!this.ready && !this.selectedModel) throw new Error('Choose a GGUF model first.');
+    if (!this.ready && !this.selectedModel) throw new Error('Load a downloaded GGUF model in Settings first.');
     if (this.queue.length >= MAX_QUEUED) throw new Error('LMA request queue is full.');
     clearTimeout(this.idleTimer);
     this.queue.push({ ...options, type: 'complete', id });

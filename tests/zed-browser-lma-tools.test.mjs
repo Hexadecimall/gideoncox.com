@@ -3,7 +3,7 @@ import test from 'node:test';
 import { BrowserLma } from '../editor/runtime/lma/client.js';
 import { QwenToolStream, qwenToolPrompt } from '../editor/runtime/lma/qwen-tools.js';
 import { DesktopLma, desktopUrl } from '../editor/runtime/lma/desktop.js';
-import { deleteModel, installedModels, installModel, modelFiles, recommendedModel, searchModels } from '../editor/runtime/lma/model-cache.js';
+import { deleteModel, importModel, installedModels, installModel, modelFiles, recommendedModel, searchModels } from '../editor/runtime/lma/model-cache.js';
 
 const tools = [{ type: 'function', function: { name: 'read_file', parameters: { type: 'object' } } }];
 
@@ -375,15 +375,47 @@ test('a split model installs every shard despite an insufficient-storage estimat
   const [model] = await modelFiles(repository);
   assert.equal(model.bytes, 2 * gguf.length);
   assert.deepEqual(model.parts.map(part => part.filename), names);
-  const client = new BrowserLma(() => {}, undefined, message => seen.push(message));
-  const installed = await client.manage('install', model);
+  const client = new BrowserLma(() => {}, () => assert.fail('Download must not start the inference worker'), message => seen.push(message));
+  const progress = [];
+  const installed = await client.manage('install', model, (received, total, name) => progress.push({ received, total, name }));
   assert.match(seen[0], /available storage/);
   assert.deepEqual(seen.slice(1), names);
   assert.deepEqual(installed.map(entry => entry.id), [model.id]);
+  assert.deepEqual(progress.at(-1), { received: model.bytes, total: model.bytes, name: model.name });
+  assert.equal(client.selectedModel, undefined);
+  assert.equal(client.ready, false);
   const files = await recommendedModel(model.id, { download: false });
   assert.deepEqual(files.map(file => file.name), names);
   for (const file of files) assert.deepEqual(new Uint8Array(await file.arrayBuffer()), gguf);
   await deleteModel(model.id);
+  assert.equal(entries.size, 0);
+});
+
+test('importing a local GGUF saves it in the downloadable library for a later load', async t => {
+  const entries = new Map();
+  const cache = {
+    async put(url, response) { entries.set(url, new Response(await response.blob(), { headers: response.headers })); },
+    async match(url) { return entries.get(url.url ?? url)?.clone(); },
+    async keys() { return [...entries.keys()].map(url => new Request(url)); },
+    async delete(url) { return entries.delete(url); },
+  };
+  Object.defineProperty(globalThis, 'location', { configurable: true, value: { origin: 'https://example.test' } });
+  Object.defineProperty(globalThis, 'caches', { configurable: true, value: { open: async () => cache } });
+  t.after(() => { delete globalThis.location; delete globalThis.caches; });
+  const file = new File(['GGUF' + '0'.repeat(20)], 'Model with spaces.gguf');
+  const progress = [];
+  await importModel([file], (received, total) => progress.push([received, total]));
+  const [entry] = await installedModels();
+  assert.equal(entry.name, file.name);
+  assert.equal(entry.bytes, file.size);
+  assert.deepEqual(progress, [[0, file.size], [file.size, file.size]]);
+  const saved = await recommendedModel(entry.id, { download: false });
+  assert.equal(saved.name, file.name);
+  assert.equal(await saved.text(), await file.text());
+  const client = new BrowserLma(() => {}, () => assert.fail('Missing files must not start an inference worker'));
+  t.mock.method(globalThis, 'fetch', () => assert.fail('Load must not download weights'));
+  await assert.rejects(client.manage('use', 'coder'), /Download or import/);
+  await deleteModel(entry.id);
   assert.equal(entries.size, 0);
 });
 
