@@ -185,3 +185,43 @@ test('a failed clangd download can be retried after restarting the server', asyn
   await clangd.processWrite(second.id, lspFrame({ jsonrpc: '2.0', id: 1, method: 'initialize' }));
   assert.equal(compilations, 2);
 });
+
+test('WebKit starts isolated language workers in sequence and reports a failed startup', async context => {
+  const navigatorProperty = Object.getOwnPropertyDescriptor(globalThis, 'navigator');
+  Object.defineProperty(globalThis, 'navigator', {
+    configurable: true,
+    value: { userAgent: 'Mozilla/5.0 AppleWebKit/605.1.15 Mobile/15E148', serviceWorker: { controller: {} } },
+  });
+  globalThis.crossOriginIsolated = true;
+  const started = [];
+  const module = await compileTestModule();
+  const clangd = new BrowserClangd({ list_browser_paths: async () => '[]' }, () => {
+    const worker = new EventTarget();
+    worker.postMessage = data => { if (data.type === 'start') started.push(worker); };
+    worker.terminate = () => {};
+    return worker;
+  }, async () => module);
+  context.after(() => {
+    clangd.close();
+    if (navigatorProperty) Object.defineProperty(globalThis, 'navigator', navigatorProperty);
+    else delete globalThis.navigator;
+    delete globalThis.crossOriginIsolated;
+  });
+
+  const first = await clangd.processOpen({ command: 'clangd', cwd: '/home/web/one' });
+  const second = await clangd.processOpen({ command: 'clangd', cwd: '/home/web/two' });
+  const initialize = lspFrame({ jsonrpc: '2.0', id: 1, method: 'initialize' });
+  const firstWrite = clangd.processWrite(first.id, initialize);
+  const firstFailed = assert.rejects(firstWrite, /Could not start isolated worker/);
+  const secondWrite = clangd.processWrite(second.id, initialize);
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(started.length, 1);
+  started[0].dispatchEvent(new MessageEvent('message', {
+    data: { type: 'failed', message: 'Could not start isolated worker' },
+  }));
+  await firstFailed;
+  await new Promise(resolve => setImmediate(resolve));
+  assert.equal(started.length, 2);
+  started[1].dispatchEvent(new MessageEvent('message', { data: { type: 'ready' } }));
+  await secondWrite;
+});

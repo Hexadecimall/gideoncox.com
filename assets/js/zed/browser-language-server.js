@@ -7,6 +7,18 @@ const MAX_OUTPUT = 24 * 1024 * 1024;
 const MAX_PROJECT_FILES = 4000;
 const READ_BATCH = 16;
 const encoder = new TextEncoder();
+let webKitStartup = Promise.resolve();
+
+function startWorker(start) {
+  const agent = globalThis.navigator?.userAgent ?? '';
+  const appleWebKit = /AppleWebKit\//.test(agent) && !/\b(?:Chromium|Chrome|Edg|OPR)\//.test(agent);
+  if (!appleWebKit || !globalThis.navigator?.serviceWorker?.controller) return start();
+  // WebKit can fail concurrent module-worker loads under the isolation service worker.
+  // Queue initialization only. Servers process LSP requests independently afterward.
+  const startup = webKitStartup.then(start);
+  webKitStartup = startup.catch(() => {});
+  return startup;
+}
 
 export function isLanguageProject(path) {
   return isBrowserProject(path) || Boolean(globalThis.zedLocalFolders?.rootFor(path));
@@ -70,10 +82,10 @@ export async function projectFiles(zed, root, include, running = () => true, res
 }
 
 class BrowserLspProcess {
-  constructor(zed, root, worker, command, initializeOptions, includePath, formatConfigFiles) {
+  constructor(zed, root, makeWorker, command, initializeOptions, includePath, formatConfigFiles) {
     this.zed = zed;
     this.root = root;
-    this.worker = worker;
+    this.makeWorker = makeWorker;
     this.command = command;
     this.initializeOptions = initializeOptions;
     this.includePath = includePath;
@@ -83,9 +95,14 @@ class BrowserLspProcess {
     this.outputLength = 0;
     this.error = new Uint8Array();
     this.exitCode = null;
+    this.failure = '';
     this.ready = new Promise(resolve => { this.finishStarting = resolve; });
     this.startTimer = setTimeout(() => this.close(1, `${command} timed out while starting.`), 90000);
     this.writeQueue = Promise.resolve();
+  }
+
+  bindWorker(worker) {
+    const { command } = this;
     worker.addEventListener('message', ({ data }) => {
       if (this.exitCode !== null) return;
       try {
@@ -115,7 +132,14 @@ class BrowserLspProcess {
       projectFiles(this.zed, this.root, this.includePath, () => this.exitCode === null),
       prepareRuntime?.(),
     ]);
-    if (this.exitCode === null) this.worker.postMessage({ type: 'start', root: this.root, files, ...runtime });
+    await startWorker(() => {
+      if (this.exitCode !== null) return;
+      const worker = this.makeWorker();
+      this.worker = worker;
+      this.bindWorker(worker);
+      worker.postMessage({ type: 'start', root: this.root, files, ...runtime });
+      return this.ready;
+    });
   }
 
   read() {
@@ -162,7 +186,7 @@ class BrowserLspProcess {
   write(bytes) {
     const data = new Uint8Array(bytes).slice();
     this.writeQueue = this.writeQueue.then(async () => {
-      if (!await this.ready || this.exitCode !== null) throw new Error(`${this.command} stopped.`);
+      if (!await this.ready || this.exitCode !== null) throw new Error(this.failure || `${this.command} stopped.`);
       for (const message of this.input.push(data)) {
         const { method, params } = message;
         if (method === 'initialize' && this.initializeOptions) {
@@ -195,9 +219,10 @@ class BrowserLspProcess {
     if (this.exitCode !== null) return;
     clearTimeout(this.startTimer);
     this.exitCode = code;
+    this.failure = reason;
     this.error = encoder.encode(reason);
     this.finishStarting(false);
-    this.worker.terminate();
+    this.worker?.terminate();
     this.reader?.();
   }
 }
@@ -222,7 +247,7 @@ export class BrowserLanguageServer {
     if (!this.accepts(options)) throw new Error(`Browser ${this.command} opens browser files only.`);
     if (!globalThis.crossOriginIsolated) throw new Error('Open the top-level Zed page to enable WebAssembly language tools.');
     const id = this.prefix + crypto.randomUUID();
-    const process = new BrowserLspProcess(this.zed, options.cwd, this.makeWorker(), this.command,
+    const process = new BrowserLspProcess(this.zed, options.cwd, this.makeWorker, this.command,
       this.initializeOptions, this.includePath, this.formatConfigFiles);
     this.running.set(id, process);
     process.start(this.prepareRuntime).catch(error => process.close(1, error?.message ?? String(error)));

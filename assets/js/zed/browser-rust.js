@@ -1,4 +1,4 @@
-import { BrowserLanguageServer } from './browser-language-server.js?v=workspace-ready-1';
+import { BrowserLanguageServer } from './browser-language-server.js?v=webkit-startup-1';
 
 const MAX_GENERATED_BYTES = 8 * 1024 * 1024;
 const MAX_BUILD_PACKAGES = 32;
@@ -18,8 +18,11 @@ export class BrowserRust extends BrowserLanguageServer {
   async processOpen(options) {
     const process = await super.processOpen(options);
     const server = this.get(process.id);
-    server.worker.addEventListener('message', ({ data }) => {
-      if (data?.type === 'clippy-on-save' && server.exitCode === null) this.checkOnSave?.(server.root, data.path);
+    server.ready.then(ready => {
+      if (!ready || server.exitCode !== null) return;
+      server.worker.addEventListener('message', ({ data }) => {
+        if (data?.type === 'clippy-on-save' && server.exitCode === null) this.checkOnSave?.(server.root, data.path);
+      });
     });
     this.refreshBuildOutput(server);
     this.refreshCargoDiagnostics(server);

@@ -1,4 +1,4 @@
-import { BrowserLanguageServer } from './browser-language-server.js?v=shared-module-1';
+import { BrowserLanguageServer } from './browser-language-server.js?v=webkit-startup-1';
 import { BUILD_CONFIG } from '../../../editor/runtime/compiler/build-settings.js?v=2';
 
 const configFiles = new Set(['.clangd', '.clang-format', '_clang-format', 'compile_commands.json', 'compile_flags.txt']);
