@@ -148,51 +148,117 @@ int git_wasi_find_rename(char **source, git_repository *repo, git_tree *parent, 
     return code;
 }
 
-static int file_history_match(git_repository *repo, const git_commit *commit, char **path, int *match)
-{
-    *match = 1;
-    if (!*path)
-        return 0;
-    const int boundary = is_shallow_boundary(repo, git_commit_id(commit));
-    const unsigned int parents = boundary ? 0 : git_commit_parentcount(commit);
-    // Like the default log --follow, visit the ancestry and omit merge diffs.
-    *match = 0;
-    if (parents > 1)
-        return 0;
+typedef struct path_visit {
+    git_oid commit;
+    char *path;
+    struct path_visit *next;
+} path_visit;
 
-    git_tree *tree = NULL;
+static void free_path_visits(path_visit *visit)
+{
+    while (visit) {
+        path_visit *next = visit->next;
+        free(visit->path);
+        free(visit);
+        visit = next;
+    }
+}
+
+static int schedule_path(path_visit **pending, const git_oid *id, const char *path)
+{
+    for (const path_visit *visit = *pending; visit; visit = visit->next) {
+        if (git_oid_equal(&visit->commit, id) && !strcmp(visit->path, path))
+            return 0;
+    }
+    path_visit *visit = malloc(sizeof(*visit));
+    if (!visit || !(visit->path = strdup(path))) {
+        free(visit);
+        git_error_set_oom();
+        return -1;
+    }
+    visit->commit = *id;
+    visit->next = *pending;
+    *pending = visit;
+    return 0;
+}
+
+static int schedule_head_path(path_visit **pending, git_repository *repo, const char *path)
+{
+    git_reference *head = NULL;
+    int code = git_repository_head(&head, repo);
+    if (code == 0)
+        code = schedule_path(pending, git_reference_target(head), path);
+    git_reference_free(head);
+    return code == GIT_ENOTFOUND || code == GIT_EUNBORNBRANCH ? 0 : code;
+}
+
+static int follow_parent(git_repository *repo, git_tree *tree, const git_oid *parent_id,
+                         const char *path, path_visit **pending, int *changed)
+{
     git_tree *parent_tree = NULL;
     git_commit *parent = NULL;
     git_tree_entry *before = NULL;
     git_tree_entry *after = NULL;
-    int code = git_commit_tree(&tree, commit);
-    if (code == 0 && parents)
-        code = git_commit_parent(&parent, commit, 0);
+    char *rename_source = NULL;
+    int code = parent_id ? git_commit_lookup(&parent, repo, parent_id) : 0;
     if (code == 0 && parent)
         code = git_commit_tree(&parent_tree, parent);
     if (code == 0)
-        code = file_entry(&before, parent_tree, *path);
+        code = file_entry(&before, parent_tree, path);
     if (code == 0)
-        code = file_entry(&after, tree, *path);
+        code = file_entry(&after, tree, path);
     if (code == 0) {
-        *match = before && after
+        *changed = before && after
             ? !git_oid_equal(git_tree_entry_id(before), git_tree_entry_id(after)) ||
                 git_tree_entry_filemode(before) != git_tree_entry_filemode(after)
             : before || after;
-        if (!before && after && parent_tree) {
-            char *source = NULL;
-            code = git_wasi_find_rename(&source, repo, parent_tree, tree, *path);
-            if (source) {
-                free(*path);
-                *path = source;
-            }
-        }
+        if (!before && after && parent_tree)
+            code = git_wasi_find_rename(&rename_source, repo, parent_tree, tree, path);
     }
+    if (code == 0 && parent_id)
+        code = schedule_path(pending, parent_id, rename_source ? rename_source : path);
+    free(rename_source);
     git_tree_entry_free(before);
     git_tree_entry_free(after);
     git_tree_free(parent_tree);
-    git_tree_free(tree);
     git_commit_free(parent);
+    return code;
+}
+
+static int file_history_match(git_repository *repo, const git_commit *commit,
+                              path_visit **pending, int *match)
+{
+    const git_oid *id = git_commit_id(commit);
+    path_visit *paths = NULL;
+    for (path_visit **link = pending; *link;) {
+        path_visit *visit = *link;
+        if (git_oid_equal(&visit->commit, id)) {
+            *link = visit->next;
+            visit->next = paths;
+            paths = visit;
+        } else {
+            link = &visit->next;
+        }
+    }
+    *match = 0;
+    if (!paths)
+        return 0;
+
+    git_tree *tree = NULL;
+    int code = git_commit_tree(&tree, commit);
+    const unsigned int parents = is_shallow_boundary(repo, id) ? 0 : git_commit_parentcount(commit);
+    for (path_visit *visit = paths; visit && code == 0; visit = visit->next) {
+        // Follow each parent's filename independently. Omit merge diffs.
+        for (unsigned int i = 0; i < (parents ? parents : 1) && code == 0; i++) {
+            const git_oid *parent = parents ? git_commit_parent_id(commit, i) : NULL;
+            int changed = 0;
+            code = follow_parent(repo, tree, parent, visit->path, pending, &changed);
+            if (parents <= 1 && changed)
+                *match = 1;
+        }
+    }
+    git_tree_free(tree);
+    free_path_visits(paths);
     return code;
 }
 
@@ -232,11 +298,7 @@ int git_wasi_history(git_repository *repo, const char *scope, const char *value,
         return 1;
     }
 
-    char *path = path_scope ? strdup(value) : NULL;
-    if (path_scope && !path) {
-        git_error_set_oom();
-        return git_wasi_fail("Reading Git history");
-    }
+    path_visit *pending = NULL;
     git_oid *reverse_ids = NULL;
     size_t count = 0, capacity = 0;
     git_revwalk *walk = NULL;
@@ -249,14 +311,17 @@ int git_wasi_history(git_repository *repo, const char *scope, const char *value,
         code = history_refs(repo, walk, !strcmp(scope, "all"), 1);
     if (code == 0)
         code = start_revision(walk, repo, scope, value);
+    if (code == 0 && path_scope)
+        code = schedule_head_path(&pending, repo, value);
     if (code == 0) {
         git_oid id;
         while ((code = git_revwalk_next(&id, walk)) == 0) {
             git_commit *commit = NULL;
             if ((code = git_commit_lookup(&commit, repo, &id)) < 0)
                 break;
-            int match;
-            code = file_history_match(repo, commit, &path, &match);
+            int match = 1;
+            if (path_scope)
+                code = file_history_match(repo, commit, &pending, &match);
             if (code == 0 && match && reverse_path) {
                 if (count == capacity) {
                     capacity = capacity ? capacity * 2 : 128;
@@ -288,7 +353,7 @@ int git_wasi_history(git_repository *repo, const char *scope, const char *value,
         git_commit_free(commit);
     }
     free(reverse_ids);
-    free(path);
+    free_path_visits(pending);
     git_revwalk_free(walk);
     return code < 0 ? git_wasi_fail("Reading Git history") : 0;
 }
@@ -327,12 +392,7 @@ int git_wasi_search(git_repository *repo, const char *scope, const char *value, 
         }
     }
 
-    char *path = path_scope ? strdup(value) : NULL;
-    if (path_scope && !path) {
-        free(folded_query);
-        git_error_set_oom();
-        return git_wasi_fail("Searching Git history");
-    }
+    path_visit *pending = NULL;
     git_revwalk *walk = NULL;
     int code = git_revwalk_new(&walk, repo);
     if (code == 0)
@@ -341,15 +401,17 @@ int git_wasi_search(git_repository *repo, const char *scope, const char *value, 
         code = history_refs(repo, walk, 1, 0);
     if (code == 0)
         code = start_revision(walk, repo, scope, value);
+    if (code == 0 && path_scope)
+        code = schedule_head_path(&pending, repo, value);
     if (code == 0) {
         git_oid id;
         while ((code = git_revwalk_next(&id, walk)) == 0) {
             git_commit *commit = NULL;
             int match = 1;
-            if (path || !hash_search)
+            if (path_scope || !hash_search)
                 code = git_commit_lookup(&commit, repo, &id);
-            if (code == 0 && path)
-                code = file_history_match(repo, commit, &path, &match);
+            if (code == 0 && path_scope)
+                code = file_history_match(repo, commit, &pending, &match);
             if (code < 0 || !match) {
                 git_commit_free(commit);
                 if (code < 0)
@@ -369,11 +431,9 @@ int git_wasi_search(git_repository *repo, const char *scope, const char *value, 
             wchar_t *folded_message = NULL;
             if (folded_query && fold_message(message, &folded_message) < 0) {
                 git_commit_free(commit);
-                free(path);
-                free(folded_query);
-                git_revwalk_free(walk);
-                fputs("Could not allocate Git search memory.\n", stderr);
-                return 1;
+                git_error_set_oom();
+                code = -1;
+                break;
             }
             if (folded_message ? wcsstr(folded_message, folded_query) != NULL : strstr(message, query) != NULL) {
                 write_oid(&id);
@@ -386,7 +446,7 @@ int git_wasi_search(git_repository *repo, const char *scope, const char *value, 
             code = 0;
     }
     git_revwalk_free(walk);
-    free(path);
+    free_path_visits(pending);
     free(folded_query);
     return code < 0 ? git_wasi_fail("Searching Git history") : 0;
 }

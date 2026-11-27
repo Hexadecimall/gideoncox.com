@@ -172,8 +172,8 @@ test('the browser Git worker can reopen a repository and preserve its real Git i
   const seed = decoder.decode((await run(reopened.metadata, [['read-commit', initialSha]])).results[0]);
   const tree = seed.split('\n')[0];
   const signatures = seed.split('\n').filter(line => /^(author|committer) /.test(line));
-  function looseCommit(parents, message) {
-    const payload = Buffer.from([tree, ...parents.map(sha => `parent ${sha}`), ...signatures, '', message, ''].join('\n'));
+  function looseCommit(parents, message, treeLine = tree) {
+    const payload = Buffer.from([treeLine, ...parents.map(sha => `parent ${sha}`), ...signatures, '', message, ''].join('\n'));
     const object = Buffer.concat([Buffer.from(`commit ${payload.length}\0`), payload]);
     const sha = createHash('sha1').update(object).digest('hex');
     return { sha, object: [`.git/objects/${sha.slice(0, 2)}/${sha.slice(2)}`, deflateSync(object)] };
@@ -473,6 +473,34 @@ test('the browser Git worker can reopen a repository and preserve its real Git i
   assert.deepEqual(commitIds(followed.results[4]), []);
   assert.equal(followed.metadata, null);
   await assert.rejects(run(unrelated.metadata, [['history', 'path', '../private.txt', 'date']]), /Invalid Git arguments/);
+
+  const sidePath = 'side notes.txt';
+  const sideText = 'An independent document.\nA second line exists on this branch alone.\n';
+  const sideBase = await run([...renameBase.metadata, [sidePath, encoder.encode(sideText)]], [
+    ['stage', sidePath], ['commit', ...identity, 'Add the side notes'],
+  ]);
+  const sideBaseSha = decoder.decode(sideBase.results[1]).slice(0, -1);
+  const sideRename = await run([...sideBase.metadata, [newPath, encoder.encode(sideText)]], [
+    ['stage-deletion', sidePath], ['stage', newPath], ['commit', ...identity, 'Alternate branch rename'],
+  ]);
+  const sideRenameSha = decoder.decode(sideRename.results[2]).slice(0, -1);
+  const [renameTree] = decoder.decode((await run(renameHead.metadata, [['read-commit', afterRename]])).results[0]).split('\n');
+  const renameMerge = looseCommit([afterRename, sideRenameSha], 'Merge the two renames', renameTree);
+  const renameMergeRepo = [...new Map([
+    ...renameHead.metadata, ...sideBase.metadata, ...sideRename.metadata, renameMerge.object,
+    ['.git/refs/heads/main', encoder.encode(`${renameMerge.sha}\n`)],
+  ])];
+  const mergedFileHistory = await run(renameMergeRepo, [
+    ['history', 'path', newPath, 'date'], ['history', 'path', newPath, 'reverse'],
+    ['search-commits', 'path', newPath, 'literal', 'Alternate branch rename'],
+  ]);
+  const historyIds = commitIds(mergedFileHistory.results[0]);
+  assert.equal(historyIds.length, 4);
+  assert.deepEqual(new Set(historyIds.slice(0, 3)), new Set([afterRename, sideBaseSha, sideRenameSha]));
+  assert.ok(historyIds.indexOf(sideRenameSha) < historyIds.indexOf(sideBaseSha));
+  assert.equal(historyIds.at(-1), beforeRename);
+  assert.deepEqual(commitIds(mergedFileHistory.results[1]), historyIds.toReversed());
+  assert.equal(decoder.decode(mergedFileHistory.results[2]), sideRenameSha + '\0');
 
   const shallowObject = `.git/objects/${beforeRename.slice(0,2)}/${beforeRename.slice(2)}`;
   const shallowRename = [
