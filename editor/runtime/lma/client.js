@@ -235,7 +235,11 @@ export class BrowserLma {
         resolve(name);
         this.releaseIdleModel();
       }
-      else reject(new Error(data.error || 'LMA could not load the model.'));
+      else {
+        this.worker?.terminate();
+        this.worker = undefined;
+        reject(new Error(data.error || 'LMA could not load the model.'));
+      }
       return;
     }
     if (this.active?.id !== data.id) return;

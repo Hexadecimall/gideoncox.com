@@ -12,6 +12,8 @@ For inline predictions, search for `lmstudio-community/Qwen2.5-Coder-0.5B-GGUF` 
 
 LMA keeps one model in memory at a time. After a refresh or two minutes of inactivity, the previously loaded model starts on demand when inference is requested. Downloaded and imported files stay in browser storage until removed.
 
+The browser runner can load Qwen3.5 GGUF files that declare a multi-token prediction block without its weights. Ordinary decoding uses the main model layers. Load failures show the runner's diagnostic when available.
+
 The Edit Prediction button writes these fields to `settings.json`.
 
 ```json

@@ -3,6 +3,7 @@ import { QwenToolStream, qwenToolPrompt } from './qwen-tools.js?v=3';
 const MODEL_CONTEXT_TOKENS = 8192;
 const OUTPUT_BYTES = 4096;
 const MODEL_PATH = '/model';
+const LOAD_FAILURE = /^(?:llama_model_load: error loading model|llama_init_from_model: failed to initialize the context):\s*(.+)/;
 const ROLES = new Set(['system', 'user', 'assistant']);
 const encoder = new TextEncoder();
 const yieldWorker = () => new Promise(resolve => setTimeout(resolve, 0));
@@ -10,6 +11,7 @@ let runtime;
 let loaded = false;
 let modelKind;
 let request;
+let loadFailure;
 
 async function loadModel(files, kind) {
   if (!Array.isArray(files) || !files.length) throw new Error('Choose a valid GGUF model.');
@@ -35,21 +37,27 @@ async function loadModel(files, kind) {
     // model out of the WebAssembly heap.
     const version = new URL(import.meta.url).search;
     const { default: createRuntime } = await import(`./lma-runtime.mjs${version}`);
-    runtime = await createRuntime({ locateFile: path => new URL(`${path}${version}`, import.meta.url).href });
+    runtime = await createRuntime({
+      locateFile: path => new URL(`${path}${version}`, import.meta.url).href,
+      printErr(message) {
+        const failure = LOAD_FAILURE.exec(message);
+        if (failure) loadFailure = failure[1].trim().slice(0, 240);
+        console.error(message);
+      },
+    });
     runtime.FS.mkdir(MODEL_PATH);
   }
 
   runtime.FS.mount(runtime.WORKERFS, { blobs }, MODEL_PATH);
   try {
     loaded = false;
+    loadFailure = undefined;
     const result = runtime.ccall('lma_load', 'number', ['string', 'number', 'boolean'], [
       `${MODEL_PATH}/${blobs[0].name}`, MODEL_CONTEXT_TOKENS, kind === 'agent',
     ]);
-    if (result === -2) {
-      throw new Error('The browser runner could not open the GGUF weights. Check the model architecture, quantization, and available memory.');
-    }
-    if (result === -3) {
-      throw new Error('The browser runner could not initialize the model context. The model may need more memory.');
+    if (result === -2 || result === -3) {
+      const stage = result === -2 ? 'Could not load the GGUF weights.' : 'Could not initialize the model context.';
+      throw new Error(loadFailure ? `${stage} ${loadFailure}` : stage);
     }
     if (result !== 0) throw new Error(`The browser runner could not initialize the model (${result}).`);
     loaded = true;

@@ -19,7 +19,7 @@ async function prepareDatabase(notify) {
 
 async function prepareLma(zed) {
   try {
-    const { BrowserLma } = await import('/editor/runtime/lma/client.js?v=model-download-5');
+    const { BrowserLma } = await import('/editor/runtime/lma/client.js?v=qwen35-mtp-1');
     if (typeof zed.lma_worker_event === 'function') {
       globalThis.zedLma = new BrowserLma(
         zed.lma_worker_event, undefined, message => zed.show_database_notice(message),

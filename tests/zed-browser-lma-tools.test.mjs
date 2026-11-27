@@ -124,6 +124,15 @@ test('model switching frees the first worker and repeat selection reuses an alre
   assert.equal(workers[0].closed, true);
   loaded(workers[1]);
   assert.equal(await agent, 'Agent.gguf');
+
+  const broken = client.loadModel({ name: 'Broken.gguf' }, 'broken');
+  const worker = workers[2];
+  worker.dispatchEvent(new MessageEvent('message', {
+    data: { id: worker.last.id, error: 'Could not load the GGUF weights. A required tensor is missing.' },
+  }));
+  await assert.rejects(broken, /required tensor is missing/);
+  assert.equal(worker.closed, true);
+  assert.equal(client.worker, undefined);
 });
 
 test('a cached selection survives reload and loads only when inference is requested', async t => {
