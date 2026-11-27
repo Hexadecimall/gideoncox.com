@@ -2,7 +2,7 @@ import { prepareEditorIsolation } from './zed/isolation.js?v=2';
 import { editorWasmResponse } from './zed/wasm-cache.js?v=4';
 
 const loading = document.querySelector('#loading');
-const build = '5bf10751e46f';
+const build = 'd80617c620b4';
 const gzip = true;
 const ios = /iPad|iPhone|iPod/.test(navigator.userAgent)
   || (navigator.platform === 'MacIntel' && navigator.maxTouchPoints > 1);

@@ -8,25 +8,20 @@ Use **Find Models** to search Hugging Face or enter an exact `owner/repository`.
 
 For Agent chat with project tools, search for `unsloth/Qwen3-0.6B-GGUF`, download `Qwen3-0.6B-Q4_K_M.gguf`, then click **Load** under **Downloaded Models** and select the model in the Agent Panel. This 397 MB model has an 8,192-token context and supports file reads, directory listings, text search, and path search. Zed’s Agent profile, workspace trust, and permissions apply. Project data and inference stay in the browser.
 
-For inline predictions, search for `lmstudio-community/Qwen2.5-Coder-0.5B-GGUF` and download `Qwen2.5-Coder-0.5B-Q4_K_M.gguf`. Click **Load** under **Downloaded Models**, then **Use for Edit Prediction**. This 398 MB base model is configured through Zed’s existing Edit Prediction settings.
+For inline predictions, choose **LMA** in **Settings → AI → Edit Predictions** or in the Edit Prediction status menu. LMA uses the active browser model under **Downloaded Models**. **Use for Edit Prediction** in the model library selects the same provider.
+
+The Qwen2.5-Coder preset uses fill-in-the-middle predictions. Other loaded GGUF models can continue the current line where there is no code to the right of the cursor.
 
 LMA keeps one model in memory at a time. After a refresh or two minutes of inactivity, the previously loaded model starts on demand when inference is requested. Downloaded and imported files stay in browser storage until removed.
 
 The browser runner can load Qwen3.5 GGUF files that declare a multi-token prediction block without its weights. Ordinary decoding uses the main model layers. Load failures show the runner's diagnostic when available.
 
-The Edit Prediction button writes these fields to `settings.json`.
+The provider selection is saved in `settings.json`.
 
 ```json
 {
   "edit_predictions": {
-    "provider": "open_ai_compatible_api",
-    "open_ai_compatible_api": {
-      "api_url": "lma://browser/completions",
-      "model": "qwen2.5-coder",
-      "prompt_format": "qwen",
-      "max_output_tokens": 48,
-      "prediction_debounce": 650
-    }
+    "provider": "lma"
   }
 }
 ```

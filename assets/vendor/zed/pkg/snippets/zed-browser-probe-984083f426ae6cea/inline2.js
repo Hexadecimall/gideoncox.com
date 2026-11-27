@@ -1,4 +1,1 @@
-
-export function pick_device_path(directory) {
-    return globalThis.zedBrowserDialogs.pickDevicePath(directory);
-}
+export function disconnectLocalProject() { globalThis.zedHost?.disconnect().catch(error => console.error(error)); }
